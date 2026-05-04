@@ -2,15 +2,50 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { Building2, CheckCircle2, IdCard, Loader2, MapPin } from 'lucide-react'
+import {
+  Building2,
+  CheckCircle2,
+  IdCard,
+  Loader2,
+  MapPin,
+  Upload,
+} from 'lucide-react'
+import * as XLSX from 'xlsx'
+
+type ExcelClient = {
+  cuit: string
+  name: string
+  address: string
+}
 
 export default function NuevoCliente() {
   const [cuit, setCuit] = useState('')
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [loading, setLoading] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+
+  async function getCompanyId() {
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !userData.user) {
+      throw new Error('No se pudo obtener el usuario logueado.')
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('users_profiles')
+      .select('company_id')
+      .eq('id', userData.user.id)
+      .single()
+
+    if (profileError || !profile?.company_id) {
+      throw new Error('No se pudo obtener la empresa del usuario.')
+    }
+
+    return profile.company_id
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -35,50 +70,168 @@ export default function NuevoCliente() {
 
     setLoading(true)
 
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    try {
+      const companyId = await getCompanyId()
 
-    if (userError || !userData.user) {
+      const { error } = await supabase.from('clients').insert({
+        company_id: companyId,
+        cuit: cuit.trim(),
+        name: name.trim(),
+        address: address.trim(),
+      })
+
+      if (error) {
+        if (error.message.toLowerCase().includes('duplicate')) {
+          setErrorMsg('Ese CUIT ya existe.')
+        } else {
+          console.error(error)
+          setErrorMsg('Error al guardar el cliente.')
+        }
+        return
+      }
+
+      setSuccessMsg('Cliente creado correctamente.')
+      setCuit('')
+      setName('')
+      setAddress('')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Error inesperado.')
+    } finally {
       setLoading(false)
-      setErrorMsg('No se pudo obtener el usuario logueado.')
-      return
     }
+  }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('users_profiles')
-      .select('company_id')
-      .eq('id', userData.user.id)
-      .single()
+  function normalizeKey(key: string) {
+    return key
+      .toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '_')
+  }
 
-    if (profileError || !profile?.company_id) {
-      setLoading(false)
-      setErrorMsg('No se pudo obtener la empresa del usuario.')
-      return
-    }
+  function getValue(row: Record<string, any>, possibleKeys: string[]) {
+    const normalizedRow: Record<string, any> = {}
 
-    const { error } = await supabase.from('clients').insert({
-      company_id: profile.company_id,
-      cuit: cuit.trim(),
-      name: name.trim(),
-      address: address.trim(),
+    Object.keys(row).forEach((key) => {
+      normalizedRow[normalizeKey(key)] = row[key]
     })
 
-    setLoading(false)
+    for (const key of possibleKeys) {
+      const value = normalizedRow[normalizeKey(key)]
+      if (value !== undefined && value !== null) return String(value).trim()
+    }
 
-    if (error) {
-      if (error.message.toLowerCase().includes('duplicate')) {
-        setErrorMsg('Ese CUIT ya existe.')
-      } else {
-        console.error(error)
-        setErrorMsg('Error al guardar el cliente.')
-      }
+    return ''
+  }
+
+  async function handleExcelImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+
+    setErrorMsg('')
+    setSuccessMsg('')
+
+    if (!file) return
+
+    const extension = file.name.split('.').pop()?.toLowerCase()
+
+    if (!['xlsx', 'xls', 'xlsm'].includes(extension || '')) {
+      setErrorMsg('El archivo debe ser Excel: .xlsx, .xls o .xlsm.')
+      e.target.value = ''
       return
     }
 
-    setSuccessMsg('Cliente creado correctamente.')
+    setImporting(true)
 
-    setCuit('')
-    setName('')
-    setAddress('')
+    try {
+      const companyId = await getCompanyId()
+
+      const buffer = await file.arrayBuffer()
+      const workbook = XLSX.read(buffer, { type: 'array' })
+      const sheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[sheetName]
+
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, {
+        defval: '',
+      })
+
+      if (!rows.length) {
+        setErrorMsg('El Excel está vacío.')
+        return
+      }
+
+      const clients: ExcelClient[] = rows
+        .map((row) => {
+          const client = {
+            cuit: getValue(row, ['cuit', 'CUIT']),
+            name: getValue(row, [
+              'name',
+              'nombre',
+              'razon_social',
+              'razón social',
+              'cliente',
+            ]),
+            address: getValue(row, [
+              'address',
+              'direccion',
+              'dirección',
+              'domicilio',
+            ]),
+          }
+
+          client.cuit = client.cuit.replace(/\D/g, '')
+
+          return client
+        })
+        .filter((client) => client.cuit && client.name)
+
+      if (!clients.length) {
+        setErrorMsg(
+          'No se encontraron clientes válidos. El Excel debe tener columnas CUIT y Nombre.'
+        )
+        return
+      }
+
+      const invalidCuit = clients.find((client) => !/^\d+$/.test(client.cuit))
+
+      if (invalidCuit) {
+        setErrorMsg('Hay CUIT inválidos. Deben ser numéricos.')
+        return
+      }
+
+      const payload = clients.map((client) => ({
+        company_id: companyId,
+        cuit: client.cuit,
+        name: client.name,
+        address: client.address,
+      }))
+
+      const { error } = await supabase.from('clients').insert(payload)
+
+      if (error) {
+        console.error(error)
+
+        if (error.message.toLowerCase().includes('duplicate')) {
+          setErrorMsg(
+            'Hay CUIT repetidos o clientes que ya existen en la base de datos.'
+          )
+        } else {
+          setErrorMsg('Error al importar clientes desde Excel.')
+        }
+
+        return
+      }
+
+      setSuccessMsg(`Se importaron ${payload.length} clientes correctamente.`)
+    } catch (err) {
+      console.error(err)
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Error inesperado al importar.'
+      )
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
   }
 
   return (
@@ -98,6 +251,41 @@ export default function NuevoCliente() {
             Cargá los datos principales del cliente para poder generar
             presupuestos, comprobantes y cuenta corriente.
           </p>
+        </div>
+
+        <div className="border-b border-slate-100 bg-slate-50 px-8 py-6">
+          <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-dashed border-blue-300 bg-white px-5 py-4 transition hover:bg-blue-50">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-blue-100 p-3 text-blue-700">
+                {importing ? (
+                  <Loader2 size={22} className="animate-spin" />
+                ) : (
+                  <Upload size={22} />
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-black text-slate-800">
+                  Importar listado desde Excel
+                </p>
+                <p className="text-xs font-semibold text-slate-500">
+                  Acepta .xlsx, .xls y .xlsm. Columnas: CUIT, Nombre y Dirección.
+                </p>
+              </div>
+            </div>
+
+            <span className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white">
+              Seleccionar archivo
+            </span>
+
+            <input
+              type="file"
+              accept=".xlsx,.xls,.xlsm"
+              onChange={handleExcelImport}
+              disabled={importing}
+              className="hidden"
+            />
+          </label>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 p-8">
