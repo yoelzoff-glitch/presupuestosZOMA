@@ -14,6 +14,9 @@ import {
   CalendarDays,
   DollarSign,
   CheckCircle2,
+  XCircle,
+  Trash2,
+  Loader2,
 } from 'lucide-react'
 
 type Budget = {
@@ -34,6 +37,7 @@ export default function PresupuestosPage() {
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
 
   useEffect(() => {
     loadBudgets()
@@ -90,15 +94,104 @@ export default function PresupuestosPage() {
     }
 
     if (data) {
-        const normalized = data.map((b: any) => ({
-            ...b,
-            client: b.clients?.[0] || null,
-        }))
+      const normalized = data.map((b: any) => ({
+        ...b,
+        client: Array.isArray(b.clients) ? b.clients[0] || null : b.clients || null,
+      }))
 
-        setBudgets(normalized)
+      setBudgets(normalized)
     }
 
     setLoading(false)
+  }
+
+  async function handleCancelBudget(budget: Budget) {
+    const confirmCancel = window.confirm(
+      `¿Querés anular el presupuesto ${budget.budget_code || budget.budget_number}?`
+    )
+
+    if (!confirmCancel) return
+
+    setActionLoadingId(budget.id)
+
+    const companyId = await getCompanyId()
+
+    if (!companyId) {
+      toast.error('No se encontró la empresa del usuario.')
+      setActionLoadingId(null)
+      return
+    }
+
+    const { error } = await supabase
+      .from('budgets')
+      .update({ status: 'cancelled' })
+      .eq('id', budget.id)
+      .eq('company_id', companyId)
+
+    setActionLoadingId(null)
+
+    if (error) {
+      toast.error(error.message)
+      return
+    }
+
+    toast.success('Presupuesto anulado correctamente.')
+
+    setBudgets((prev) =>
+      prev.map((item) =>
+        item.id === budget.id ? { ...item, status: 'cancelled' } : item
+      )
+    )
+  }
+
+  async function handleDeleteBudget(budget: Budget) {
+    const confirmDelete = window.confirm(
+      `¿Seguro querés eliminar el presupuesto ${
+        budget.budget_code || budget.budget_number
+      }? Esta acción no se puede deshacer.`
+    )
+
+    if (!confirmDelete) return
+
+    setActionLoadingId(budget.id)
+
+    const companyId = await getCompanyId()
+
+    if (!companyId) {
+      toast.error('No se encontró la empresa del usuario.')
+      setActionLoadingId(null)
+      return
+    }
+
+    // Primero borra los ítems del presupuesto si existen.
+    // Si tu tabla se llama distinto, cambiá "budget_items" por el nombre correcto.
+    const { error: itemsError } = await supabase
+      .from('budget_items')
+      .delete()
+      .eq('budget_id', budget.id)
+
+    if (itemsError) {
+      setActionLoadingId(null)
+      toast.error(itemsError.message)
+      return
+    }
+
+    const { error } = await supabase
+      .from('budgets')
+      .delete()
+      .eq('id', budget.id)
+      .eq('company_id', companyId)
+
+    setActionLoadingId(null)
+
+    if (error) {
+      toast.error(error.message)
+      return
+    }
+
+    toast.success('Presupuesto eliminado correctamente.')
+
+    setBudgets((prev) => prev.filter((item) => item.id !== budget.id))
   }
 
   const filteredBudgets = useMemo(() => {
@@ -111,17 +204,18 @@ export default function PresupuestosPage() {
         budget.budget_code?.toLowerCase().includes(q) ||
         String(budget.budget_number).includes(q) ||
         budget.client?.name?.toLowerCase().includes(q) ||
-        budget.client?.cuit?.toLowerCase().includes(q)
+        budget.client?.cuit?.toLowerCase().includes(q) ||
+        budget.status?.toLowerCase().includes(q)
       )
     })
   }, [budgets, search])
 
-  const totalAmount = budgets.reduce(
-    (acc, budget) => acc + Number(budget.total_amount || 0),
-    0
-  )
+  const totalAmount = budgets
+    .filter((budget) => budget.status !== 'cancelled')
+    .reduce((acc, budget) => acc + Number(budget.total_amount || 0), 0)
 
   const issuedCount = budgets.filter((b) => b.status === 'issued').length
+  const cancelledCount = budgets.filter((b) => b.status === 'cancelled').length
 
   return (
     <div className="space-y-6">
@@ -141,7 +235,8 @@ export default function PresupuestosPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Consultá presupuestos emitidos, totales y clientes vinculados.
+              Consultá presupuestos emitidos, anulá los que no fueron aprobados
+              o eliminá los que no quieras conservar.
             </p>
           </div>
 
@@ -155,7 +250,7 @@ export default function PresupuestosPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <Stat
           title="Presupuestos"
           value={budgets.length}
@@ -171,7 +266,14 @@ export default function PresupuestosPage() {
         />
 
         <Stat
-          title="Total presupuestado"
+          title="Anulados"
+          value={cancelledCount}
+          icon={XCircle}
+          loading={loading}
+        />
+
+        <Stat
+          title="Total vigente"
           value={`$${totalAmount.toLocaleString('es-AR')}`}
           icon={DollarSign}
           loading={loading}
@@ -185,7 +287,7 @@ export default function PresupuestosPage() {
               Listado de presupuestos
             </h2>
             <p className="text-sm text-slate-500">
-              Buscá por número, cliente o CUIT.
+              Buscá por número, cliente, CUIT o estado.
             </p>
           </div>
 
@@ -214,7 +316,7 @@ export default function PresupuestosPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden">
+        <div className="overflow-x-auto">
           {loading ? (
             <div className="p-10 text-center text-sm font-bold text-slate-500">
               Cargando presupuestos...
@@ -234,7 +336,7 @@ export default function PresupuestosPage() {
               </p>
             </div>
           ) : (
-            <table className="w-full min-w-[900px]">
+            <table className="w-full min-w-[1050px]">
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
@@ -258,73 +360,128 @@ export default function PresupuestosPage() {
                   </th>
 
                   <th className="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-slate-500">
-                    Acción
+                    Acciones
                   </th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {filteredBudgets.map((budget) => (
-                  <tr key={budget.id} className="transition hover:bg-blue-50/40">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                          <FileText size={20} />
+                {filteredBudgets.map((budget) => {
+                  const isCancelled = budget.status === 'cancelled'
+                  const isActionLoading = actionLoadingId === budget.id
+
+                  return (
+                    <tr
+                      key={budget.id}
+                      className={`transition ${
+                        isCancelled
+                          ? 'bg-red-50/40 opacity-75'
+                          : 'hover:bg-blue-50/40'
+                      }`}
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${
+                              isCancelled ? 'bg-red-600' : 'bg-slate-950'
+                            }`}
+                          >
+                            <FileText size={20} />
+                          </div>
+
+                          <div>
+                            <p className="font-black text-slate-950">
+                              {budget.budget_code ||
+                                `000-${budget.budget_number}`}
+                            </p>
+                            <p className="text-xs font-semibold text-slate-400">
+                              Nº interno {budget.budget_number}
+                            </p>
+                          </div>
                         </div>
+                      </td>
 
-                        <div>
-                          <p className="font-black text-slate-950">
-                            {budget.budget_code || `000-${budget.budget_number}`}
-                          </p>
-                          <p className="text-xs font-semibold text-slate-400">
-                            Nº interno {budget.budget_number}
-                          </p>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <User size={16} className="text-slate-400" />
+                          <div>
+                            <p className="font-bold text-slate-800">
+                              {budget.client?.name || 'Sin cliente'}
+                            </p>
+                            <p className="text-xs font-semibold text-slate-400">
+                              CUIT: {budget.client?.cuit || '-'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <User size={16} className="text-slate-400" />
-                        <div>
-                          <p className="font-bold text-slate-800">
-                            {budget.client?.name || 'Sin cliente'}
-                          </p>
-                          <p className="text-xs font-semibold text-slate-400">
-                            CUIT: {budget.client?.cuit || '-'}
-                          </p>
+                      <td className="px-5 py-4">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
+                          <CalendarDays size={15} />
+                          {budget.budget_date
+                            ? new Date(
+                                budget.budget_date
+                              ).toLocaleDateString('es-AR')
+                            : '-'}
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="px-5 py-4">
-                      <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
-                        <CalendarDays size={15} />
-                        {budget.budget_date
-                          ? new Date(budget.budget_date).toLocaleDateString('es-AR')
-                          : '-'}
-                      </div>
-                    </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge status={budget.status} />
+                      </td>
 
-                    <td className="px-5 py-4">
-                      <StatusBadge status={budget.status} />
-                    </td>
-
-                    <td className="px-5 py-4 text-right text-lg font-black text-blue-700">
-                      ${Number(budget.total_amount || 0).toLocaleString('es-AR')}
-                    </td>
-
-                    <td className="px-5 py-4 text-right">
-                      <Link
-                        href={`/presupuestos/${budget.id}`}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                      <td
+                        className={`px-5 py-4 text-right text-lg font-black ${
+                          isCancelled ? 'text-red-600' : 'text-blue-700'
+                        }`}
                       >
-                        <Eye size={15} />
-                        Ver
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                        ${Number(budget.total_amount || 0).toLocaleString('es-AR')}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/presupuestos/${budget.id}`}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            <Eye size={15} />
+                            Ver
+                          </Link>
+
+                          {!isCancelled && (
+                            <button
+                              type="button"
+                              disabled={isActionLoading}
+                              onClick={() => handleCancelBudget(budget)}
+                              className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isActionLoading ? (
+                                <Loader2 size={15} className="animate-spin" />
+                              ) : (
+                                <XCircle size={15} />
+                              )}
+                              Anular
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            disabled={isActionLoading}
+                            onClick={() => handleDeleteBudget(budget)}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isActionLoading ? (
+                              <Loader2 size={15} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={15} />
+                            )}
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}
@@ -364,21 +521,37 @@ function Stat({
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const label =
-    status === 'issued'
-      ? 'Emitido'
-      : status === 'draft'
-        ? 'Borrador'
-        : status === 'approved'
-          ? 'Aprobado'
-          : status === 'cancelled'
-            ? 'Cancelado'
-            : status
+  if (status === 'cancelled') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">
+        <XCircle size={14} />
+        Anulado
+      </span>
+    )
+  }
+
+  if (status === 'draft') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+        <FileText size={14} />
+        Borrador
+      </span>
+    )
+  }
+
+  if (status === 'approved') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+        <CheckCircle2 size={14} />
+        Aprobado
+      </span>
+    )
+  }
 
   return (
     <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
       <CheckCircle2 size={14} />
-      {label}
+      Emitido
     </span>
   )
 }
