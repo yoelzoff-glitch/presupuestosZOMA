@@ -77,12 +77,14 @@ export default function DashboardPage() {
       supabase
         .from('budgets')
         .select('id', { count: 'exact', head: true })
-        .eq('company_id', companyId),
+        .eq('company_id', companyId)
+        .neq('status','cancelled'),
 
       supabase
         .from('client_account_balances')
         .select('balance')
-        .eq('company_id', companyId),
+        .eq('company_id', companyId)
+        .neq('status','cancelled'),
     ])
 
     const totalBalance =
