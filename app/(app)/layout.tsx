@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from 'next/link'
 import {
   LayoutDashboard,
   Users,
@@ -6,21 +6,22 @@ import {
   FileText,
   Wallet,
   Settings,
-} from "lucide-react";
+} from 'lucide-react'
+import LogoutButton from '../components/LogoutButton'
 
 export default function AppLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   const navItems = [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/clientes", label: "Clientes", icon: Users },
-    { href: "/productos", label: "Productos", icon: Package },
-    { href: "/presupuestos", label: "Presupuestos", icon: FileText },
-    { href: "/cuenta-corriente", label: "Cuenta corriente", icon: Wallet },
-    { href: "/configuracion", label: "Configuración", icon: Settings },
-  ];
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/clientes', label: 'Clientes', icon: Users },
+    { href: '/productos', label: 'Productos', icon: Package },
+    { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
+    { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
+    { href: '/configuracion', label: 'Configuración', icon: Settings },
+  ]
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -36,7 +37,7 @@ export default function AppLayout({
 
         <nav className="space-y-2 p-4">
           {navItems.map((item) => {
-            const Icon = item.icon;
+            const Icon = item.icon
 
             return (
               <Link
@@ -47,7 +48,7 @@ export default function AppLayout({
                 <Icon size={19} />
                 {item.label}
               </Link>
-            );
+            )
           })}
         </nav>
       </aside>
@@ -64,8 +65,12 @@ export default function AppLayout({
               </h2>
             </div>
 
-            <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">
-              Online
+            <div className="flex items-center gap-3">
+              <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">
+                Online
+              </div>
+
+              <LogoutButton />
             </div>
           </div>
         </header>
@@ -73,5 +78,5 @@ export default function AppLayout({
         <section className="p-6">{children}</section>
       </main>
     </div>
-  );
+  )
 }
