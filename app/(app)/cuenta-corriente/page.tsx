@@ -34,6 +34,7 @@ type Movement = {
   budgets?: {
     budget_code: string | null
     budget_number: number | null
+    status: string | null
   } | null
 }
 
@@ -133,7 +134,8 @@ export default function CuentaCorrientePage() {
         created_at,
         budgets (
           budget_code,
-          budget_number
+          budget_number,
+          status
         )
       `)
       .eq('company_id', companyId)
@@ -154,7 +156,11 @@ export default function CuentaCorrientePage() {
         : item.budgets || null,
     }))
 
-    setMovements(normalized)
+    const filtered = normalized.filter(
+      (item: any) => item.budgets?.status !== 'cancelled'
+    )
+
+    setMovements(filtered)
     setMovementsLoading(false)
   }
 

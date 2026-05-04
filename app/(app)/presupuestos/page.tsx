@@ -105,6 +105,16 @@ export default function PresupuestosPage() {
     setLoading(false)
   }
 
+  async function removeBudgetImpact(budgetId: string, companyId: string) {
+    const { error } = await supabase
+      .from('account_movements')
+      .delete()
+      .eq('company_id', companyId)
+      .eq('budget_id', budgetId)
+
+    if (error) throw error
+  }
+
   async function handleCancelBudget(budget: Budget) {
     const confirmCancel = window.confirm(
       `¿Querés anular el presupuesto ${budget.budget_code || budget.budget_number}?`
@@ -122,26 +132,33 @@ export default function PresupuestosPage() {
       return
     }
 
-    const { error } = await supabase
-      .from('budgets')
-      .update({ status: 'cancelled' })
-      .eq('id', budget.id)
-      .eq('company_id', companyId)
+    try {
+      await removeBudgetImpact(budget.id, companyId)
 
-    setActionLoadingId(null)
+      const { error } = await supabase
+        .from('budgets')
+        .update({ status: 'cancelled' })
+        .eq('id', budget.id)
+        .eq('company_id', companyId)
 
-    if (error) {
-      toast.error(error.message)
-      return
-    }
+      if (error) throw error
 
-    toast.success('Presupuesto anulado correctamente.')
-
-    setBudgets((prev) =>
-      prev.map((item) =>
-        item.id === budget.id ? { ...item, status: 'cancelled' } : item
+      setBudgets((prev) =>
+        prev.map((item) =>
+          item.id === budget.id ? { ...item, status: 'cancelled' } : item
+        )
       )
-    )
+
+      toast.success('Presupuesto anulado correctamente.')
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'No se pudo anular el presupuesto.'
+      )
+    } finally {
+      setActionLoadingId(null)
+    }
   }
 
   async function handleDeleteBudget(budget: Budget) {
@@ -163,35 +180,36 @@ export default function PresupuestosPage() {
       return
     }
 
-    // Primero borra los ítems del presupuesto si existen.
-    // Si tu tabla se llama distinto, cambiá "budget_items" por el nombre correcto.
-    const { error: itemsError } = await supabase
-      .from('budget_items')
-      .delete()
-      .eq('budget_id', budget.id)
+    try {
+      await removeBudgetImpact(budget.id, companyId)
 
-    if (itemsError) {
+      const { error: itemsError } = await supabase
+        .from('budget_items')
+        .delete()
+        .eq('budget_id', budget.id)
+
+      if (itemsError) throw itemsError
+
+      const { error } = await supabase
+        .from('budgets')
+        .delete()
+        .eq('id', budget.id)
+        .eq('company_id', companyId)
+
+      if (error) throw error
+
+      setBudgets((prev) => prev.filter((item) => item.id !== budget.id))
+
+      toast.success('Presupuesto eliminado correctamente.')
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'No se pudo eliminar el presupuesto.'
+      )
+    } finally {
       setActionLoadingId(null)
-      toast.error(itemsError.message)
-      return
     }
-
-    const { error } = await supabase
-      .from('budgets')
-      .delete()
-      .eq('id', budget.id)
-      .eq('company_id', companyId)
-
-    setActionLoadingId(null)
-
-    if (error) {
-      toast.error(error.message)
-      return
-    }
-
-    toast.success('Presupuesto eliminado correctamente.')
-
-    setBudgets((prev) => prev.filter((item) => item.id !== budget.id))
   }
 
   const filteredBudgets = useMemo(() => {
@@ -210,9 +228,12 @@ export default function PresupuestosPage() {
     })
   }, [budgets, search])
 
-  const totalAmount = budgets
-    .filter((budget) => budget.status !== 'cancelled')
-    .reduce((acc, budget) => acc + Number(budget.total_amount || 0), 0)
+  const activeBudgets = budgets.filter((budget) => budget.status !== 'cancelled')
+
+  const totalAmount = activeBudgets.reduce(
+    (acc, budget) => acc + Number(budget.total_amount || 0),
+    0
+  )
 
   const issuedCount = budgets.filter((b) => b.status === 'issued').length
   const cancelledCount = budgets.filter((b) => b.status === 'cancelled').length
@@ -251,27 +272,9 @@ export default function PresupuestosPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-4">
-        <Stat
-          title="Presupuestos"
-          value={budgets.length}
-          icon={FileText}
-          loading={loading}
-        />
-
-        <Stat
-          title="Emitidos"
-          value={issuedCount}
-          icon={CheckCircle2}
-          loading={loading}
-        />
-
-        <Stat
-          title="Anulados"
-          value={cancelledCount}
-          icon={XCircle}
-          loading={loading}
-        />
-
+        <Stat title="Presupuestos" value={budgets.length} icon={FileText} loading={loading} />
+        <Stat title="Emitidos" value={issuedCount} icon={CheckCircle2} loading={loading} />
+        <Stat title="Anulados" value={cancelledCount} icon={XCircle} loading={loading} />
         <Stat
           title="Total vigente"
           value={`$${totalAmount.toLocaleString('es-AR')}`}
@@ -342,23 +345,18 @@ export default function PresupuestosPage() {
                   <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
                     Presupuesto
                   </th>
-
                   <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
                     Cliente
                   </th>
-
                   <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
                     Fecha
                   </th>
-
                   <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
                     Estado
                   </th>
-
                   <th className="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-slate-500">
                     Total
                   </th>
-
                   <th className="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-slate-500">
                     Acciones
                   </th>
@@ -419,9 +417,9 @@ export default function PresupuestosPage() {
                         <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
                           <CalendarDays size={15} />
                           {budget.budget_date
-                            ? new Date(
-                                budget.budget_date
-                              ).toLocaleDateString('es-AR')
+                            ? new Date(budget.budget_date).toLocaleDateString(
+                                'es-AR'
+                              )
                             : '-'}
                         </div>
                       </td>
