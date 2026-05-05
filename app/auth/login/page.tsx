@@ -20,21 +20,45 @@ export default function Login() {
     setErrorMsg('')
 
     if (!email.trim() || !password.trim()) {
-      setErrorMsg('Completá email y contraseña.')
+      setErrorMsg('Completá usuario/email y contraseña.')
       return
     }
 
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+    const loginValue = email.trim().toLowerCase()
+
+    const loginEmail = loginValue.includes('@')
+      ? loginValue
+      : `${loginValue}@clientes.local`
+
+    const { data: loginData, error } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
       password,
     })
 
+    if (error || !loginData.user) {
+      setLoading(false)
+      setErrorMsg('Usuario/email o contraseña incorrectos.')
+      return
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('users_profiles')
+      .select('role')
+      .eq('id', loginData.user.id)
+      .single()
+
     setLoading(false)
 
-    if (error) {
-      setErrorMsg('Email o contraseña incorrectos.')
+    if (profileError || !profile) {
+      setErrorMsg('No se encontró el perfil del usuario.')
+      await supabase.auth.signOut()
+      return
+    }
+
+    if (profile.role === 'customer') {
+      router.replace('/portal')
       return
     }
 
@@ -77,7 +101,7 @@ export default function Login() {
               </p>
               <h2 className="mt-2 text-3xl font-black">Iniciar sesión</h2>
               <p className="mt-2 text-sm text-slate-500">
-                Ingresá con tu email y contraseña.
+                Ingresá con tu email o usuario y contraseña.
               </p>
             </div>
 
@@ -90,15 +114,15 @@ export default function Login() {
             <div className="space-y-4">
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Email
+                  Email o usuario
                 </span>
 
                 <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
                   <Mail size={18} className="text-slate-400" />
                   <input
-                    type="email"
+                    type="text"
                     value={email}
-                    placeholder="tuemail@gmail.com"
+                    placeholder="tuemail@gmail.com o cliente1"
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
                   />

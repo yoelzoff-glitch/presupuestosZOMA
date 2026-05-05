@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { getUserCompanyId } from '@/lib/getUserCompany'
 
-type Order = {
+type ManualOrder = {
   id: string
   company_id: string
   client_id: string
@@ -22,9 +22,37 @@ type Order = {
   } | null
 }
 
+type PortalOrder = {
+  id: string
+  company_id: string
+  customer_user_id: string
+  status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'cancelled'
+  notes: string | null
+  total_amount: number
+  created_at: string
+  updated_at: string
+  customer_users?: {
+    name: string
+    email: string
+  } | null
+}
+
+type UnifiedOrder = {
+  id: string
+  source: 'manual' | 'portal'
+  code: string
+  date: string
+  clientName: string
+  clientExtra: string
+  status: string
+  totalAmount: number | null
+  notes: string | null
+  raw: ManualOrder | PortalOrder
+}
+
 export default function PedidosPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState<UnifiedOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -45,53 +73,149 @@ export default function PedidosPage() {
 
     setCompanyId(id)
 
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        clients (
-          name,
-          cuit
-        )
-      `)
-      .eq('company_id', id)
-      .order('created_at', { ascending: false })
+    const [manualRes, portalRes] = await Promise.all([
+      supabase
+        .from('orders')
+        .select(`
+          *,
+          clients (
+            name,
+            cuit
+          )
+        `)
+        .eq('company_id', id)
+        .order('created_at', { ascending: false }),
 
-    if (error) {
-      console.error('Error cargando pedidos:', error)
-      alert('Error cargando pedidos')
+      supabase
+        .from('customer_orders')
+        .select(`
+          *,
+          customer_users (
+            name,
+            email
+          )
+        `)
+        .eq('company_id', id)
+        .order('created_at', { ascending: false }),
+    ])
+
+    if (manualRes.error) {
+      console.error('Error cargando pedidos manuales:', manualRes.error)
+      alert('Error cargando pedidos manuales')
       setLoading(false)
       return
     }
 
-    setOrders(data || [])
-    setLoading(false)
-  }
-
-  async function cancelOrder(order: Order) {
-    if (order.status === 'confirmed') {
-      alert('No podés anular un pedido que ya fue convertido a presupuesto.')
+    if (portalRes.error) {
+      console.error('Error cargando pedidos del portal:', portalRes.error)
+      alert('Error cargando pedidos del portal')
+      setLoading(false)
       return
     }
 
-    const confirmCancel = confirm(
-      `¿Seguro que querés anular el pedido ${order.order_code || order.order_number}?`
+    const manualOrders: UnifiedOrder[] = (manualRes.data || []).map(
+      (order: ManualOrder) => ({
+        id: order.id,
+        source: 'manual',
+        code: order.order_code || `PED-${order.order_number}`,
+        date: order.order_date,
+        clientName: order.clients?.name || 'Sin cliente',
+        clientExtra: order.clients?.cuit || '-',
+        status: order.status,
+        totalAmount: null,
+        notes: order.notes,
+        raw: order,
+      })
     )
+
+    const portalOrders: UnifiedOrder[] = (portalRes.data || []).map(
+      (order: PortalOrder, index: number) => ({
+        id: order.id,
+        source: 'portal',
+        code: `WEB-${String(index + 1).padStart(4, '0')}`,
+        date: order.created_at,
+        clientName: order.customer_users?.name || 'Cliente portal',
+        clientExtra: order.customer_users?.email || '-',
+        status: order.status,
+        totalAmount: Number(order.total_amount || 0),
+        notes: order.notes,
+        raw: order,
+      })
+    )
+
+    const allOrders = [...manualOrders, ...portalOrders].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+
+    setOrders(allOrders)
+    setLoading(false)
+  }
+
+  async function cancelOrder(order: UnifiedOrder) {
+    const confirmCancel = confirm(`¿Seguro que querés anular el pedido ${order.code}?`)
 
     if (!confirmCancel || !companyId) return
 
+    if (order.source === 'manual') {
+      if (order.status === 'confirmed') {
+        alert('No podés anular un pedido que ya fue convertido a presupuesto.')
+        return
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
+        .eq('company_id', companyId)
+
+      if (error) {
+        console.error('Error anulando pedido:', error)
+        alert('No se pudo anular el pedido')
+        return
+      }
+    }
+
+    if (order.source === 'portal') {
+      const { error } = await supabase
+        .from('customer_orders')
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
+        .eq('company_id', companyId)
+
+      if (error) {
+        console.error('Error anulando pedido portal:', error)
+        alert('No se pudo anular el pedido del portal')
+        return
+      }
+    }
+
+    await loadData()
+  }
+
+  async function updatePortalOrderStatus(
+    order: UnifiedOrder,
+    status: 'approved' | 'rejected' | 'delivered'
+  ) {
+    if (!companyId || order.source !== 'portal') return
+
     const { error } = await supabase
-      .from('orders')
+      .from('customer_orders')
       .update({
-        status: 'cancelled',
+        status,
         updated_at: new Date().toISOString(),
       })
       .eq('id', order.id)
       .eq('company_id', companyId)
 
     if (error) {
-      console.error('Error anulando pedido:', error)
-      alert('No se pudo anular el pedido')
+      console.error('Error actualizando pedido portal:', error)
+      alert('No se pudo actualizar el estado del pedido')
       return
     }
 
@@ -102,22 +226,19 @@ export default function PedidosPage() {
     if (status === 'pending') return 'Pendiente'
     if (status === 'confirmed') return 'Confirmado'
     if (status === 'cancelled') return 'Anulado'
+    if (status === 'approved') return 'Aprobado'
+    if (status === 'rejected') return 'Rechazado'
+    if (status === 'delivered') return 'Entregado'
     return status
   }
 
   function getStatusClass(status: string) {
-    if (status === 'pending') {
-      return 'bg-amber-100 text-amber-700 border-amber-200'
-    }
-
-    if (status === 'confirmed') {
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200'
-    }
-
-    if (status === 'cancelled') {
-      return 'bg-red-100 text-red-700 border-red-200'
-    }
-
+    if (status === 'pending') return 'bg-amber-100 text-amber-700 border-amber-200'
+    if (status === 'confirmed') return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    if (status === 'approved') return 'bg-blue-100 text-blue-700 border-blue-200'
+    if (status === 'delivered') return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    if (status === 'rejected') return 'bg-red-100 text-red-700 border-red-200'
+    if (status === 'cancelled') return 'bg-red-100 text-red-700 border-red-200'
     return 'bg-slate-100 text-slate-700 border-slate-200'
   }
 
@@ -125,13 +246,12 @@ export default function PedidosPage() {
     const searchText = search.toLowerCase()
 
     const matchesSearch =
-      order.order_code?.toLowerCase().includes(searchText) ||
-      String(order.order_number).includes(searchText) ||
-      order.clients?.name?.toLowerCase().includes(searchText) ||
-      order.clients?.cuit?.toLowerCase().includes(searchText)
+      order.code.toLowerCase().includes(searchText) ||
+      order.clientName.toLowerCase().includes(searchText) ||
+      order.clientExtra.toLowerCase().includes(searchText) ||
+      order.source.toLowerCase().includes(searchText)
 
-    const matchesStatus =
-      statusFilter === 'all' || order.status === statusFilter
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter
 
     return matchesSearch && matchesStatus
   })
@@ -144,7 +264,7 @@ export default function PedidosPage() {
             <p className="text-sm font-medium text-blue-300">Gestión comercial</p>
             <h1 className="mt-1 text-3xl font-bold">Pedidos</h1>
             <p className="mt-2 text-sm text-slate-300">
-              Tomá pedidos sin precio y convertilos en presupuesto cuando el cliente confirme.
+              Pedidos manuales y pedidos recibidos desde el portal de clientes.
             </p>
           </div>
 
@@ -156,7 +276,7 @@ export default function PedidosPage() {
           </Link>
         </div>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-slate-500">Total pedidos</p>
             <p className="mt-2 text-3xl font-bold text-slate-900">{orders.length}</p>
@@ -170,9 +290,20 @@ export default function PedidosPage() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Confirmados</p>
+            <p className="text-sm text-slate-500">Portal</p>
+            <p className="mt-2 text-3xl font-bold text-blue-600">
+              {orders.filter((o) => o.source === 'portal').length}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-slate-500">Confirmados/Aprobados</p>
             <p className="mt-2 text-3xl font-bold text-emerald-600">
-              {orders.filter((o) => o.status === 'confirmed').length}
+              {
+                orders.filter(
+                  (o) => o.status === 'confirmed' || o.status === 'approved'
+                ).length
+              }
             </p>
           </div>
         </section>
@@ -182,7 +313,7 @@ export default function PedidosPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por cliente, CUIT o número de pedido..."
+              placeholder="Buscar por cliente, usuario, CUIT o número de pedido..."
               className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 md:max-w-md"
             />
 
@@ -194,6 +325,9 @@ export default function PedidosPage() {
               <option value="all">Todos</option>
               <option value="pending">Pendientes</option>
               <option value="confirmed">Confirmados</option>
+              <option value="approved">Aprobados</option>
+              <option value="delivered">Entregados</option>
+              <option value="rejected">Rechazados</option>
               <option value="cancelled">Anulados</option>
             </select>
           </div>
@@ -212,9 +346,11 @@ export default function PedidosPage() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                     <th className="px-4 py-3 font-semibold">Pedido</th>
+                    <th className="px-4 py-3 font-semibold">Origen</th>
                     <th className="px-4 py-3 font-semibold">Fecha</th>
                     <th className="px-4 py-3 font-semibold">Cliente</th>
-                    <th className="px-4 py-3 font-semibold">CUIT</th>
+                    <th className="px-4 py-3 font-semibold">Dato</th>
+                    <th className="px-4 py-3 text-right font-semibold">Total</th>
                     <th className="px-4 py-3 font-semibold">Estado</th>
                     <th className="px-4 py-3 text-right font-semibold">Acciones</th>
                   </tr>
@@ -223,23 +359,41 @@ export default function PedidosPage() {
                 <tbody>
                   {filteredOrders.map((order) => (
                     <tr
-                      key={order.id}
+                      key={`${order.source}-${order.id}`}
                       className="border-b border-slate-100 transition hover:bg-slate-50"
                     >
                       <td className="px-4 py-4 font-semibold text-slate-900">
-                        {order.order_code || `PED-${order.order_number}`}
+                        {order.code}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-bold ${
+                            order.source === 'portal'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {order.source === 'portal' ? 'Portal' : 'Manual'}
+                        </span>
                       </td>
 
                       <td className="px-4 py-4 text-slate-600">
-                        {new Date(order.order_date).toLocaleDateString('es-AR')}
+                        {new Date(order.date).toLocaleDateString('es-AR')}
                       </td>
 
-                      <td className="px-4 py-4 text-slate-900">
-                        {order.clients?.name || 'Sin cliente'}
+                      <td className="px-4 py-4 font-semibold text-slate-900">
+                        {order.clientName}
                       </td>
 
                       <td className="px-4 py-4 text-slate-600">
-                        {order.clients?.cuit || '-'}
+                        {order.clientExtra}
+                      </td>
+
+                      <td className="px-4 py-4 text-right font-bold text-slate-900">
+                        {order.totalAmount === null
+                          ? '-'
+                          : formatCurrency(order.totalAmount)}
                       </td>
 
                       <td className="px-4 py-4">
@@ -253,13 +407,48 @@ export default function PedidosPage() {
                       </td>
 
                       <td className="px-4 py-4">
-                        <div className="flex justify-end gap-2">
-                          <Link
-                            href={`/pedidos/${order.id}`}
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                          >
-                            Ver
-                          </Link>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {order.source === 'manual' && (
+                            <Link
+                              href={`/pedidos/${order.id}`}
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                            >
+                              Ver
+                            </Link>
+                          )}
+
+                          {order.source === 'portal' && order.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() =>
+                                  updatePortalOrderStatus(order, 'approved')
+                                }
+                                className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-50"
+                              >
+                                Aprobar
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  updatePortalOrderStatus(order, 'rejected')
+                                }
+                                className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                              >
+                                Rechazar
+                              </button>
+                            </>
+                          )}
+
+                          {order.source === 'portal' && order.status === 'approved' && (
+                            <button
+                              onClick={() =>
+                                updatePortalOrderStatus(order, 'delivered')
+                              }
+                              className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
+                            >
+                              Entregar
+                            </button>
+                          )}
 
                           {order.status === 'pending' && (
                             <button
@@ -281,4 +470,13 @@ export default function PedidosPage() {
       </div>
     </main>
   )
+}
+
+function formatCurrency(value: number) {
+  return value.toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
