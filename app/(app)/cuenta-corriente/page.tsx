@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import * as XLSX from 'xlsx'
 import {
   Wallet,
   Users,
@@ -13,6 +14,7 @@ import {
   CalendarDays,
   ReceiptText,
   FileText,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 type Client = {
@@ -213,6 +215,50 @@ export default function CuentaCorrientePage() {
     }
   }, [movements])
 
+  function exportToXlsm() {
+    if (!selectedClient) return
+
+    const rows = movements.map((movement) => ({
+      Fecha: new Date(movement.movement_date).toLocaleDateString('es-AR'),
+      Tipo: movement.movement_type,
+      'Tipo de pago': movement.payment_type || '',
+      Descripción: movement.description || '',
+      Presupuesto:
+        movement.budgets?.budget_code ||
+        (movement.budgets?.budget_number
+          ? `000-${movement.budgets.budget_number}`
+          : ''),
+      Debe: Number(movement.debit || 0),
+      Haber: Number(movement.credit || 0),
+    }))
+
+    const resumen = [
+      {
+        Cliente: selectedClient.name,
+        CUIT: selectedClient.cuit,
+        'Total vendido': totals.debit,
+        'Total pagado': totals.credit,
+        'Saldo pendiente': totals.balance,
+      },
+    ]
+
+    const wb = XLSX.utils.book_new()
+
+    const wsResumen = XLSX.utils.json_to_sheet(resumen)
+    const wsMovimientos = XLSX.utils.json_to_sheet(rows)
+
+    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen')
+    XLSX.utils.book_append_sheet(wb, wsMovimientos, 'Movimientos')
+
+    const cleanName = selectedClient.name
+      .replace(/[^a-z0-9]/gi, '_')
+      .toLowerCase()
+
+    XLSX.writeFile(wb, `cuenta_corriente_${cleanName}.xlsm`, {
+      bookType: 'xlsm',
+    })
+  }
+
   const pendingBudgets = useMemo<PendingBudget[]>(() => {
     const grouped = new Map<string, PendingBudget>()
 
@@ -405,7 +451,7 @@ export default function CuentaCorrientePage() {
   }
 
   return (
-    <div className="w-full max-w-full overflow-hidden space-y-6">
+    <div className="space-y-6">
       <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl">
         <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
         <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
@@ -438,8 +484,8 @@ export default function CuentaCorrientePage() {
         </div>
       )}
 
-      <div className="grid w-full max-w-full grid-cols-1 gap-6 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
-        <section className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+        <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-5">
             <h2 className="flex items-center gap-2 text-xl font-black text-slate-950">
               <Users size={22} className="text-blue-600" />
@@ -492,7 +538,7 @@ export default function CuentaCorrientePage() {
           </div>
         </section>
 
-        <section className="min-w-0 space-y-5 overflow-hidden">
+        <section className="space-y-5">
           {!selectedClient ? (
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-10 text-center shadow-sm">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
@@ -510,31 +556,42 @@ export default function CuentaCorrientePage() {
           ) : (
             <>
               <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
                     <p className="text-sm font-bold text-slate-500">
                       Cuenta corriente de
                     </p>
-                    <h2 className="truncate text-2xl font-black text-slate-950">
+                    <h2 className="text-2xl font-black text-slate-950">
                       {selectedClient.name}
                     </h2>
-                    <p className="mt-1 truncate text-sm font-bold text-slate-400">
+                    <p className="mt-1 text-sm font-bold text-slate-400">
                       CUIT: {selectedClient.cuit}
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPaymentForm(!showPaymentForm)
-                      setErrorMsg('')
-                      setSuccessMsg('')
-                    }}
-                    className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 sm:w-auto"
-                  >
-                    <Plus size={18} />
-                    Registrar pago
-                  </button>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={exportToXlsm}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-5 py-3 text-sm font-bold text-green-700 transition hover:bg-green-100"
+                    >
+                      <FileSpreadsheet size={18} />
+                      Exportar XLSM
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPaymentForm(!showPaymentForm)
+                        setErrorMsg('')
+                        setSuccessMsg('')
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"
+                    >
+                      <Plus size={18} />
+                      Registrar pago
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -715,7 +772,7 @@ export default function CuentaCorrientePage() {
                   </p>
                 </div>
 
-                <div className="w-full max-w-full overflow-x-auto">
+                <div className="overflow-x-auto">
                   {movementsLoading ? (
                     <div className="flex items-center justify-center gap-3 p-10 text-sm font-bold text-slate-500">
                       <Loader2 className="animate-spin text-blue-600" />

@@ -12,14 +12,15 @@ import {
   Loader2,
   Package,
   LogOut,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import * as XLSX from 'xlsx'
 
 type Product = {
   id: string
   internal_code: string | null
   name: string
-  supplier: string | null
   category: string | null
   cost_price: number | null
 }
@@ -86,7 +87,7 @@ export default function PortalPage() {
 
     const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('id, internal_code, name, supplier, category, cost_price')
+      .select('id, internal_code, name, category, cost_price')
       .eq('company_id', customerData.company_id)
       .order('name', { ascending: true })
       .range(0, 4999)
@@ -106,6 +107,31 @@ export default function PortalPage() {
     router.push('/auth/login')
   }
 
+  function exportPriceListXlsm() {
+    const rows = filteredProducts.map((product) => ({
+      Código: product.internal_code || '',
+      Producto: product.name || '',
+      Categoría: product.category || '',
+      Precio: Number(product.cost_price || 0),
+    }))
+
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+
+    worksheet['!cols'] = [
+      { wch: 18 },
+      { wch: 45 },
+      { wch: 25 },
+      { wch: 15 },
+    ]
+
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Lista de precios')
+
+    XLSX.writeFile(workbook, 'lista-de-precios.xlsm', {
+      bookType: 'xlsm',
+    })
+  }
+
   const filteredProducts = useMemo(() => {
     const q = search.toLowerCase().trim()
 
@@ -115,7 +141,6 @@ export default function PortalPage() {
       return (
         product.name?.toLowerCase().includes(q) ||
         product.internal_code?.toLowerCase().includes(q) ||
-        product.supplier?.toLowerCase().includes(q) ||
         product.category?.toLowerCase().includes(q)
       )
     })
@@ -253,13 +278,23 @@ export default function PortalPage() {
               </p>
             </div>
 
-            <button
-              onClick={logout}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15"
-            >
-              <LogOut size={17} />
-              Salir
-            </button>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={exportPriceListXlsm}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15"
+              >
+                <FileSpreadsheet size={17} />
+                Exportar XLSM
+              </button>
+
+              <button
+                onClick={logout}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15"
+              >
+                <LogOut size={17} />
+                Salir
+              </button>
+            </div>
           </div>
         </section>
 
@@ -281,7 +316,7 @@ export default function PortalPage() {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar producto, código, proveedor o categoría..."
+                  placeholder="Buscar producto, código o categoría..."
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                 />
               </div>
@@ -305,7 +340,6 @@ export default function PortalPage() {
 
                       <div className="mt-1 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
                         <span>Código: {product.internal_code || '-'}</span>
-                        <span>Proveedor: {product.supplier || '-'}</span>
                         <span>Categoría: {product.category || '-'}</span>
                       </div>
                     </div>

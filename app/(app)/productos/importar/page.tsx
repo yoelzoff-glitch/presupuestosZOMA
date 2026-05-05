@@ -64,6 +64,17 @@ export default function ImportarProductosPage() {
       const validRows = normalized.filter(
         (row) => row.codigo && row.producto && !Number.isNaN(row.precio)
       )
+      
+      const repeatedCodes = validRows
+        .map((row) => row.codigo)
+        .filter((code, index, arr) => arr.indexOf(code) !== index)
+
+      if (repeatedCodes.length > 0) {
+        toast.error(
+          `El Excel tiene códigos duplicados: ${[...new Set(repeatedCodes)].join(', ')}`
+        )
+        return
+      }
 
       if (validRows.length === 0) {
         toast.error('El Excel no tiene productos válidos.')
