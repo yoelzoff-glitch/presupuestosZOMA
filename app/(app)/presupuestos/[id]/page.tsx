@@ -176,96 +176,249 @@ export default function PresupuestoDetallePage() {
   const budgetLabel = budget.budget_code || `000-${budget.budget_number}`
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl print:hidden">
-        <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+    <>
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
 
-        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <Link
-              href="/presupuestos"
-              className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-blue-200 transition hover:text-white"
-            >
-              <ArrowLeft size={17} />
-              Volver a presupuestos
-            </Link>
+          html,
+          body {
+            width: 210mm;
+            min-height: 297mm;
+            background: white !important;
+            overflow: visible !important;
+          }
 
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-200">
-              <FileText size={14} />
-              Detalle
+          body * {
+            visibility: hidden !important;
+          }
+
+          .print-area,
+          .print-area * {
+            visibility: visible !important;
+          }
+
+          .print-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            color: #0f172a !important;
+            box-shadow: none !important;
+            border: 0 !important;
+          }
+
+          .print-hidden {
+            display: none !important;
+          }
+
+          .print-card {
+            border: 1px solid #d7dee8 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: white !important;
+          }
+
+          .print-header {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            gap: 24px !important;
+            border-bottom: 2px solid #0f172a !important;
+            padding: 0 0 18px 0 !important;
+            margin-bottom: 18px !important;
+          }
+
+          .print-title {
+            font-size: 28px !important;
+            line-height: 1.1 !important;
+            font-weight: 900 !important;
+            color: #0f172a !important;
+          }
+
+          .print-subtitle {
+            font-size: 11px !important;
+            letter-spacing: 0.22em !important;
+            text-transform: uppercase !important;
+            color: #475569 !important;
+            font-weight: 900 !important;
+          }
+
+          .print-client-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 10px !important;
+          }
+
+          .print-section {
+            padding: 16px 0 !important;
+            border-bottom: 1px solid #d7dee8 !important;
+          }
+
+          .print-section-title {
+            font-size: 18px !important;
+            font-weight: 900 !important;
+            margin-bottom: 10px !important;
+            color: #0f172a !important;
+          }
+
+          .print-table-wrap {
+            display: block !important;
+            overflow: visible !important;
+            border: 1px solid #d7dee8 !important;
+            border-radius: 0 !important;
+          }
+
+          .print-table {
+            width: 100% !important;
+            min-width: 0 !important;
+            border-collapse: collapse !important;
+            table-layout: fixed !important;
+            font-size: 11px !important;
+          }
+
+          .print-table th {
+            background: #f1f5f9 !important;
+            color: #0f172a !important;
+            font-weight: 900 !important;
+            padding: 8px !important;
+            border-bottom: 1px solid #d7dee8 !important;
+          }
+
+          .print-table td {
+            padding: 8px !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            color: #0f172a !important;
+            vertical-align: top !important;
+          }
+
+          .print-table tr {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+
+          .print-total {
+            margin-top: 16px !important;
+            margin-left: auto !important;
+            width: 260px !important;
+            border: 2px solid #0f172a !important;
+            padding: 12px !important;
+            background: white !important;
+            color: #0f172a !important;
+          }
+
+          .print-total-label {
+            font-size: 10px !important;
+            letter-spacing: 0.18em !important;
+            text-transform: uppercase !important;
+            color: #475569 !important;
+            font-weight: 900 !important;
+          }
+
+          .print-total-number {
+            margin-top: 4px !important;
+            font-size: 26px !important;
+            line-height: 1.1 !important;
+            font-weight: 900 !important;
+          }
+        }
+      `}</style>
+
+      <div className="space-y-6">
+        <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl print-hidden print:hidden">
+          <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
+          <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+
+          <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <Link
+                href="/presupuestos"
+                className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-blue-200 transition hover:text-white"
+              >
+                <ArrowLeft size={17} />
+                Volver a presupuestos
+              </Link>
+
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-200">
+                <FileText size={14} />
+                Detalle
+              </div>
+
+              <h1 className="text-3xl font-black tracking-tight">
+                Presupuesto {budgetLabel}
+              </h1>
+
+              <p className="mt-2 text-sm text-slate-300">
+                Detalle completo del presupuesto emitido.
+              </p>
             </div>
 
-            <h1 className="text-3xl font-black tracking-tight">
-              Presupuesto {budgetLabel}
-            </h1>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <StatusBadge status={budget.status || 'issued'} />
 
-            <p className="mt-2 text-sm text-slate-300">
-              Detalle completo del presupuesto emitido.
-            </p>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
+              >
+                <Printer size={18} />
+                Imprimir / PDF
+              </button>
+            </div>
           </div>
+        </section>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <StatusBadge status={budget.status || 'issued'} />
+        <section className="grid gap-4 md:grid-cols-3 print-hidden print:hidden">
+          <InfoCard
+            icon={User}
+            title="Cliente"
+            value={budget.clients?.name || 'Sin cliente'}
+            detail={`CUIT: ${budget.clients?.cuit || '-'}`}
+          />
 
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
-            >
-              <Printer size={18} />
-              Imprimir / PDF
-            </button>
-          </div>
-        </div>
-      </section>
+          <InfoCard
+            icon={CalendarDays}
+            title="Fecha"
+            value={
+              budget.budget_date
+                ? new Date(budget.budget_date).toLocaleDateString('es-AR')
+                : '-'
+            }
+            detail="Fecha de emisión"
+          />
 
-      <section className="grid gap-4 md:grid-cols-3 print:hidden">
-        <InfoCard
-          icon={User}
-          title="Cliente"
-          value={budget.clients?.name || 'Sin cliente'}
-          detail={`CUIT: ${budget.clients?.cuit || '-'}`}
-        />
+          <InfoCard
+            icon={DollarSign}
+            title="Total"
+            value={`$${finalTotal.toLocaleString('es-AR')}`}
+            detail="Importe final"
+          />
+        </section>
 
-        <InfoCard
-          icon={CalendarDays}
-          title="Fecha"
-          value={
-            budget.budget_date
-              ? new Date(budget.budget_date).toLocaleDateString('es-AR')
-              : '-'
-          }
-          detail="Fecha de emisión"
-        />
-
-        <InfoCard
-          icon={DollarSign}
-          title="Total"
-          value={`$${finalTotal.toLocaleString('es-AR')}`}
-          detail="Importe final"
-        />
-      </section>
-
-      <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm print:border-0 print:shadow-none">
-        <div className="border-b border-slate-200 p-6 print:border-b-2 print:border-slate-900">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <section className="print-area print-card rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+          <div className="print-header border-b border-slate-200 p-6">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-700 print:text-slate-900">
+              <p className="print-subtitle text-xs font-black uppercase tracking-[0.25em] text-blue-700">
                 Presupuesto
               </p>
 
-              <h2 className="mt-2 text-3xl font-black text-slate-950">
+              <h2 className="print-title mt-2 text-3xl font-black text-slate-950">
                 {budgetLabel}
               </h2>
 
-              <div className="mt-3 print:hidden">
+              <div className="mt-3 print-hidden print:hidden">
                 <StatusBadge status={budget.status || 'issued'} />
               </div>
             </div>
 
-            <div className="rounded-3xl bg-slate-50 p-5 text-left md:text-right print:bg-white print:p-0">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+            <div className="rounded-3xl bg-slate-50 p-5 text-left md:text-right">
+              <p className="print-subtitle text-xs font-black uppercase tracking-widest text-slate-400">
                 Fecha de emisión
               </p>
 
@@ -276,188 +429,185 @@ export default function PresupuestoDetallePage() {
               </p>
             </div>
           </div>
-        </div>
 
-        <div className="border-b border-slate-200 p-6">
-          <h2 className="text-xl font-black text-slate-950">
-            Datos del cliente
-          </h2>
+          <div className="print-section border-b border-slate-200 p-6">
+            <h2 className="print-section-title text-xl font-black text-slate-950">
+              Datos del cliente
+            </h2>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <ClientData
-              icon={User}
-              label="Nombre"
-              value={budget.clients?.name || '-'}
-            />
+            <div className="print-client-grid mt-4 grid gap-4 md:grid-cols-3">
+              <ClientData
+                icon={User}
+                label="Nombre"
+                value={budget.clients?.name || '-'}
+              />
 
-            <ClientData
-              icon={Hash}
-              label="CUIT"
-              value={budget.clients?.cuit || '-'}
-            />
+              <ClientData
+                icon={Hash}
+                label="CUIT"
+                value={budget.clients?.cuit || '-'}
+              />
 
-            <ClientData
-              icon={MapPin}
-              label="Dirección"
-              value={budget.clients?.address || '-'}
-            />
-          </div>
-        </div>
-
-        <div className="p-6">
-          <h2 className="mb-4 text-xl font-black text-slate-950">
-            Productos presupuestados
-          </h2>
-
-          {items.length === 0 ? (
-            <div className="rounded-3xl bg-slate-50 p-10 text-center text-sm font-bold text-slate-500">
-              Este presupuesto no tiene productos cargados.
+              <ClientData
+                icon={MapPin}
+                label="Dirección"
+                value={budget.clients?.address || '-'}
+              />
             </div>
-          ) : (
-            <>
-              <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 lg:block">
-                <table className="w-full min-w-[850px]">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <TableHead>Producto</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead align="right">Cantidad</TableHead>
-                      <TableHead align="right">Precio unit.</TableHead>
-                      <TableHead align="right">Total</TableHead>
-                    </tr>
-                  </thead>
+          </div>
 
-                  <tbody className="divide-y divide-slate-100">
-                    {items.map((item) => {
-                      const itemTotal =
-                        item.total ??
-                        Number(item.quantity || 0) *
-                          Number(item.unit_price || 0)
+          <div className="print-section p-6">
+            <h2 className="print-section-title mb-4 text-xl font-black text-slate-950">
+              Productos presupuestados
+            </h2>
 
-                      return (
-                        <tr
-                          key={item.id}
-                          className="transition hover:bg-blue-50/40"
-                        >
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 print:hidden">
-                                <Package size={19} />
+            {items.length === 0 ? (
+              <div className="rounded-3xl bg-slate-50 p-10 text-center text-sm font-bold text-slate-500">
+                Este presupuesto no tiene productos cargados.
+              </div>
+            ) : (
+              <>
+                <div className="print-table-wrap hidden overflow-x-auto rounded-2xl border border-slate-200 lg:block">
+                  <table className="print-table w-full min-w-[850px]">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead align="right">Cantidad</TableHead>
+                        <TableHead align="right">Precio unit.</TableHead>
+                        <TableHead align="right">Total</TableHead>
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-100">
+                      {items.map((item) => {
+                        const itemTotal =
+                          item.total ??
+                          Number(item.quantity || 0) *
+                            Number(item.unit_price || 0)
+
+                        return (
+                          <tr
+                            key={item.id}
+                            className="transition hover:bg-blue-50/40"
+                          >
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="print-hidden flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 print:hidden">
+                                  <Package size={19} />
+                                </div>
+
+                                <p className="font-black text-slate-950">
+                                  {item.product_name}
+                                </p>
                               </div>
+                            </td>
 
-                              <p className="font-black text-slate-950">
-                                {item.product_name}
-                              </p>
-                            </div>
-                          </td>
-
-                          <td className="px-5 py-4">
-                            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700 print:bg-white print:px-0">
-                              <Hash size={14} className="print:hidden" />
+                            <td className="px-5 py-4">
                               {item.product_code || '-'}
-                            </span>
-                          </td>
+                            </td>
 
-                          <td className="px-5 py-4">
-                            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700 print:bg-white print:px-0 print:text-slate-700">
-                              <Tag size={14} className="print:hidden" />
+                            <td className="px-5 py-4">
                               {item.category || 'Sin categoría'}
-                            </span>
-                          </td>
+                            </td>
 
-                          <td className="px-5 py-4 text-right font-bold text-slate-700">
-                            {Number(item.quantity || 0).toLocaleString('es-AR')}
-                          </td>
+                            <td className="px-5 py-4 text-right font-bold text-slate-700">
+                              {Number(item.quantity || 0).toLocaleString(
+                                'es-AR'
+                              )}
+                            </td>
 
-                          <td className="px-5 py-4 text-right font-bold text-slate-700">
-                            $
-                            {Number(item.unit_price || 0).toLocaleString(
+                            <td className="px-5 py-4 text-right font-bold text-slate-700">
+                              $
+                              {Number(item.unit_price || 0).toLocaleString(
+                                'es-AR'
+                              )}
+                            </td>
+
+                            <td className="px-5 py-4 text-right text-lg font-black text-blue-700">
+                              $
+                              {Number(itemTotal || 0).toLocaleString('es-AR')}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="space-y-3 lg:hidden print-hidden print:hidden">
+                  {items.map((item) => {
+                    const itemTotal =
+                      item.total ??
+                      Number(item.quantity || 0) * Number(item.unit_price || 0)
+
+                    return (
+                      <article
+                        key={item.id}
+                        className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                            <Package size={20} />
+                          </div>
+
+                          <div>
+                            <h3 className="font-black text-slate-950">
+                              {item.product_name}
+                            </h3>
+
+                            <p className="mt-1 text-xs font-semibold text-slate-400">
+                              Código: {item.product_code || '-'} ·{' '}
+                              {item.category || 'Sin categoría'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-3 gap-3">
+                          <MiniData
+                            label="Cant."
+                            value={Number(item.quantity || 0).toLocaleString(
                               'es-AR'
                             )}
-                          </td>
+                          />
 
-                          <td className="px-5 py-4 text-right text-lg font-black text-blue-700 print:text-slate-950">
-                            ${Number(itemTotal || 0).toLocaleString('es-AR')}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          <MiniData
+                            label="Precio"
+                            value={`$${Number(
+                              item.unit_price || 0
+                            ).toLocaleString('es-AR')}`}
+                          />
 
-              <div className="space-y-3 lg:hidden print:hidden">
-                {items.map((item) => {
-                  const itemTotal =
-                    item.total ??
-                    Number(item.quantity || 0) * Number(item.unit_price || 0)
-
-                  return (
-                    <article
-                      key={item.id}
-                      className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                          <Package size={20} />
+                          <MiniData
+                            label="Total"
+                            value={`$${Number(itemTotal || 0).toLocaleString(
+                              'es-AR'
+                            )}`}
+                          />
                         </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              </>
+            )}
 
-                        <div>
-                          <h3 className="font-black text-slate-950">
-                            {item.product_name}
-                          </h3>
+            <div className="mt-6 flex justify-end">
+              <div className="print-total w-full rounded-3xl bg-slate-950 p-6 text-white md:w-96">
+                <p className="print-total-label text-sm font-black uppercase tracking-widest text-blue-200">
+                  Total presupuesto
+                </p>
 
-                          <p className="mt-1 text-xs font-semibold text-slate-400">
-                            Código: {item.product_code || '-'} ·{' '}
-                            {item.category || 'Sin categoría'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-3 gap-3">
-                        <MiniData
-                          label="Cant."
-                          value={Number(item.quantity || 0).toLocaleString(
-                            'es-AR'
-                          )}
-                        />
-
-                        <MiniData
-                          label="Precio"
-                          value={`$${Number(
-                            item.unit_price || 0
-                          ).toLocaleString('es-AR')}`}
-                        />
-
-                        <MiniData
-                          label="Total"
-                          value={`$${Number(itemTotal || 0).toLocaleString(
-                            'es-AR'
-                          )}`}
-                        />
-                      </div>
-                    </article>
-                  )
-                })}
+                <p className="print-total-number mt-2 text-4xl font-black">
+                  ${finalTotal.toLocaleString('es-AR')}
+                </p>
               </div>
-            </>
-          )}
-
-          <div className="mt-6 flex justify-end">
-            <div className="w-full rounded-3xl bg-slate-950 p-6 text-white md:w-96 print:bg-white print:p-0 print:text-slate-950">
-              <p className="text-sm font-black uppercase tracking-widest text-blue-200 print:text-slate-500">
-                Total presupuesto
-              </p>
-
-              <p className="mt-2 text-4xl font-black">
-                ${finalTotal.toLocaleString('es-AR')}
-              </p>
             </div>
           </div>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </>
   )
 }
 
@@ -503,9 +653,9 @@ function ClientData({
   value: string
 }) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-4 print:bg-white print:p-0">
+    <div className="rounded-2xl bg-slate-50 p-4">
       <p className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
-        <Icon size={14} className="print:hidden" />
+        <Icon size={14} className="print-hidden print:hidden" />
         {label}
       </p>
 
