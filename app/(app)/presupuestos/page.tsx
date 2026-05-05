@@ -206,7 +206,7 @@ export default function PresupuestosPage() {
       const { error } = await supabase
         .from('budgets')
         .delete()
-        .eq('id', budget.id)
+        .eq('budget_id', budget.id)
         .eq('company_id', companyId)
 
       if (error) throw error
@@ -270,7 +270,7 @@ export default function PresupuestosPage() {
             </div>
 
             <h1 className="text-3xl font-black tracking-tight">
-              Gestión de presupuestos
+              Gestión de presupuestos.
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
