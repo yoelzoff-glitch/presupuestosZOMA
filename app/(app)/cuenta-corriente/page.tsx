@@ -405,7 +405,7 @@ export default function CuentaCorrientePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full overflow-hidden space-y-6">
       <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl">
         <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
         <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
@@ -438,8 +438,8 @@ export default function CuentaCorrientePage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+      <div className="grid w-full max-w-full grid-cols-1 gap-6 xl:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+        <section className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-5">
             <h2 className="flex items-center gap-2 text-xl font-black text-slate-950">
               <Users size={22} className="text-blue-600" />
@@ -492,7 +492,7 @@ export default function CuentaCorrientePage() {
           </div>
         </section>
 
-        <section className="space-y-5">
+        <section className="min-w-0 space-y-5 overflow-hidden">
           {!selectedClient ? (
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-10 text-center shadow-sm">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
@@ -510,15 +510,15 @@ export default function CuentaCorrientePage() {
           ) : (
             <>
               <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
+                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-500">
                       Cuenta corriente de
                     </p>
-                    <h2 className="text-2xl font-black text-slate-950">
+                    <h2 className="truncate text-2xl font-black text-slate-950">
                       {selectedClient.name}
                     </h2>
-                    <p className="mt-1 text-sm font-bold text-slate-400">
+                    <p className="mt-1 truncate text-sm font-bold text-slate-400">
                       CUIT: {selectedClient.cuit}
                     </p>
                   </div>
@@ -530,7 +530,7 @@ export default function CuentaCorrientePage() {
                       setErrorMsg('')
                       setSuccessMsg('')
                     }}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"
+                    className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 sm:w-auto"
                   >
                     <Plus size={18} />
                     Registrar pago
@@ -715,7 +715,7 @@ export default function CuentaCorrientePage() {
                   </p>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="w-full max-w-full overflow-x-auto">
                   {movementsLoading ? (
                     <div className="flex items-center justify-center gap-3 p-10 text-sm font-bold text-slate-500">
                       <Loader2 className="animate-spin text-blue-600" />
