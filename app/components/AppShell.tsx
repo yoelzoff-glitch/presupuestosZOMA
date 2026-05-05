@@ -73,10 +73,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">
-              ERP Comercial
+              ZOMA
             </p>
             <h1 className="mt-1 text-xl font-black text-white">
-              Presupuestos
+              Clientes
             </h1>
           </div>
         </div>
