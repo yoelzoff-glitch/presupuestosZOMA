@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import {
@@ -43,6 +44,8 @@ type BudgetItem = {
 }
 
 export default function NuevoPresupuestoPage() {
+  const router = useRouter()
+
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -142,6 +145,16 @@ export default function NuevoPresupuestoPage() {
     (acc, item) => acc + item.price * item.quantity,
     0
   )
+
+  const canSave = Boolean(companyId && clientId && items.length > 0 && !saving)
+
+  const saveButtonText = saving
+    ? 'Guardando...'
+    : !clientId
+      ? 'Seleccioná un cliente'
+      : items.length === 0
+        ? 'Agregá productos'
+        : 'Guardar presupuesto'
 
   function selectProduct(product: Product) {
     setSelectedProduct(product)
@@ -293,6 +306,7 @@ export default function NuevoPresupuestoPage() {
         .single()
 
       if (budgetError) throw budgetError
+      if (!budget?.id) throw new Error('No se pudo crear el presupuesto.')
 
       const itemsToInsert = items.map((item) => ({
         company_id: companyId,
@@ -311,27 +325,28 @@ export default function NuevoPresupuestoPage() {
 
       if (itemsError) throw itemsError
 
-      await supabase.from('account_movements').insert({
-        company_id: companyId,
-        client_id: clientId,
-        budget_id: budget.id,
-        movement_type: 'Venta',
-        debit: total,
-        credit: 0,
-        description: `Presupuesto 000-${nextNumber}`,
-      })
+      const { error: movementError } = await supabase
+        .from('account_movements')
+        .insert({
+          company_id: companyId,
+          client_id: clientId,
+          budget_id: budget.id,
+          movement_type: 'Venta',
+          debit: total,
+          credit: 0,
+          description: `Presupuesto 000-${nextNumber}`,
+        })
+
+      if (movementError) throw movementError
 
       toast.success(`Presupuesto 000-${nextNumber} creado correctamente.`)
 
-      setItems([])
-      setClientId('')
-      setSearch('')
-      setSelectedProduct(null)
+      router.push(`/presupuestos/${budget.id}`)
     } catch (error: any) {
       toast.error(error.message || 'Error al guardar presupuesto.')
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   return (
@@ -360,17 +375,19 @@ export default function NuevoPresupuestoPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Seleccioná cliente, agregá productos del listado o cargalos manualmente.
+              Seleccioná cliente, agregá productos del listado o cargalos
+              manualmente.
             </p>
           </div>
 
           <button
+            type="button"
             onClick={saveBudget}
-            disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:opacity-60"
+            disabled={!canSave}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save size={18} />
-            {saving ? 'Guardando...' : 'Guardar presupuesto'}
+            {saveButtonText}
           </button>
         </div>
       </section>
@@ -395,10 +412,13 @@ export default function NuevoPresupuestoPage() {
 
             <select
               value={clientId}
+              disabled={loading}
               onChange={(e) => setClientId(e.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <option value="">Seleccionar cliente</option>
+              <option value="">
+                {loading ? 'Cargando clientes...' : 'Seleccionar cliente'}
+              </option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
                   {client.name} - CUIT {client.cuit}
@@ -445,20 +465,30 @@ export default function NuevoPresupuestoPage() {
 
               <input
                 value={search}
+                disabled={loading}
                 onChange={(e) => {
                   setSearch(e.target.value)
                   setSelectedProduct(null)
                 }}
-                placeholder="Buscar producto..."
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                placeholder={
+                  loading ? 'Cargando productos...' : 'Buscar producto...'
+                }
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
+
+            {search && filteredProducts.length === 0 && !selectedProduct && (
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                No se encontraron productos con esa búsqueda.
+              </div>
+            )}
 
             {search && filteredProducts.length > 0 && !selectedProduct && (
               <div className="mt-3 max-h-72 overflow-auto rounded-2xl border border-slate-200">
                 {filteredProducts.map((product) => (
                   <button
                     key={product.id}
+                    type="button"
                     onClick={() => selectProduct(product)}
                     className="flex w-full items-center justify-between gap-4 border-b border-slate-100 p-4 text-left transition last:border-b-0 hover:bg-blue-50"
                   >
@@ -493,12 +523,22 @@ export default function NuevoPresupuestoPage() {
                 </h3>
 
                 <div className="mt-3 grid gap-3 text-sm font-semibold text-slate-600 sm:grid-cols-3">
-                  <Info icon={Hash} label="Código" value={selectedProduct.internal_code || '-'} />
-                  <Info icon={Tag} label="Categoría" value={selectedProduct.category || '-'} />
+                  <Info
+                    icon={Hash}
+                    label="Código"
+                    value={selectedProduct.internal_code || '-'}
+                  />
+                  <Info
+                    icon={Tag}
+                    label="Categoría"
+                    value={selectedProduct.category || '-'}
+                  />
                   <Info
                     icon={DollarSign}
                     label="Precio lista"
-                    value={`$${Number(selectedProduct.cost_price || 0).toLocaleString('es-AR')}`}
+                    value={`$${Number(
+                      selectedProduct.cost_price || 0
+                    ).toLocaleString('es-AR')}`}
                   />
                 </div>
 
@@ -522,12 +562,16 @@ export default function NuevoPresupuestoPage() {
                       Total
                     </label>
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-blue-700">
-                      ${(Number(productQty || 0) * Number(productPrice || 0)).toLocaleString('es-AR')}
+                      $
+                      {(
+                        Number(productQty || 0) * Number(productPrice || 0)
+                      ).toLocaleString('es-AR')}
                     </div>
                   </div>
                 </div>
 
                 <button
+                  type="button"
                   onClick={addProductItem}
                   className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
                 >
@@ -549,16 +593,43 @@ export default function NuevoPresupuestoPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Código" value={manual.code} onChange={(v) => setManual({ ...manual, code: v })} />
-              <Field label="Categoría" value={manual.category} onChange={(v) => setManual({ ...manual, category: v })} />
+              <Field
+                label="Código"
+                value={manual.code}
+                onChange={(v) => setManual({ ...manual, code: v })}
+              />
+
+              <Field
+                label="Categoría"
+                value={manual.category}
+                onChange={(v) => setManual({ ...manual, category: v })}
+              />
+
               <div className="md:col-span-2">
-                <Field label="Producto" value={manual.name} onChange={(v) => setManual({ ...manual, name: v })} />
+                <Field
+                  label="Producto"
+                  value={manual.name}
+                  onChange={(v) => setManual({ ...manual, name: v })}
+                />
               </div>
-              <Field label="Precio unitario" value={manual.price} onChange={(v) => setManual({ ...manual, price: v })} type="number" />
-              <Field label="Cantidad" value={manual.quantity} onChange={(v) => setManual({ ...manual, quantity: v })} type="number" />
+
+              <Field
+                label="Precio unitario"
+                value={manual.price}
+                onChange={(v) => setManual({ ...manual, price: v })}
+                type="number"
+              />
+
+              <Field
+                label="Cantidad"
+                value={manual.quantity}
+                onChange={(v) => setManual({ ...manual, quantity: v })}
+                type="number"
+              />
             </div>
 
             <button
+              type="button"
               onClick={addManualItem}
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"
             >
@@ -609,13 +680,16 @@ export default function NuevoPresupuestoPage() {
                           {item.name}
                         </p>
                         <p className="mt-1 text-xs font-semibold text-slate-400">
-                          Código: {item.code || '-'} · {item.category || 'Sin categoría'}
+                          Código: {item.code || '-'} ·{' '}
+                          {item.category || 'Sin categoría'}
                         </p>
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => removeItem(index)}
                         className="rounded-xl border border-red-100 bg-red-50 p-2 text-red-600 transition hover:bg-red-100"
+                        aria-label="Eliminar producto"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -629,7 +703,9 @@ export default function NuevoPresupuestoPage() {
                         <input
                           type="number"
                           value={item.quantity}
-                          onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                          onChange={(e) =>
+                            updateItem(index, 'quantity', e.target.value)
+                          }
                           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white"
                         />
                       </div>
@@ -641,7 +717,9 @@ export default function NuevoPresupuestoPage() {
                         <input
                           type="number"
                           value={item.price}
-                          onChange={(e) => updateItem(index, 'price', e.target.value)}
+                          onChange={(e) =>
+                            updateItem(index, 'price', e.target.value)
+                          }
                           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white"
                         />
                       </div>
@@ -671,12 +749,13 @@ export default function NuevoPresupuestoPage() {
               </div>
 
               <button
+                type="button"
                 onClick={saveBudget}
-                disabled={saving}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500 disabled:opacity-60"
+                disabled={!canSave}
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Save size={18} />
-                {saving ? 'Guardando...' : 'Guardar presupuesto'}
+                {saveButtonText}
               </button>
             </div>
           </section>

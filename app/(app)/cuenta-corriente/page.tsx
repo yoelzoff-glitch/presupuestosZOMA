@@ -12,6 +12,7 @@ import {
   ArrowUpCircle,
   CalendarDays,
   ReceiptText,
+  FileText,
 } from 'lucide-react'
 
 type Client = {
@@ -38,6 +39,14 @@ type Movement = {
   } | null
 }
 
+type PendingBudget = {
+  id: string
+  label: string
+  total: number
+  paid: number
+  balance: number
+}
+
 export default function CuentaCorrientePage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>([])
@@ -51,6 +60,7 @@ export default function CuentaCorrientePage() {
 
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState('')
+  const [selectedPaymentBudgetId, setSelectedPaymentBudgetId] = useState('')
   const [paymentType, setPaymentType] =
     useState<'Pago total' | 'Pago parcial' | 'A cuenta'>('Pago parcial')
   const [paymentDescription, setPaymentDescription] = useState('Pago recibido')
@@ -65,8 +75,16 @@ export default function CuentaCorrientePage() {
   useEffect(() => {
     if (selectedClientId) {
       loadMovements(selectedClientId)
+      setSelectedPaymentBudgetId('')
+      setPaymentAmount('')
+      setPaymentType('Pago parcial')
+      setPaymentDescription('Pago recibido')
     } else {
       setMovements([])
+      setSelectedPaymentBudgetId('')
+      setPaymentAmount('')
+      setPaymentType('Pago parcial')
+      setPaymentDescription('Pago recibido')
     }
   }, [selectedClientId])
 
@@ -164,6 +182,90 @@ export default function CuentaCorrientePage() {
     setMovementsLoading(false)
   }
 
+  const selectedClient = clients.find((c) => c.id === selectedClientId)
+
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.toLowerCase().trim()
+
+    if (!q) return clients
+
+    return clients.filter(
+      (client) =>
+        client.name.toLowerCase().includes(q) ||
+        client.cuit.toLowerCase().includes(q)
+    )
+  }, [clients, clientSearch])
+
+  const totals = useMemo(() => {
+    const debit = movements.reduce(
+      (acc, item) => acc + Number(item.debit || 0),
+      0
+    )
+    const credit = movements.reduce(
+      (acc, item) => acc + Number(item.credit || 0),
+      0
+    )
+
+    return {
+      debit,
+      credit,
+      balance: debit - credit,
+    }
+  }, [movements])
+
+  const pendingBudgets = useMemo<PendingBudget[]>(() => {
+    const grouped = new Map<string, PendingBudget>()
+
+    movements.forEach((movement) => {
+      if (!movement.budget_id) return
+
+      const budgetCode =
+        movement.budgets?.budget_code ||
+        (movement.budgets?.budget_number
+          ? `000-${movement.budgets.budget_number}`
+          : 'Presupuesto')
+
+      const current =
+        grouped.get(movement.budget_id) || {
+          id: movement.budget_id,
+          label: budgetCode,
+          total: 0,
+          paid: 0,
+          balance: 0,
+        }
+
+      current.total += Number(movement.debit || 0)
+      current.paid += Number(movement.credit || 0)
+      current.balance = current.total - current.paid
+
+      grouped.set(movement.budget_id, current)
+    })
+
+    return Array.from(grouped.values()).filter((budget) => budget.balance > 0)
+  }, [movements])
+
+  const selectedPaymentBudget = pendingBudgets.find(
+    (budget) => budget.id === selectedPaymentBudgetId
+  )
+
+  const paymentFullAmount = selectedPaymentBudget
+    ? selectedPaymentBudget.balance
+    : totals.balance
+
+  useEffect(() => {
+    if (paymentType === 'Pago total') {
+      setPaymentAmount(
+        paymentFullAmount > 0 ? String(Number(paymentFullAmount.toFixed(2))) : ''
+      )
+
+      if (selectedPaymentBudget) {
+        setPaymentDescription(`Pago completo ${selectedPaymentBudget.label}`)
+      } else {
+        setPaymentDescription('Pago completo de deuda')
+      }
+    }
+  }, [paymentType, paymentFullAmount, selectedPaymentBudget])
+
   async function handleSavePayment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
@@ -180,10 +282,23 @@ export default function CuentaCorrientePage() {
       return
     }
 
-    const amount = Number(paymentAmount)
+    const amount =
+      paymentType === 'Pago total'
+        ? Number(paymentFullAmount)
+        : Number(paymentAmount)
 
-    if (!paymentAmount || isNaN(amount) || amount <= 0) {
+    if (!amount || isNaN(amount) || amount <= 0) {
       setErrorMsg('Ingresá un monto válido.')
+      return
+    }
+
+    if (paymentType === 'Pago total' && amount > totals.balance) {
+      setErrorMsg('El pago no puede superar la deuda total del cliente.')
+      return
+    }
+
+    if (selectedPaymentBudget && amount > selectedPaymentBudget.balance) {
+      setErrorMsg('El pago no puede superar la deuda del presupuesto seleccionado.')
       return
     }
 
@@ -192,9 +307,14 @@ export default function CuentaCorrientePage() {
     const { error } = await supabase.from('account_movements').insert({
       company_id: companyId,
       client_id: selectedClientId,
+      budget_id: selectedPaymentBudgetId || null,
       movement_type: 'Pago',
       payment_type: paymentType,
-      description: paymentDescription.trim() || 'Pago recibido',
+      description:
+        paymentDescription.trim() ||
+        (selectedPaymentBudget
+          ? `Pago ${selectedPaymentBudget.label}`
+          : 'Pago recibido'),
       debit: 0,
       credit: amount,
     })
@@ -209,6 +329,7 @@ export default function CuentaCorrientePage() {
 
     setSuccessMsg('Pago registrado correctamente.')
     setPaymentAmount('')
+    setSelectedPaymentBudgetId('')
     setPaymentType('Pago parcial')
     setPaymentDescription('Pago recibido')
     setShowPaymentForm(false)
@@ -216,33 +337,61 @@ export default function CuentaCorrientePage() {
     await loadMovements(selectedClientId)
   }
 
-  const selectedClient = clients.find((c) => c.id === selectedClientId)
+  function handleBudgetSelection(budgetId: string) {
+    setSelectedPaymentBudgetId(budgetId)
 
-  const filteredClients = useMemo(() => {
-    const q = clientSearch.toLowerCase().trim()
+    const budget = pendingBudgets.find((item) => item.id === budgetId)
 
-    if (!q) return clients
+    if (budget) {
+      setPaymentDescription(`Pago ${budget.label}`)
 
-    return clients.filter(
-      (client) =>
-        client.name.toLowerCase().includes(q) ||
-        client.cuit.toLowerCase().includes(q)
-    )
-  }, [clients, clientSearch])
+      if (paymentType === 'Pago total') {
+        setPaymentAmount(String(Number(budget.balance.toFixed(2))))
+      }
+    } else {
+      setPaymentDescription('Pago recibido')
 
-  const totals = useMemo(() => {
-    const debit = movements.reduce((acc, item) => acc + Number(item.debit || 0), 0)
-    const credit = movements.reduce(
-      (acc, item) => acc + Number(item.credit || 0),
-      0
-    )
-
-    return {
-      debit,
-      credit,
-      balance: debit - credit,
+      if (paymentType === 'Pago total') {
+        setPaymentAmount(
+          totals.balance > 0 ? String(Number(totals.balance.toFixed(2))) : ''
+        )
+      }
     }
-  }, [movements])
+  }
+
+  function handlePaymentTypeChange(
+    nextType: 'Pago total' | 'Pago parcial' | 'A cuenta'
+  ) {
+    setPaymentType(nextType)
+
+    if (nextType === 'Pago total') {
+      setPaymentAmount(
+        paymentFullAmount > 0 ? String(Number(paymentFullAmount.toFixed(2))) : ''
+      )
+
+      if (selectedPaymentBudget) {
+        setPaymentDescription(`Pago completo ${selectedPaymentBudget.label}`)
+      } else {
+        setPaymentDescription('Pago completo de deuda')
+      }
+    }
+
+    if (nextType === 'Pago parcial') {
+      if (selectedPaymentBudget) {
+        setPaymentDescription(`Pago parcial ${selectedPaymentBudget.label}`)
+      } else {
+        setPaymentDescription('Pago recibido')
+      }
+    }
+
+    if (nextType === 'A cuenta') {
+      if (selectedPaymentBudget) {
+        setPaymentDescription(`Pago a cuenta ${selectedPaymentBudget.label}`)
+      } else {
+        setPaymentDescription('Pago a cuenta')
+      }
+    }
+  }
 
   if (loading) {
     return (
@@ -376,7 +525,11 @@ export default function CuentaCorrientePage() {
 
                   <button
                     type="button"
-                    onClick={() => setShowPaymentForm(!showPaymentForm)}
+                    onClick={() => {
+                      setShowPaymentForm(!showPaymentForm)
+                      setErrorMsg('')
+                      setSuccessMsg('')
+                    }}
                     className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"
                   >
                     <Plus size={18} />
@@ -388,21 +541,21 @@ export default function CuentaCorrientePage() {
               <div className="grid gap-4 md:grid-cols-3">
                 <StatCard
                   title="Total vendido"
-                  value={`$${totals.debit.toLocaleString('es-AR')}`}
+                  value={formatCurrency(totals.debit)}
                   icon={ArrowUpCircle}
                   tone="blue"
                 />
 
                 <StatCard
                   title="Total pagado"
-                  value={`$${totals.credit.toLocaleString('es-AR')}`}
+                  value={formatCurrency(totals.credit)}
                   icon={ArrowDownCircle}
                   tone="green"
                 />
 
                 <StatCard
                   title="Saldo pendiente"
-                  value={`$${totals.balance.toLocaleString('es-AR')}`}
+                  value={formatCurrency(totals.balance)}
                   icon={Wallet}
                   tone={totals.balance > 0 ? 'red' : 'green'}
                 />
@@ -413,32 +566,59 @@ export default function CuentaCorrientePage() {
                   onSubmit={handleSavePayment}
                   className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm"
                 >
-                  <h3 className="mb-4 text-lg font-black text-slate-950">
-                    Registrar pago
-                  </h3>
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-950">
+                        Registrar pago
+                      </h3>
+                      <p className="text-sm font-semibold text-slate-500">
+                        Podés asociar el pago a un presupuesto pendiente del cliente.
+                      </p>
+                    </div>
 
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <label className="block">
+                    {selectedPaymentBudget && (
+                      <div className="rounded-2xl bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">
+                        Deuda: {formatCurrency(selectedPaymentBudget.balance)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="block xl:col-span-2">
                       <span className="mb-2 block text-sm font-bold text-slate-700">
-                        Monto
+                        Presupuesto asociado
                       </span>
-                      <input
-                        type="number"
-                        value={paymentAmount}
-                        onChange={(e) => setPaymentAmount(e.target.value)}
-                        placeholder="Ej: 15000"
+
+                      <select
+                        value={selectedPaymentBudgetId}
+                        onChange={(e) => handleBudgetSelection(e.target.value)}
                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                      />
+                      >
+                        <option value="">Sin asociar a presupuesto</option>
+
+                        {pendingBudgets.map((budget) => (
+                          <option key={budget.id} value={budget.id}>
+                            {budget.label} - deuda {formatCurrency(budget.balance)}
+                          </option>
+                        ))}
+                      </select>
+
+                      {pendingBudgets.length === 0 && (
+                        <p className="mt-2 text-xs font-bold text-slate-400">
+                          Este cliente no tiene presupuestos pendientes para asociar.
+                        </p>
+                      )}
                     </label>
 
                     <label className="block">
                       <span className="mb-2 block text-sm font-bold text-slate-700">
                         Tipo de pago
                       </span>
+
                       <select
                         value={paymentType}
                         onChange={(e) =>
-                          setPaymentType(
+                          handlePaymentTypeChange(
                             e.target.value as
                               | 'Pago total'
                               | 'Pago parcial'
@@ -455,8 +635,38 @@ export default function CuentaCorrientePage() {
 
                     <label className="block">
                       <span className="mb-2 block text-sm font-bold text-slate-700">
+                        Monto
+                      </span>
+
+                      <input
+                        type="number"
+                        value={paymentAmount}
+                        readOnly={paymentType === 'Pago total'}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                        placeholder="Ej: 15000"
+                        className={`w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 ${
+                          paymentType === 'Pago total'
+                            ? 'cursor-not-allowed bg-slate-100 text-slate-500'
+                            : 'bg-slate-50'
+                        }`}
+                      />
+
+                      {paymentType === 'Pago total' && (
+                        <p className="mt-2 text-xs font-bold text-blue-600">
+                          Se completa automáticamente con la deuda{' '}
+                          {selectedPaymentBudget
+                            ? 'del presupuesto'
+                            : 'total del cliente'}
+                          .
+                        </p>
+                      )}
+                    </label>
+
+                    <label className="block xl:col-span-4">
+                      <span className="mb-2 block text-sm font-bold text-slate-700">
                         Descripción
                       </span>
+
                       <input
                         value={paymentDescription}
                         onChange={(e) => setPaymentDescription(e.target.value)}
@@ -469,7 +679,13 @@ export default function CuentaCorrientePage() {
                   <div className="mt-5 flex justify-end gap-3">
                     <button
                       type="button"
-                      onClick={() => setShowPaymentForm(false)}
+                      onClick={() => {
+                        setShowPaymentForm(false)
+                        setPaymentAmount('')
+                        setSelectedPaymentBudgetId('')
+                        setPaymentType('Pago parcial')
+                        setPaymentDescription('Pago recibido')
+                      }}
                       className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
                     >
                       Cancelar
@@ -478,7 +694,7 @@ export default function CuentaCorrientePage() {
                     <button
                       type="submit"
                       disabled={savingPayment}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:opacity-70"
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {savingPayment && (
                         <Loader2 size={18} className="animate-spin" />
@@ -579,27 +795,24 @@ export default function CuentaCorrientePage() {
                               )}
 
                               {movement.budgets && (
-                                <p className="mt-1 text-xs font-bold text-blue-500">
+                                <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-blue-500">
+                                  <FileText size={13} />
                                   Presupuesto:{' '}
                                   {movement.budgets.budget_code ||
-                                    movement.budgets.budget_number}
+                                    `000-${movement.budgets.budget_number}`}
                                 </p>
                               )}
                             </td>
 
                             <td className="px-5 py-4 text-right text-base font-black text-red-600">
                               {Number(movement.debit || 0) > 0
-                                ? `$${Number(movement.debit).toLocaleString(
-                                    'es-AR'
-                                  )}`
+                                ? formatCurrency(Number(movement.debit))
                                 : '-'}
                             </td>
 
                             <td className="px-5 py-4 text-right text-base font-black text-green-600">
                               {Number(movement.credit || 0) > 0
-                                ? `$${Number(movement.credit).toLocaleString(
-                                    'es-AR'
-                                  )}`
+                                ? formatCurrency(Number(movement.credit))
                                 : '-'}
                             </td>
                           </tr>
@@ -635,19 +848,30 @@ function StatCard({
   }
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center gap-3">
+    <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex min-w-0 items-center gap-3">
         <div
-          className={`flex h-12 w-12 items-center justify-center rounded-2xl ${styles[tone]}`}
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${styles[tone]}`}
         >
           <Icon size={23} />
         </div>
 
-        <div>
-          <p className="text-sm font-bold text-slate-500">{title}</p>
-          <h2 className="text-2xl font-black text-slate-950">{value}</h2>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-slate-500">{title}</p>
+          <h2 className="truncate text-[22px] font-black leading-tight text-slate-950">
+            {value}
+          </h2>
         </div>
       </div>
     </div>
   )
+}
+
+function formatCurrency(value: number) {
+  return value.toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }

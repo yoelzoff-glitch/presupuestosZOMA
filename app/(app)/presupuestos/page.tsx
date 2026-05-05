@@ -17,7 +17,11 @@ import {
   XCircle,
   Trash2,
   Loader2,
+  Clock3,
+  Filter,
 } from 'lucide-react'
+
+type BudgetStatus = 'all' | 'issued' | 'approved' | 'draft' | 'cancelled'
 
 type Budget = {
   id: string
@@ -33,9 +37,18 @@ type Budget = {
   } | null
 }
 
+const statusFilters: { label: string; value: BudgetStatus }[] = [
+  { label: 'Todos', value: 'all' },
+  { label: 'Emitidos', value: 'issued' },
+  { label: 'Aprobados', value: 'approved' },
+  { label: 'Borradores', value: 'draft' },
+  { label: 'Anulados', value: 'cancelled' },
+]
+
 export default function PresupuestosPage() {
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<BudgetStatus>('all')
   const [loading, setLoading] = useState(true)
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
 
@@ -215,18 +228,21 @@ export default function PresupuestosPage() {
   const filteredBudgets = useMemo(() => {
     const q = search.toLowerCase().trim()
 
-    if (!q) return budgets
-
     return budgets.filter((budget) => {
-      return (
+      const matchesSearch =
+        !q ||
         budget.budget_code?.toLowerCase().includes(q) ||
         String(budget.budget_number).includes(q) ||
         budget.client?.name?.toLowerCase().includes(q) ||
         budget.client?.cuit?.toLowerCase().includes(q) ||
         budget.status?.toLowerCase().includes(q)
-      )
+
+      const matchesStatus =
+        statusFilter === 'all' || budget.status === statusFilter
+
+      return matchesSearch && matchesStatus
     })
-  }, [budgets, search])
+  }, [budgets, search, statusFilter])
 
   const activeBudgets = budgets.filter((budget) => budget.status !== 'cancelled')
 
@@ -236,6 +252,8 @@ export default function PresupuestosPage() {
   )
 
   const issuedCount = budgets.filter((b) => b.status === 'issued').length
+  const approvedCount = budgets.filter((b) => b.status === 'approved').length
+  const draftCount = budgets.filter((b) => b.status === 'draft').length
   const cancelledCount = budgets.filter((b) => b.status === 'cancelled').length
 
   return (
@@ -256,8 +274,8 @@ export default function PresupuestosPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Consultá presupuestos emitidos, anulá los que no fueron aprobados
-              o eliminá los que no quieras conservar.
+              Consultá presupuestos, filtrá por estado, revisá importes y
+              administrá anulaciones o eliminaciones desde una vista más clara.
             </p>
           </div>
 
@@ -271,220 +289,359 @@ export default function PresupuestosPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <Stat title="Presupuestos" value={budgets.length} icon={FileText} loading={loading} />
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+        <Stat title="Total" value={budgets.length} icon={FileText} loading={loading} />
         <Stat title="Emitidos" value={issuedCount} icon={CheckCircle2} loading={loading} />
-        <Stat title="Anulados" value={cancelledCount} icon={XCircle} loading={loading} />
+        <Stat title="Aprobados" value={approvedCount} icon={CheckCircle2} loading={loading} />
+        <Stat title="Borradores" value={draftCount} icon={Clock3} loading={loading} />
         <Stat
           title="Total vigente"
-          value={`$${totalAmount.toLocaleString('es-AR')}`}
+          value={totalAmount.toLocaleString('es-AR', {
+            style: 'currency',
+            currency: 'ARS',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
           icon={DollarSign}
           loading={loading}
         />
       </section>
 
       <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-xl font-black text-slate-950">
-              Listado de presupuestos
-            </h2>
-            <p className="text-sm text-slate-500">
-              Buscá por número, cliente, CUIT o estado.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="relative">
-              <Search
-                size={18}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar presupuesto..."
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:w-80"
-              />
-            </div>
-
-            <button
-              onClick={loadBudgets}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-            >
-              <RefreshCw size={17} />
-              Actualizar
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="p-10 text-center text-sm font-bold text-slate-500">
-              Cargando presupuestos...
-            </div>
-          ) : filteredBudgets.length === 0 ? (
-            <div className="p-10 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
-                <FileText size={26} />
-              </div>
-
-              <h3 className="text-lg font-black text-slate-900">
-                No hay presupuestos para mostrar
-              </h3>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Creá un presupuesto nuevo o cambiá la búsqueda.
+        <div className="space-y-4 border-b border-slate-200 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-950">
+                Listado de presupuestos
+              </h2>
+              <p className="text-sm text-slate-500">
+                Buscá por número, cliente, CUIT o estado.
               </p>
             </div>
-          ) : (
-            <table className="w-full min-w-[1050px]">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                    Presupuesto
-                  </th>
-                  <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                    Cliente
-                  </th>
-                  <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                    Fecha
-                  </th>
-                  <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                    Estado
-                  </th>
-                  <th className="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-slate-500">
-                    Total
-                  </th>
-                  <th className="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-slate-500">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
 
-              <tbody className="divide-y divide-slate-100">
-                {filteredBudgets.map((budget) => {
-                  const isCancelled = budget.status === 'cancelled'
-                  const isActionLoading = actionLoadingId === budget.id
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative">
+                <Search
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
 
-                  return (
-                    <tr
-                      key={budget.id}
-                      className={`transition ${
-                        isCancelled
-                          ? 'bg-red-50/40 opacity-75'
-                          : 'hover:bg-blue-50/40'
-                      }`}
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${
-                              isCancelled ? 'bg-red-600' : 'bg-slate-950'
-                            }`}
-                          >
-                            <FileText size={20} />
-                          </div>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar presupuesto..."
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:w-80"
+                />
+              </div>
 
-                          <div>
-                            <p className="font-black text-slate-950">
-                              {budget.budget_code ||
-                                `000-${budget.budget_number}`}
-                            </p>
-                            <p className="text-xs font-semibold text-slate-400">
-                              Nº interno {budget.budget_number}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
+              <button
+                type="button"
+                onClick={loadBudgets}
+                disabled={loading}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
+                Actualizar
+              </button>
+            </div>
+          </div>
 
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <User size={16} className="text-slate-400" />
-                          <div>
-                            <p className="font-bold text-slate-800">
-                              {budget.client?.name || 'Sin cliente'}
-                            </p>
-                            <p className="text-xs font-semibold text-slate-400">
-                              CUIT: {budget.client?.cuit || '-'}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-1 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
+              <Filter size={14} />
+              Estado
+            </div>
 
-                      <td className="px-5 py-4">
-                        <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
-                          <CalendarDays size={15} />
-                          {budget.budget_date
-                            ? new Date(budget.budget_date).toLocaleDateString(
-                                'es-AR'
-                              )
-                            : '-'}
-                        </div>
-                      </td>
+            {statusFilters.map((filter) => {
+              const active = statusFilter === filter.value
 
-                      <td className="px-5 py-4">
-                        <StatusBadge status={budget.status} />
-                      </td>
-
-                      <td
-                        className={`px-5 py-4 text-right text-lg font-black ${
-                          isCancelled ? 'text-red-600' : 'text-blue-700'
-                        }`}
-                      >
-                        ${Number(budget.total_amount || 0).toLocaleString('es-AR')}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-2">
-                          <Link
-                            href={`/presupuestos/${budget.id}`}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                          >
-                            <Eye size={15} />
-                            Ver
-                          </Link>
-
-                          {!isCancelled && (
-                            <button
-                              type="button"
-                              disabled={isActionLoading}
-                              onClick={() => handleCancelBudget(budget)}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {isActionLoading ? (
-                                <Loader2 size={15} className="animate-spin" />
-                              ) : (
-                                <XCircle size={15} />
-                              )}
-                              Anular
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            disabled={isActionLoading}
-                            onClick={() => handleDeleteBudget(budget)}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {isActionLoading ? (
-                              <Loader2 size={15} className="animate-spin" />
-                            ) : (
-                              <Trash2 size={15} />
-                            )}
-                            Eliminar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setStatusFilter(filter.value)}
+                  className={`rounded-full px-4 py-2 text-xs font-black transition ${
+                    active
+                      ? 'bg-slate-950 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
+
+        {loading ? (
+          <LoadingState />
+        ) : filteredBudgets.length === 0 ? (
+          <EmptyState search={search} />
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1050px]">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <TableHead>Presupuesto</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead align="right">Total</TableHead>
+                    <TableHead align="right">Acciones</TableHead>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {filteredBudgets.map((budget) => (
+                    <BudgetRow
+                      key={budget.id}
+                      budget={budget}
+                      actionLoadingId={actionLoadingId}
+                      onCancel={handleCancelBudget}
+                      onDelete={handleDeleteBudget}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="space-y-3 p-4 lg:hidden">
+              {filteredBudgets.map((budget) => (
+                <BudgetMobileCard
+                  key={budget.id}
+                  budget={budget}
+                  actionLoadingId={actionLoadingId}
+                  onCancel={handleCancelBudget}
+                  onDelete={handleDeleteBudget}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </section>
+    </div>
+  )
+}
+
+function BudgetRow({
+  budget,
+  actionLoadingId,
+  onCancel,
+  onDelete,
+}: {
+  budget: Budget
+  actionLoadingId: string | null
+  onCancel: (budget: Budget) => void
+  onDelete: (budget: Budget) => void
+}) {
+  const isCancelled = budget.status === 'cancelled'
+  const isActionLoading = actionLoadingId === budget.id
+
+  return (
+    <tr
+      className={`transition ${
+        isCancelled ? 'bg-red-50/40 opacity-75' : 'hover:bg-blue-50/40'
+      }`}
+    >
+      <td className="px-5 py-4">
+        <BudgetIdentity budget={budget} />
+      </td>
+
+      <td className="px-5 py-4">
+        <ClientInfo budget={budget} />
+      </td>
+
+      <td className="px-5 py-4">
+        <DateBadge date={budget.budget_date} />
+      </td>
+
+      <td className="px-5 py-4">
+        <StatusBadge status={budget.status} />
+      </td>
+
+      <td
+        className={`px-5 py-4 text-right text-lg font-black ${
+          isCancelled ? 'text-red-600 line-through' : 'text-blue-700'
+        }`}
+      >
+        ${Number(budget.total_amount || 0).toLocaleString('es-AR')}
+      </td>
+
+      <td className="px-5 py-4">
+        <BudgetActions
+          budget={budget}
+          isActionLoading={isActionLoading}
+          onCancel={onCancel}
+          onDelete={onDelete}
+        />
+      </td>
+    </tr>
+  )
+}
+
+function BudgetMobileCard({
+  budget,
+  actionLoadingId,
+  onCancel,
+  onDelete,
+}: {
+  budget: Budget
+  actionLoadingId: string | null
+  onCancel: (budget: Budget) => void
+  onDelete: (budget: Budget) => void
+}) {
+  const isCancelled = budget.status === 'cancelled'
+  const isActionLoading = actionLoadingId === budget.id
+
+  return (
+    <article
+      className={`rounded-3xl border p-4 shadow-sm ${
+        isCancelled
+          ? 'border-red-100 bg-red-50/70'
+          : 'border-slate-200 bg-white'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <BudgetIdentity budget={budget} />
+        <StatusBadge status={budget.status} />
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <ClientInfo budget={budget} />
+        <DateBadge date={budget.budget_date} />
+
+        <div className="rounded-2xl bg-slate-50 p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+            Total
+          </p>
+          <p
+            className={`mt-1 text-2xl font-black ${
+              isCancelled ? 'text-red-600 line-through' : 'text-blue-700'
+            }`}
+          >
+            ${Number(budget.total_amount || 0).toLocaleString('es-AR')}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <BudgetActions
+          budget={budget}
+          isActionLoading={isActionLoading}
+          onCancel={onCancel}
+          onDelete={onDelete}
+          mobile
+        />
+      </div>
+    </article>
+  )
+}
+
+function BudgetIdentity({ budget }: { budget: Budget }) {
+  const isCancelled = budget.status === 'cancelled'
+
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${
+          isCancelled ? 'bg-red-600' : 'bg-slate-950'
+        }`}
+      >
+        <FileText size={20} />
+      </div>
+
+      <div>
+        <p className="font-black text-slate-950">
+          {budget.budget_code || `000-${budget.budget_number}`}
+        </p>
+        <p className="text-xs font-semibold text-slate-400">
+          Nº interno {budget.budget_number}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ClientInfo({ budget }: { budget: Budget }) {
+  return (
+    <div className="flex items-center gap-2">
+      <User size={16} className="shrink-0 text-slate-400" />
+      <div>
+        <p className="font-bold text-slate-800">
+          {budget.client?.name || 'Sin cliente'}
+        </p>
+        <p className="text-xs font-semibold text-slate-400">
+          CUIT: {budget.client?.cuit || '-'}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function DateBadge({ date }: { date: string }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
+      <CalendarDays size={15} />
+      {date ? new Date(date).toLocaleDateString('es-AR') : '-'}
+    </div>
+  )
+}
+
+function BudgetActions({
+  budget,
+  isActionLoading,
+  onCancel,
+  onDelete,
+  mobile = false,
+}: {
+  budget: Budget
+  isActionLoading: boolean
+  onCancel: (budget: Budget) => void
+  onDelete: (budget: Budget) => void
+  mobile?: boolean
+}) {
+  const isCancelled = budget.status === 'cancelled'
+
+  return (
+    <div className={`flex gap-2 ${mobile ? 'flex-col' : 'justify-end'}`}>
+      <Link
+        href={`/presupuestos/${budget.id}`}
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+      >
+        <Eye size={15} />
+        Ver
+      </Link>
+
+      {!isCancelled && (
+        <button
+          type="button"
+          disabled={isActionLoading}
+          onClick={() => onCancel(budget)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isActionLoading ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <XCircle size={15} />
+          )}
+          Anular
+        </button>
+      )}
+
+      <button
+        type="button"
+        disabled={isActionLoading}
+        onClick={() => onDelete(budget)}
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isActionLoading ? (
+          <Loader2 size={15} className="animate-spin" />
+        ) : (
+          <Trash2 size={15} />
+        )}
+        Eliminar
+      </button>
     </div>
   )
 }
@@ -501,15 +658,18 @@ function Stat({
   loading: boolean
 }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+    <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
           <Icon size={22} />
         </div>
 
-        <div>
-          <p className="text-sm font-bold text-slate-500">{title}</p>
-          <h2 className="text-2xl font-black text-slate-950">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-slate-500">
+            {title}
+          </p>
+
+          <h2 className="truncate text-[22px] font-black leading-tight text-slate-950 2xl:text-2xl">
             {loading ? '...' : value}
           </h2>
         </div>
@@ -531,7 +691,7 @@ function StatusBadge({ status }: { status: string }) {
   if (status === 'draft') {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
-        <FileText size={14} />
+        <Clock3 size={14} />
         Borrador
       </span>
     )
@@ -551,5 +711,69 @@ function StatusBadge({ status }: { status: string }) {
       <CheckCircle2 size={14} />
       Emitido
     </span>
+  )
+}
+
+function TableHead({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode
+  align?: 'left' | 'right'
+}) {
+  return (
+    <th
+      className={`px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500 ${
+        align === 'right' ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function LoadingState() {
+  return (
+    <div className="flex flex-col items-center justify-center p-12 text-center">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
+        <Loader2 size={26} className="animate-spin" />
+      </div>
+
+      <h3 className="text-lg font-black text-slate-900">
+        Cargando presupuestos
+      </h3>
+
+      <p className="mt-1 text-sm text-slate-500">
+        Estamos consultando la información registrada.
+      </p>
+    </div>
+  )
+}
+
+function EmptyState({ search }: { search: string }) {
+  return (
+    <div className="p-10 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
+        <FileText size={26} />
+      </div>
+
+      <h3 className="text-lg font-black text-slate-900">
+        No hay presupuestos para mostrar
+      </h3>
+
+      <p className="mt-1 text-sm text-slate-500">
+        {search
+          ? 'Probá cambiar la búsqueda o limpiar los filtros.'
+          : 'Creá un presupuesto nuevo para empezar a trabajar.'}
+      </p>
+
+      <Link
+        href="/presupuestos/nuevo"
+        className="mt-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
+      >
+        <Plus size={18} />
+        Nuevo presupuesto
+      </Link>
+    </div>
   )
 }
