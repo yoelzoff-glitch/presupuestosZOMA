@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Sparkles,
+  ClipboardList,
 } from 'lucide-react'
 import LogoutButton from '@/app/components/LogoutButton'
 
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/productos', label: 'Productos', icon: Package },
+  { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
   { href: '/configuracion', label: 'Configuración', icon: Settings },
@@ -33,6 +35,7 @@ function getPageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard'
   if (pathname.startsWith('/clientes')) return 'Clientes'
   if (pathname.startsWith('/productos')) return 'Productos'
+  if (pathname.startsWith('/pedidos')) return 'Pedidos'
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
   if (pathname.startsWith('/configuracion')) return 'Configuración'
@@ -44,6 +47,7 @@ function getPageDescription(pathname: string) {
   if (pathname === '/') return 'Resumen general de la gestión comercial'
   if (pathname.startsWith('/clientes')) return 'Administración de clientes y datos comerciales'
   if (pathname.startsWith('/productos')) return 'Gestión de productos, precios y catálogo'
+  if (pathname.startsWith('/pedidos')) return 'Carga de pedidos sin valores para convertir luego en presupuestos'
   if (pathname.startsWith('/presupuestos')) return 'Creación y seguimiento de presupuestos'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'
@@ -122,7 +126,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
 
           <p className="mt-2 text-xs leading-5 text-slate-400">
-            Sistema listo para gestionar presupuestos, productos y clientes.
+            Sistema listo para gestionar pedidos, presupuestos, productos y clientes.
           </p>
         </div>
       </div>
@@ -139,12 +143,10 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      {/* Sidebar desktop */}
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-white/10 bg-slate-950 text-white lg:block">
         <SidebarContent />
       </aside>
 
-      {/* Overlay mobile */}
       {mobileOpen && (
         <button
           type="button"
@@ -154,7 +156,6 @@ export default function AppShell({ children }: AppShellProps) {
         />
       )}
 
-      {/* Sidebar mobile */}
       <aside
         className={`fixed left-0 top-0 z-50 h-screen w-80 max-w-[86vw] border-r border-white/10 bg-slate-950 text-white shadow-2xl transition-transform duration-300 lg:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import {
@@ -115,17 +116,13 @@ export default function ProductosPage() {
 
   const suppliers = useMemo(() => {
     return new Set(
-      products
-        .map((product) => product.supplier?.trim())
-        .filter(Boolean)
+      products.map((product) => product.supplier?.trim()).filter(Boolean)
     ).size
   }, [products])
 
   const categories = useMemo(() => {
     return new Set(
-      products
-        .map((product) => product.category?.trim())
-        .filter(Boolean)
+      products.map((product) => product.category?.trim()).filter(Boolean)
     ).size
   }, [products])
 
@@ -145,63 +142,62 @@ export default function ProductosPage() {
   ).length
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl">
-        <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden space-y-3 pb-6">
+      <section className="relative w-full max-w-full overflow-hidden rounded-[1.5rem] bg-slate-950 px-5 py-4 text-white shadow-xl">
+        <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="absolute bottom-0 left-16 h-28 w-28 rounded-full bg-cyan-400/10 blur-3xl" />
 
-        <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-200">
-              <Package size={14} />
+        <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-200">
+              <Package size={13} />
               Productos
             </div>
 
-            <h1 className="text-3xl font-black tracking-tight">
+            <h1 className="truncate text-2xl font-black tracking-tight">
               Lista de productos
             </h1>
 
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Gestioná el catálogo de productos, proveedores, categorías y
-              precios para armar presupuestos.
+            <p className="mt-1 line-clamp-1 text-xs text-slate-300">
+              Gestioná catálogo, proveedores, categorías y precios.
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:justify-end">
+          <div className="flex flex-wrap gap-2 lg:justify-end">
             <Link
               href="/productos/nuevo"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
             >
-              <Plus size={18} />
-              Nuevo producto
+              <Plus size={16} />
+              Nuevo
             </Link>
 
             <Link
               href="/productos/importar"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"
             >
-              <FileSpreadsheet size={18} />
-              Importar Excel
+              <FileSpreadsheet size={16} />
+              Excel
             </Link>
 
             <Link
               href="/productos/aumentos"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"
             >
-              <ArrowUp size={18} />
-              Aumentar precios
+              <ArrowUp size={16} />
+              Aumentos
             </Link>
           </div>
         </div>
       </section>
 
       {errorMsg && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-700">
           {errorMsg}
         </div>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid w-full max-w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="Productos"
           value={products.length}
@@ -243,31 +239,31 @@ export default function ProductosPage() {
         />
       </section>
 
-      <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
-        <div className="space-y-4 border-b border-slate-200 p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-xl font-black text-slate-950">
+      <section className="w-full max-w-full overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 p-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-black text-slate-950">
                 Catálogo de productos
               </h2>
 
-              <p className="text-sm text-slate-500">
+              <p className="text-xs text-slate-500">
                 Buscá por nombre, código, proveedor o categoría.
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="relative">
+            <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+              <div className="relative w-full sm:w-72">
                 <Search
-                  size={18}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                 />
 
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar producto..."
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:w-80"
+                  placeholder="Buscar..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                 />
               </div>
 
@@ -275,10 +271,10 @@ export default function ProductosPage() {
                 type="button"
                 onClick={refreshProducts}
                 disabled={loading || refreshing}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw
-                  size={17}
+                  size={15}
                   className={loading || refreshing ? 'animate-spin' : ''}
                 />
                 Actualizar
@@ -287,7 +283,7 @@ export default function ProductosPage() {
           </div>
 
           {search && (
-            <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
+            <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
               Resultado: {filteredProducts.length} producto
               {filteredProducts.length === 1 ? '' : 's'} encontrado
               {filteredProducts.length === 1 ? '' : 's'}.
@@ -295,14 +291,14 @@ export default function ProductosPage() {
           )}
         </div>
 
-        {loading ? (
-          <LoadingState />
-        ) : filteredProducts.length === 0 ? (
-          <EmptyState hasSearch={Boolean(search.trim())} />
-        ) : (
-          <>
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="w-full min-w-[1050px]">
+        <div className="w-full max-w-full overflow-x-hidden">
+          {loading ? (
+            <LoadingState />
+          ) : filteredProducts.length === 0 ? (
+            <EmptyState hasSearch={Boolean(search.trim())} />
+          ) : (
+            <div className="w-full max-w-full overflow-x-hidden">
+              <table className="w-full table-fixed">
                 <thead className="bg-slate-50">
                   <tr>
                     <TableHead>Producto</TableHead>
@@ -318,29 +314,31 @@ export default function ProductosPage() {
                   {filteredProducts.map((product) => (
                     <tr
                       key={product.id}
-                      className="transition hover:bg-blue-50/40"
+                      className="h-[52px] transition hover:bg-blue-50/40"
                     >
-                      <td className="px-5 py-4">
+                      <td className="min-w-0 px-4 py-2">
                         <ProductIdentity product={product} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="min-w-0 px-4 py-2">
                         <CodeBadge code={product.internal_code} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="min-w-0 px-4 py-2">
                         <SupplierBadge supplier={product.supplier} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="min-w-0 px-4 py-2">
                         <CategoryBadge category={product.category} />
                       </td>
 
-                      <td className="px-5 py-4 text-right text-lg font-black text-blue-700">
-                        {formatCurrency(Number(product.cost_price || 0))}
+                      <td className="min-w-0 px-4 py-2 text-right text-sm font-black text-blue-700">
+                        <span className="block truncate">
+                          {formatCurrency(Number(product.cost_price || 0))}
+                        </span>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="min-w-0 px-4 py-2">
                         <DateBadge date={product.last_price_update} />
                       </td>
                     </tr>
@@ -348,54 +346,26 @@ export default function ProductosPage() {
                 </tbody>
               </table>
             </div>
-
-            <div className="space-y-3 p-4 xl:hidden">
-              {filteredProducts.map((product) => (
-                <ProductMobileCard key={product.id} product={product} />
-              ))}
-            </div>
-          </>
-        )}
+          )}
+        </div>
       </section>
     </div>
   )
 }
 
-function ProductMobileCard({ product }: { product: Product }) {
-  return (
-    <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-      <ProductIdentity product={product} />
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <MiniData label="Código" value={product.internal_code || '-'} />
-        <MiniData label="Proveedor" value={product.supplier || 'Sin proveedor'} />
-        <MiniData label="Categoría" value={product.category || 'Sin categoría'} />
-        <MiniData
-          label="Precio costo"
-          value={formatCurrency(Number(product.cost_price || 0))}
-        />
-      </div>
-
-      <div className="mt-4">
-        <DateBadge date={product.last_price_update} />
-      </div>
-    </article>
-  )
-}
-
 function ProductIdentity({ product }: { product: Product }) {
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white">
-        <Package size={20} />
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white">
+        <Package size={17} />
       </div>
 
       <div className="min-w-0">
-        <p className="truncate font-black text-slate-950">
+        <p className="truncate text-sm font-black text-slate-950">
           {product.name || 'Sin nombre'}
         </p>
 
-        <p className="text-xs font-semibold text-slate-400">
+        <p className="truncate text-[11px] font-semibold text-slate-400">
           Producto del catálogo
         </p>
       </div>
@@ -405,49 +375,39 @@ function ProductIdentity({ product }: { product: Product }) {
 
 function CodeBadge({ code }: { code: string | null }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
-      <Hash size={14} />
-      {code || 'Sin código'}
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+      <Hash size={12} />
+      <span className="truncate">{code || 'Sin código'}</span>
     </span>
   )
 }
 
 function SupplierBadge({ supplier }: { supplier: string | null }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
-      <Truck size={14} />
-      {supplier || 'Sin proveedor'}
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+      <Truck size={12} />
+      <span className="truncate">{supplier || 'Sin proveedor'}</span>
     </span>
   )
 }
 
 function CategoryBadge({ category }: { category: string | null }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">
-      <Tag size={14} />
-      {category || 'Sin categoría'}
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+      <Tag size={12} />
+      <span className="truncate">{category || 'Sin categoría'}</span>
     </span>
   )
 }
 
 function DateBadge({ date }: { date: string | null }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
-      <CalendarDays size={15} />
-      {date ? new Date(date).toLocaleDateString('es-AR') : 'Sin actualizar'}
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+      <CalendarDays size={13} />
+      <span className="truncate">
+        {date ? new Date(date).toLocaleDateString('es-AR') : 'Sin actualizar'}
+      </span>
     </span>
-  )
-}
-
-function MiniData({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-3">
-      <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-        {label}
-      </p>
-
-      <p className="mt-1 font-black text-slate-900">{value}</p>
-    </div>
   )
 }
 
@@ -472,20 +432,18 @@ function StatCard({
   }
 
   return (
-    <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex min-w-0 items-center gap-3">
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex min-w-0 items-center gap-2">
         <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${styles[tone]}`}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${styles[tone]}`}
         >
-          <Icon size={22} />
+          <Icon size={18} />
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-slate-500">
-            {title}
-          </p>
+          <p className="truncate text-xs font-bold text-slate-500">{title}</p>
 
-          <h2 className="truncate text-[22px] font-black leading-tight text-slate-950">
+          <h2 className="truncate text-lg font-black leading-tight text-slate-950">
             {loading ? '...' : value}
           </h2>
         </div>
@@ -498,32 +456,32 @@ function TableHead({
   children,
   align = 'left',
 }: {
-  children: React.ReactNode
+  children: ReactNode
   align?: 'left' | 'right'
 }) {
   return (
     <th
-      className={`px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500 ${
+      className={`min-w-0 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-500 ${
         align === 'right' ? 'text-right' : 'text-left'
       }`}
     >
-      {children}
+      <span className="block truncate">{children}</span>
     </th>
   )
 }
 
 function LoadingState() {
   return (
-    <div className="flex flex-col items-center justify-center p-12 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
-        <Loader2 size={26} className="animate-spin" />
+    <div className="flex min-h-[320px] flex-col items-center justify-center text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+        <Loader2 size={24} className="animate-spin" />
       </div>
 
-      <h3 className="text-lg font-black text-slate-900">
+      <h3 className="text-base font-black text-slate-900">
         Cargando productos
       </h3>
 
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="mt-1 text-xs text-slate-500">
         Estamos consultando el catálogo registrado.
       </p>
     </div>
@@ -532,36 +490,36 @@ function LoadingState() {
 
 function EmptyState({ hasSearch }: { hasSearch: boolean }) {
   return (
-    <div className="p-10 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
-        <Boxes size={26} />
+    <div className="flex min-h-[320px] flex-col items-center justify-center text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+        <Boxes size={24} />
       </div>
 
-      <h3 className="text-lg font-black text-slate-900">
+      <h3 className="text-base font-black text-slate-900">
         No hay productos para mostrar
       </h3>
 
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="mt-1 text-xs text-slate-500">
         {hasSearch
           ? 'Probá cambiar la búsqueda o limpiarla.'
           : 'Cargá un producto nuevo o importá un Excel para empezar.'}
       </p>
 
       {!hasSearch && (
-        <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
           <Link
             href="/productos/nuevo"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
           >
-            <PackagePlus size={18} />
+            <PackagePlus size={16} />
             Nuevo producto
           </Link>
 
           <Link
             href="/productos/importar"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
           >
-            <FileSpreadsheet size={18} />
+            <FileSpreadsheet size={16} />
             Importar Excel
           </Link>
         </div>
