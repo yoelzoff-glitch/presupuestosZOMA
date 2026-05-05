@@ -59,10 +59,12 @@ export default function Login() {
 
     if (profile.role === 'customer') {
       router.replace('/portal')
+      router.refresh()
       return
     }
 
     router.replace('/')
+    router.refresh()
   }
 
   return (
