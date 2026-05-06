@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 
 import { getUserCompanyId } from '@/lib/getUserCompany'
+import { supabase } from '@/lib/supabase/client'
 
 type MpStatus = {
   connected: boolean
@@ -61,42 +62,84 @@ export default function ConfiguracionPage() {
   }
 
   async function handleDisconnect() {
-    if (!companyId) return
+      if (!companyId) return
 
-    const confirmDisconnect = confirm(
-      '¿Seguro que querés desconectar Mercado Pago?'
-    )
-
-    if (!confirmDisconnect) return
-
-    try {
-      setDisconnecting(true)
-
-      const response = await fetch(
-        '/api/mercadopago/disconnect',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            company_id: companyId,
-          }),
-        }
+      const confirmDisconnect = confirm(
+        '¿Seguro que querés desconectar Mercado Pago?'
       )
 
-      if (!response.ok) {
-        alert('No se pudo desconectar Mercado Pago')
-        return
-      }
+      if (!confirmDisconnect) return
 
-      await loadMpStatus()
-    } catch (error) {
-      console.error(error)
-      alert('Ocurrió un error')
-    } finally {
-      setDisconnecting(false)
+      try {
+        setDisconnecting(true)
+
+        const response = await fetch(
+          '/api/mercadopago/disconnect',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              company_id: companyId,
+            }),
+          }
+        )
+
+        if (!response.ok) {
+          alert('No se pudo desconectar Mercado Pago')
+          return
+        }
+
+        await loadMpStatus()
+      } catch (error) {
+        console.error(error)
+        alert('Ocurrió un error')
+      } finally {
+        setDisconnecting(false)
+      }
     }
+
+    async function handleConnectMercadoPago() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        const token = session?.access_token
+
+        if (!token) {
+          alert('Sesión inválida')
+          return
+        }
+
+        const response = await fetch(
+          '/api/mercadopago/oauth/start',
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+
+        if (!response.redirected) {
+          const errorData = await response.json()
+
+          alert(
+            errorData?.error ||
+              'No se pudo iniciar Mercado Pago'
+          )
+
+          return
+        }
+
+        window.location.href = response.url
+      } catch (error) {
+        console.error(error)
+        alert('Error conectando Mercado Pago')
+      }
+   }
+    
   }
 
   return (
@@ -244,13 +287,14 @@ export default function ConfiguracionPage() {
                 </p>
               </div>
 
-              <a
-                href={`/api/mercadopago/oauth/start?company_id=${companyId}`}
-                className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-700"
-              >
+              
+              <button
+                 onClick={handleConnectMercadoPago}
+                 className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-sky-700"
+               >
                 <CreditCard size={16} />
                 Vincular Mercado Pago
-              </a>
+              </button>
             </>
           )}
         </div>

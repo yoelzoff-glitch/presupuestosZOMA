@@ -58,6 +58,9 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     )
   }
+  const expiresAt = new Date(
+    Date.now() + Number(tokenData.expires_in || 0) * 1000
+  ).toISOString()
 
   const { error } = await supabaseAdmin
     .from('mp_accounts')
@@ -70,6 +73,8 @@ export async function GET(req: NextRequest) {
         public_key: tokenData.public_key,
         token_type: tokenData.token_type,
         expires_in: tokenData.expires_in,
+        expires_at: expiresAt,
+        connected_at: new Date().toISOString(),
         scope: tokenData.scope,
         connected: true,
         updated_at: new Date().toISOString(),

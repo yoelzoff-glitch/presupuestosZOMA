@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
+import { getValidMercadoPagoAccessToken } from '@/lib/mercadopago/refreshAccessToken'
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -54,14 +54,23 @@ async function handleWebhook(req: NextRequest) {
     let companyId: string | null = null
 
     for (const account of mpAccounts) {
-      const response = await fetch(
-        `https://api.mercadopago.com/v1/payments/${paymentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${account.access_token}`,
-          },
+        const validAccessToken =
+          await getValidMercadoPagoAccessToken(
+            account.company_id
+         )
+
+        if (!validAccessToken) {
+          continue
         }
-      )
+
+        const response = await fetch(
+          `https://api.mercadopago.com/v1/payments/${paymentId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${validAccessToken}`,
+            },
+         }
+        )
 
       const text = await response.text()
       console.log('MP PAYMENT RESPONSE:', response.status, text)

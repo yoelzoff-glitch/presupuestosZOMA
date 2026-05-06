@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getValidMercadoPagoAccessToken } from '@/lib/mercadopago/refreshAccessToken'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -56,18 +57,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { data: mpAccount, error: mpError } = await supabaseAdmin
-      .from('mp_accounts')
-      .select('access_token')
-      .eq('company_id', budget.company_id)
-      .eq('connected', true)
-      .single()
+    const accessToken = await getValidMercadoPagoAccessToken(
+            budget.company_id
+            )
 
-    if (mpError || !mpAccount) {
-      return NextResponse.json(
-        { error: 'La empresa no tiene Mercado Pago conectado' },
-        { status: 400 }
-      )
+            if (!accessToken) {
+            return NextResponse.json(
+                {
+                error:
+                    'No se pudo obtener un token válido de Mercado Pago',
+                },
+                { status: 400 }
+            )
     }
 
     const appUrl =
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${mpAccount.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
