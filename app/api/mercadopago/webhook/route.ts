@@ -21,10 +21,11 @@ async function handleWebhook(req: NextRequest) {
     console.log('MP WEBHOOK BODY:', body)
 
     const paymentId =
-      body?.data?.id ||
-      body?.id ||
-      url.searchParams.get('data.id') ||
-      url.searchParams.get('id')
+        body?.data?.id ||
+        body?.id ||
+        url.searchParams.get('data.id') ||
+        url.searchParams.get('id') ||
+        url.searchParams.get('resource')?.split('/').pop()
 
     const topic =
       body?.type ||
