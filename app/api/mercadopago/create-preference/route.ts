@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${mpAccount.access_token}`,
+          Authorization: `Bearer APP_USR-7960168790590986-050601-ccd1facf732930a3ccf753383221447c-3381216083`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
