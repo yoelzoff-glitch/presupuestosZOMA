@@ -2,26 +2,94 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getValidMercadoPagoAccessToken } from '@/lib/mercadopago/refreshAccessToken'
 import { verifyMercadoPagoWebhookSignature } from '@/lib/mercadopago/verifyWebhookSignature'
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+type LocalPayment = {
+  id: string
+  company_id: string
+  client_id: string
+  budget_id: string | null
+  amount: number
+  status: string
+}
+
+async function createPaymentNotification(localPayment: LocalPayment) {
+  const { data: existingNotification } = await supabaseAdmin
+    .from('notifications')
+    .select('id')
+    .eq('company_id', localPayment.company_id)
+    .eq('type', 'payment')
+    .ilike('message', `%${localPayment.id}%`)
+    .maybeSingle()
+
+  if (existingNotification) {
+    return
+  }
+
+  const { data: client } = await supabaseAdmin
+    .from('clients')
+    .select('name, cuit')
+    .eq('id', localPayment.client_id)
+    .eq('company_id', localPayment.company_id)
+    .maybeSingle()
+
+  const { data: budget } = localPayment.budget_id
+    ? await supabaseAdmin
+        .from('budgets')
+        .select('budget_code, budget_number')
+        .eq('id', localPayment.budget_id)
+        .eq('company_id', localPayment.company_id)
+        .maybeSingle()
+    : { data: null }
+
+  const clientName = client?.name || 'Un cliente'
+  const budgetLabel =
+    budget?.budget_code ||
+    (budget?.budget_number ? `000-${budget.budget_number}` : 'un presupuesto')
+
+  const amount = Number(localPayment.amount || 0).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+  const link = localPayment.budget_id
+    ? `/presupuestos/${localPayment.budget_id}`
+    : '/cuenta-corriente'
+
+  const { error } = await supabaseAdmin.from('notifications').insert({
+    company_id: localPayment.company_id,
+    title: 'Pago recibido',
+    message: `${clientName} pagó ${amount} por Mercado Pago para el presupuesto ${budgetLabel}. Ref. pago interno: ${localPayment.id}`,
+    type: 'payment',
+    link,
+    read: false,
+  })
+
+  if (error) {
+    console.log('PAYMENT NOTIFICATION INSERT ERROR:', error)
+  }
+}
+
 async function handleWebhook(req: NextRequest) {
-  const isValidSignature =
-    verifyMercadoPagoWebhookSignature(req)
+  const isValidSignature = verifyMercadoPagoWebhookSignature(req)
 
-    if (!isValidSignature) {
-      console.error('Firma webhook Mercado Pago inválida')
+  if (!isValidSignature) {
+    console.error('Firma webhook Mercado Pago inválida')
 
-      return NextResponse.json(
-        {
-         received: false,
-         error: 'Invalid signature',
-        },
-        {
-         status: 401,
-        }
+    return NextResponse.json(
+      {
+        received: false,
+        error: 'Invalid signature',
+      },
+      {
+        status: 401,
+      }
     )
   }
 
@@ -72,23 +140,22 @@ async function handleWebhook(req: NextRequest) {
     let companyId: string | null = null
 
     for (const account of mpAccounts) {
-        const validAccessToken =
-          await getValidMercadoPagoAccessToken(
-            account.company_id
-         )
+      const validAccessToken = await getValidMercadoPagoAccessToken(
+        account.company_id
+      )
 
-        if (!validAccessToken) {
-          continue
+      if (!validAccessToken) {
+        continue
+      }
+
+      const response = await fetch(
+        `https://api.mercadopago.com/v1/payments/${paymentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${validAccessToken}`,
+          },
         }
-
-        const response = await fetch(
-          `https://api.mercadopago.com/v1/payments/${paymentId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${validAccessToken}`,
-            },
-         }
-        )
+      )
 
       const text = await response.text()
       console.log('MP PAYMENT RESPONSE:', response.status, text)
@@ -115,13 +182,25 @@ async function handleWebhook(req: NextRequest) {
               ? 'refunded'
               : 'pending'
 
+    const { data: previousPayment, error: previousPaymentError } =
+      await supabaseAdmin
+        .from('payments')
+        .select('id, company_id, client_id, budget_id, amount, status')
+        .eq('company_id', companyId)
+        .eq('mp_external_reference', mpPayment.external_reference)
+        .maybeSingle()
+
+    if (previousPaymentError) {
+      console.log('PREVIOUS PAYMENT READ ERROR:', previousPaymentError)
+    }
+
+    const wasAlreadyApproved = previousPayment?.status === 'approved'
+
     const updatePayload = {
       status: mappedStatus,
       mp_payment_id: String(mpPayment.id),
       payment_method:
-        mpPayment.payment_method_id ||
-        mpPayment.payment_type_id ||
-        null,
+        mpPayment.payment_method_id || mpPayment.payment_type_id || null,
       paid_at: mappedStatus === 'approved' ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     }
@@ -165,6 +244,10 @@ async function handleWebhook(req: NextRequest) {
         if (movementError) {
           console.log('ACCOUNT MOVEMENT INSERT ERROR:', movementError)
         }
+      }
+
+      if (!wasAlreadyApproved) {
+        await createPaymentNotification(localPayment as LocalPayment)
       }
 
       if (localPayment.budget_id) {
@@ -211,9 +294,7 @@ async function handleWebhook(req: NextRequest) {
               payment_status: paymentStatus,
               paid_amount: totalPaid,
               paid_at:
-                paymentStatus === 'paid'
-                  ? new Date().toISOString()
-                  : null,
+                paymentStatus === 'paid' ? new Date().toISOString() : null,
             })
             .eq('id', localPayment.budget_id)
 
