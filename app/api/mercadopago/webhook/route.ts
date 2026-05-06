@@ -21,11 +21,11 @@ async function handleWebhook(req: NextRequest) {
     console.log('MP WEBHOOK BODY:', body)
 
     const paymentId =
-        body?.data?.id ||
-        body?.id ||
-        url.searchParams.get('data.id') ||
-        url.searchParams.get('id') ||
-        url.searchParams.get('resource')?.split('/').pop()
+      body?.data?.id ||
+      body?.id ||
+      url.searchParams.get('data.id') ||
+      url.searchParams.get('id') ||
+      url.searchParams.get('resource')?.split('/').pop()
 
     const topic =
       body?.type ||
@@ -88,23 +88,57 @@ async function handleWebhook(req: NextRequest) {
               ? 'refunded'
               : 'pending'
 
-    const { error: updateError } = await supabaseAdmin
+    const updatePayload = {
+      status: mappedStatus,
+      mp_payment_id: String(mpPayment.id),
+      payment_method:
+        mpPayment.payment_method_id ||
+        mpPayment.payment_type_id ||
+        null,
+      paid_at: mappedStatus === 'approved' ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data: updatedPayments, error: updateError } = await supabaseAdmin
       .from('payments')
-      .update({
-        status: mappedStatus,
-        mp_payment_id: String(mpPayment.id),
-        payment_method:
-          mpPayment.payment_method_id ||
-          mpPayment.payment_type_id ||
-          null,
-        paid_at: mappedStatus === 'approved' ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('company_id', companyId)
       .eq('mp_external_reference', mpPayment.external_reference)
+      .select('id, company_id, client_id, budget_id, amount, status')
+      .limit(1)
 
     if (updateError) {
       console.log('PAYMENT UPDATE ERROR:', updateError)
+    }
+
+    const localPayment = updatedPayments?.[0]
+
+    if (mappedStatus === 'approved' && localPayment) {
+      const { data: existingMovement } = await supabaseAdmin
+        .from('account_movements')
+        .select('id')
+        .eq('payment_id', localPayment.id)
+        .maybeSingle()
+
+      if (!existingMovement) {
+        const { error: movementError } = await supabaseAdmin
+          .from('account_movements')
+          .insert({
+            company_id: localPayment.company_id,
+            client_id: localPayment.client_id,
+            budget_id: localPayment.budget_id,
+            payment_id: localPayment.id,
+            movement_type: 'Pago',
+            payment_type: 'Pago total',
+            description: `Pago Mercado Pago - ${mpPayment.id}`,
+            debit: 0,
+            credit: Number(localPayment.amount),
+          })
+
+        if (movementError) {
+          console.log('ACCOUNT MOVEMENT INSERT ERROR:', movementError)
+        }
+      }
     }
 
     return NextResponse.json({
