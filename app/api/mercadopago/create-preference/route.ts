@@ -12,7 +12,10 @@ export async function POST(req: NextRequest) {
     const { budget_id } = body
 
     if (!budget_id) {
-      return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Falta budget_id' },
+        { status: 400 }
+      )
     }
 
     const { data: budget, error: budgetError } = await supabaseAdmin
@@ -67,6 +70,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      'https://presupuestos-zoma.vercel.app'
+
     const externalReference = `budget:${budget.id}`
 
     const preferenceResponse = await fetch(
@@ -74,20 +81,33 @@ export async function POST(req: NextRequest) {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer APP_USR-7960168790590986-050601-ccd1facf732930a3ccf753383221447c-3381216083`,
+          Authorization: `Bearer ${mpAccount.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           items: [
             {
-              title: `Presupuesto ${budget.budget_code || budget.budget_number}`,
+              title: `Presupuesto ${
+                budget.budget_code || budget.budget_number
+              }`,
               quantity: 1,
               currency_id: 'ARS',
               unit_price: Number(budget.total_amount),
             },
           ],
+
           external_reference: externalReference,
-          notification_url: 'https://presupuestos-zoma.vercel.app/api/mercadopago/webhook',
+
+          notification_url:
+            `${appUrl}/api/mercadopago/webhook`,
+
+          back_urls: {
+            success: `${appUrl}/portal/pago-exitoso`,
+            failure: `${appUrl}/portal/pago-error`,
+            pending: `${appUrl}/portal/pago-pendiente`,
+          },
+
+          auto_return: 'approved',
         }),
       }
     )
@@ -123,7 +143,8 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         {
-          error: 'Se creó la preferencia, pero no se pudo guardar el pago',
+          error:
+            'Se creó la preferencia, pero no se pudo guardar el pago',
           detail: paymentError.message,
         },
         { status: 500 }
