@@ -1,11 +1,27 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { getUserCompanyId } from '@/lib/getUserCompany'
+import {
+  ClipboardList,
+  Plus,
+  Search,
+  RefreshCw,
+  Loader2,
+  CalendarDays,
+  User,
+  FileText,
+  XCircle,
+  Clock3,
+  CheckCircle2,
+  Package,
+  Globe2,
+  UserRoundCog,
+} from 'lucide-react'
 
-type ManualOrder = {
+type Order = {
   id: string
   company_id: string
   client_id: string
@@ -13,6 +29,7 @@ type ManualOrder = {
   order_code: string | null
   order_date: string
   status: 'pending' | 'confirmed' | 'cancelled'
+  source: 'manual' | 'portal' | string | null
   budget_id: string | null
   notes: string | null
   created_at: string
@@ -22,40 +39,20 @@ type ManualOrder = {
   } | null
 }
 
-type PortalOrder = {
-  id: string
-  company_id: string
-  customer_user_id: string
-  status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'cancelled'
-  notes: string | null
-  total_amount: number
-  created_at: string
-  updated_at: string
-  customer_users?: {
-    name: string
-    email: string
-  } | null
-}
-
-type UnifiedOrder = {
-  id: string
-  source: 'manual' | 'portal'
-  code: string
-  date: string
-  clientName: string
-  clientExtra: string
-  status: string
-  totalAmount: number | null
-  notes: string | null
-  raw: ManualOrder | PortalOrder
-}
-
 export default function PedidosPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [orders, setOrders] = useState<UnifiedOrder[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'pending' | 'confirmed' | 'cancelled'
+  >('all')
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'portal' | 'manual'>(
+    'all'
+  )
+  const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
     loadData()
@@ -63,420 +60,654 @@ export default function PedidosPage() {
 
   async function loadData() {
     setLoading(true)
+    setErrorMsg('')
 
     const id = await getUserCompanyId()
 
     if (!id) {
+      setErrorMsg('No se encontró la empresa del usuario.')
       setLoading(false)
       return
     }
 
     setCompanyId(id)
 
-    const [manualRes, portalRes] = await Promise.all([
-      supabase
-        .from('orders')
-        .select(`
-          *,
-          clients (
-            name,
-            cuit
-          )
-        `)
-        .eq('company_id', id)
-        .order('created_at', { ascending: false }),
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        id,
+        company_id,
+        client_id,
+        order_number,
+        order_code,
+        order_date,
+        status,
+        source,
+        budget_id,
+        notes,
+        created_at,
+        clients (
+          name,
+          cuit
+        )
+      `)
+      .eq('company_id', id)
+      .order('created_at', { ascending: false })
 
-      supabase
-        .from('customer_orders')
-        .select(`
-          *,
-          customer_users (
-            name,
-            email
-          )
-        `)
-        .eq('company_id', id)
-        .order('created_at', { ascending: false }),
-    ])
-
-    if (manualRes.error) {
-      console.error('Error cargando pedidos manuales:', manualRes.error)
-      alert('Error cargando pedidos manuales')
+    if (error) {
+      console.error('Error cargando pedidos:', error)
+      setErrorMsg('Error cargando pedidos.')
+      setOrders([])
       setLoading(false)
       return
     }
 
-    if (portalRes.error) {
-      console.error('Error cargando pedidos del portal:', portalRes.error)
-      alert('Error cargando pedidos del portal')
-      setLoading(false)
-      return
-    }
+    const normalized = (data || []).map((item: any) => ({
+      ...item,
+      clients: Array.isArray(item.clients)
+        ? item.clients[0] || null
+        : item.clients || null,
+    }))
 
-    const manualOrders: UnifiedOrder[] = (manualRes.data || []).map(
-      (order: ManualOrder) => ({
-        id: order.id,
-        source: 'manual',
-        code: order.order_code || `PED-${order.order_number}`,
-        date: order.order_date,
-        clientName: order.clients?.name || 'Sin cliente',
-        clientExtra: order.clients?.cuit || '-',
-        status: order.status,
-        totalAmount: null,
-        notes: order.notes,
-        raw: order,
-      })
-    )
-
-    const portalOrders: UnifiedOrder[] = (portalRes.data || []).map(
-      (order: PortalOrder, index: number) => ({
-        id: order.id,
-        source: 'portal',
-        code: `WEB-${String(index + 1).padStart(4, '0')}`,
-        date: order.created_at,
-        clientName: order.customer_users?.name || 'Cliente portal',
-        clientExtra: order.customer_users?.email || '-',
-        status: order.status,
-        totalAmount: Number(order.total_amount || 0),
-        notes: order.notes,
-        raw: order,
-      })
-    )
-
-    const allOrders = [...manualOrders, ...portalOrders].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    )
-
-    setOrders(allOrders)
+    setOrders(normalized)
     setLoading(false)
   }
 
-  async function cancelOrder(order: UnifiedOrder) {
-    const confirmCancel = confirm(`¿Seguro que querés anular el pedido ${order.code}?`)
-
-    if (!confirmCancel || !companyId) return
-
-    if (order.source === 'manual') {
-      if (order.status === 'confirmed') {
-        alert('No podés anular un pedido que ya fue convertido a presupuesto.')
-        return
-      }
-
-      const { error } = await supabase
-        .from('orders')
-        .update({
-          status: 'cancelled',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', order.id)
-        .eq('company_id', companyId)
-
-      if (error) {
-        console.error('Error anulando pedido:', error)
-        alert('No se pudo anular el pedido')
-        return
-      }
-    }
-
-    if (order.source === 'portal') {
-      const { error } = await supabase
-        .from('customer_orders')
-        .update({
-          status: 'cancelled',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', order.id)
-        .eq('company_id', companyId)
-
-      if (error) {
-        console.error('Error anulando pedido portal:', error)
-        alert('No se pudo anular el pedido del portal')
-        return
-      }
-    }
-
+  async function refreshOrders() {
+    setRefreshing(true)
     await loadData()
+    setRefreshing(false)
   }
 
-  async function updatePortalOrderStatus(
-    order: UnifiedOrder,
-    status: 'approved' | 'rejected' | 'delivered'
-  ) {
-    if (!companyId || order.source !== 'portal') return
+  async function cancelOrder(order: Order) {
+    if (!companyId) return
+
+    if (order.status === 'confirmed') {
+      alert('No podés anular un pedido que ya fue convertido a presupuesto.')
+      return
+    }
+
+    const confirmCancel = confirm(
+      `¿Seguro que querés anular el pedido ${
+        order.order_code || `PED-${order.order_number}`
+      }?`
+    )
+
+    if (!confirmCancel) return
+
+    setCancellingId(order.id)
 
     const { error } = await supabase
-      .from('customer_orders')
+      .from('orders')
       .update({
-        status,
+        status: 'cancelled',
         updated_at: new Date().toISOString(),
       })
       .eq('id', order.id)
       .eq('company_id', companyId)
+      .eq('status', 'pending')
 
     if (error) {
-      console.error('Error actualizando pedido portal:', error)
-      alert('No se pudo actualizar el estado del pedido')
+      console.error('Error anulando pedido:', error)
+      alert('No se pudo anular el pedido.')
+      setCancellingId(null)
       return
     }
 
     await loadData()
+    setCancellingId(null)
   }
 
-  function getStatusLabel(status: string) {
-    if (status === 'pending') return 'Pendiente'
-    if (status === 'confirmed') return 'Confirmado'
-    if (status === 'cancelled') return 'Anulado'
-    if (status === 'approved') return 'Aprobado'
-    if (status === 'rejected') return 'Rechazado'
-    if (status === 'delivered') return 'Entregado'
-    return status
-  }
+  const filteredOrders = useMemo(() => {
+    const q = search.toLowerCase().trim()
 
-  function getStatusClass(status: string) {
-    if (status === 'pending') return 'bg-amber-100 text-amber-700 border-amber-200'
-    if (status === 'confirmed') return 'bg-emerald-100 text-emerald-700 border-emerald-200'
-    if (status === 'approved') return 'bg-blue-100 text-blue-700 border-blue-200'
-    if (status === 'delivered') return 'bg-emerald-100 text-emerald-700 border-emerald-200'
-    if (status === 'rejected') return 'bg-red-100 text-red-700 border-red-200'
-    if (status === 'cancelled') return 'bg-red-100 text-red-700 border-red-200'
-    return 'bg-slate-100 text-slate-700 border-slate-200'
-  }
+    return orders.filter((order) => {
+      const code = order.order_code || `PED-${order.order_number}`
 
-  const filteredOrders = orders.filter((order) => {
-    const searchText = search.toLowerCase()
+      const matchesSearch =
+        !q ||
+        code.toLowerCase().includes(q) ||
+        order.clients?.name?.toLowerCase().includes(q) ||
+        order.clients?.cuit?.toLowerCase().includes(q) ||
+        order.notes?.toLowerCase().includes(q) ||
+        order.source?.toLowerCase().includes(q)
 
-    const matchesSearch =
-      order.code.toLowerCase().includes(searchText) ||
-      order.clientName.toLowerCase().includes(searchText) ||
-      order.clientExtra.toLowerCase().includes(searchText) ||
-      order.source.toLowerCase().includes(searchText)
+      const matchesStatus =
+        statusFilter === 'all' || order.status === statusFilter
 
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter
+      const orderSource = order.source || 'manual'
+      const matchesSource =
+        sourceFilter === 'all' || orderSource === sourceFilter
 
-    return matchesSearch && matchesStatus
-  })
+      return matchesSearch && matchesStatus && matchesSource
+    })
+  }, [orders, search, statusFilter, sourceFilter])
+
+  const pendingCount = orders.filter((order) => order.status === 'pending').length
+  const confirmedCount = orders.filter(
+    (order) => order.status === 'confirmed'
+  ).length
+  const cancelledCount = orders.filter(
+    (order) => order.status === 'cancelled'
+  ).length
+  const portalCount = orders.filter((order) => order.source === 'portal').length
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex flex-col gap-4 rounded-2xl bg-slate-950 p-6 text-white shadow-lg md:flex-row md:items-center md:justify-between">
+    <div className="space-y-6">
+      <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl">
+        <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-medium text-blue-300">Gestión comercial</p>
-            <h1 className="mt-1 text-3xl font-bold">Pedidos</h1>
-            <p className="mt-2 text-sm text-slate-300">
-              Pedidos manuales y pedidos recibidos desde el portal de clientes.
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-blue-200">
+              <ClipboardList size={14} />
+              Gestión comercial
+            </div>
+
+            <h1 className="text-3xl font-black tracking-tight">
+              Pedidos
+            </h1>
+
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+              Los pedidos ingresan como pendientes. Podés distinguir si llegaron
+              desde el portal o si fueron cargados manualmente.
             </p>
           </div>
 
           <Link
             href="/pedidos/nuevo"
-            className="rounded-xl bg-blue-600 px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-blue-500"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
           >
+            <Plus size={18} />
             Nuevo pedido
           </Link>
         </div>
+      </section>
 
-        <section className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Total pedidos</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{orders.length}</p>
-          </div>
+      {errorMsg && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          {errorMsg}
+        </div>
+      )}
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Pendientes</p>
-            <p className="mt-2 text-3xl font-bold text-amber-600">
-              {orders.filter((o) => o.status === 'pending').length}
-            </p>
-          </div>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          title="Total pedidos"
+          value={orders.length}
+          icon={ClipboardList}
+          loading={loading}
+          tone="blue"
+        />
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Portal</p>
-            <p className="mt-2 text-3xl font-bold text-blue-600">
-              {orders.filter((o) => o.source === 'portal').length}
-            </p>
-          </div>
+        <StatCard
+          title="Pendientes"
+          value={pendingCount}
+          icon={Clock3}
+          loading={loading}
+          tone="amber"
+        />
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Confirmados/Aprobados</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-600">
-              {
-                orders.filter(
-                  (o) => o.status === 'confirmed' || o.status === 'approved'
-                ).length
-              }
-            </p>
-          </div>
-        </section>
+        <StatCard
+          title="Convertidos"
+          value={confirmedCount}
+          icon={CheckCircle2}
+          loading={loading}
+          tone="green"
+        />
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por cliente, usuario, CUIT o número de pedido..."
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 md:max-w-md"
-            />
+        <StatCard
+          title="Anulados"
+          value={cancelledCount}
+          icon={XCircle}
+          loading={loading}
+          tone="red"
+        />
 
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              <option value="all">Todos</option>
-              <option value="pending">Pendientes</option>
-              <option value="confirmed">Confirmados</option>
-              <option value="approved">Aprobados</option>
-              <option value="delivered">Entregados</option>
-              <option value="rejected">Rechazados</option>
-              <option value="cancelled">Anulados</option>
-            </select>
-          </div>
+        <StatCard
+          title="Desde portal"
+          value={portalCount}
+          icon={Globe2}
+          loading={loading}
+          tone="blue"
+        />
+      </section>
 
-          <div className="mt-5 overflow-x-auto">
-            {loading ? (
-              <div className="py-10 text-center text-sm text-slate-500">
-                Cargando pedidos...
+      <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+        <div className="space-y-4 border-b border-slate-200 p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-950">
+                Listado de pedidos
+              </h2>
+
+              <p className="text-sm text-slate-500">
+                Buscá por número, cliente, CUIT, nota u origen.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:justify-end">
+              <div className="relative">
+                <Search
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar pedido..."
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:w-72"
+                />
               </div>
-            ) : filteredOrders.length === 0 ? (
-              <div className="py-10 text-center text-sm text-slate-500">
-                No hay pedidos para mostrar.
-              </div>
-            ) : (
-              <table className="w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                    <th className="px-4 py-3 font-semibold">Pedido</th>
-                    <th className="px-4 py-3 font-semibold">Origen</th>
-                    <th className="px-4 py-3 font-semibold">Fecha</th>
-                    <th className="px-4 py-3 font-semibold">Cliente</th>
-                    <th className="px-4 py-3 font-semibold">Dato</th>
-                    <th className="px-4 py-3 text-right font-semibold">Total</th>
-                    <th className="px-4 py-3 font-semibold">Estado</th>
-                    <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+
+              <select
+                value={statusFilter}
+                onChange={(e) =>
+                  setStatusFilter(
+                    e.target.value as
+                      | 'all'
+                      | 'pending'
+                      | 'confirmed'
+                      | 'cancelled'
+                  )
+                }
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              >
+                <option value="all">Todos los estados</option>
+                <option value="pending">Pendientes</option>
+                <option value="confirmed">Convertidos</option>
+                <option value="cancelled">Anulados</option>
+              </select>
+
+              <select
+                value={sourceFilter}
+                onChange={(e) =>
+                  setSourceFilter(e.target.value as 'all' | 'portal' | 'manual')
+                }
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              >
+                <option value="all">Todos los orígenes</option>
+                <option value="portal">Portal</option>
+                <option value="manual">Manual</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={refreshOrders}
+                disabled={loading || refreshing}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw
+                  size={17}
+                  className={loading || refreshing ? 'animate-spin' : ''}
+                />
+                Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <LoadingState />
+        ) : filteredOrders.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto xl:block">
+              <table className="w-full min-w-[1120px]">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <TableHead>Pedido</TableHead>
+                    <TableHead>Origen</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>CUIT</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Notas</TableHead>
+                    <TableHead align="right">Acciones</TableHead>
                   </tr>
                 </thead>
 
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {filteredOrders.map((order) => (
                     <tr
-                      key={`${order.source}-${order.id}`}
-                      className="border-b border-slate-100 transition hover:bg-slate-50"
+                      key={order.id}
+                      className={`transition ${
+                        order.status === 'cancelled'
+                          ? 'bg-red-50/40 opacity-75'
+                          : 'hover:bg-blue-50/40'
+                      }`}
                     >
-                      <td className="px-4 py-4 font-semibold text-slate-900">
-                        {order.code}
+                      <td className="px-5 py-4">
+                        <OrderIdentity order={order} />
                       </td>
 
-                      <td className="px-4 py-4">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${
-                            order.source === 'portal'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          {order.source === 'portal' ? 'Portal' : 'Manual'}
+                      <td className="px-5 py-4">
+                        <SourceBadge source={order.source} />
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <DateBadge date={order.created_at || order.order_date} />
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <ClientName order={order} />
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span className="font-bold text-slate-600">
+                          {order.clients?.cuit || '-'}
                         </span>
                       </td>
 
-                      <td className="px-4 py-4 text-slate-600">
-                        {new Date(order.date).toLocaleDateString('es-AR')}
+                      <td className="px-5 py-4">
+                        <StatusBadge status={order.status} />
                       </td>
 
-                      <td className="px-4 py-4 font-semibold text-slate-900">
-                        {order.clientName}
+                      <td className="px-5 py-4">
+                        <p className="line-clamp-2 max-w-xs text-sm font-semibold text-slate-500">
+                          {order.notes || '-'}
+                        </p>
                       </td>
 
-                      <td className="px-4 py-4 text-slate-600">
-                        {order.clientExtra}
-                      </td>
-
-                      <td className="px-4 py-4 text-right font-bold text-slate-900">
-                        {order.totalAmount === null
-                          ? '-'
-                          : formatCurrency(order.totalAmount)}
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClass(
-                            order.status
-                          )}`}
-                        >
-                          {getStatusLabel(order.status)}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {order.source === 'manual' && (
-                            <Link
-                              href={`/pedidos/${order.id}`}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                            >
-                              Ver
-                            </Link>
-                          )}
-
-                          {order.source === 'portal' && order.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() =>
-                                  updatePortalOrderStatus(order, 'approved')
-                                }
-                                className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-50"
-                              >
-                                Aprobar
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  updatePortalOrderStatus(order, 'rejected')
-                                }
-                                className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                              >
-                                Rechazar
-                              </button>
-                            </>
-                          )}
-
-                          {order.source === 'portal' && order.status === 'approved' && (
-                            <button
-                              onClick={() =>
-                                updatePortalOrderStatus(order, 'delivered')
-                              }
-                              className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
-                            >
-                              Entregar
-                            </button>
-                          )}
-
-                          {order.status === 'pending' && (
-                            <button
-                              onClick={() => cancelOrder(order)}
-                              className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                            >
-                              Anular
-                            </button>
-                          )}
-                        </div>
+                      <td className="px-5 py-4 text-right">
+                        <OrderActions
+                          order={order}
+                          cancelling={cancellingId === order.id}
+                          onCancel={() => cancelOrder(order)}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            )}
-          </div>
-        </section>
-      </div>
-    </main>
+            </div>
+
+            <div className="space-y-3 p-4 xl:hidden">
+              {filteredOrders.map((order) => (
+                <OrderMobileCard
+                  key={order.id}
+                  order={order}
+                  cancelling={cancellingId === order.id}
+                  onCancel={() => cancelOrder(order)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    </div>
   )
 }
 
-function formatCurrency(value: number) {
-  return value.toLocaleString('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
+function OrderMobileCard({
+  order,
+  cancelling,
+  onCancel,
+}: {
+  order: Order
+  cancelling: boolean
+  onCancel: () => void
+}) {
+  return (
+    <article className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <OrderIdentity order={order} />
+        <StatusBadge status={order.status} />
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <SourceBadge source={order.source} />
+        <DateBadge date={order.created_at || order.order_date} />
+        <ClientName order={order} />
+
+        <p className="rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+          {order.notes || 'Sin notas'}
+        </p>
+      </div>
+
+      <div className="mt-4">
+        <OrderActions order={order} cancelling={cancelling} onCancel={onCancel} mobile />
+      </div>
+    </article>
+  )
+}
+
+function OrderIdentity({ order }: { order: Order }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white">
+        <Package size={20} />
+      </div>
+
+      <div className="min-w-0">
+        <p className="truncate font-black text-slate-950">
+          {order.order_code || `PED-${order.order_number}`}
+        </p>
+
+        <p className="text-xs font-semibold text-slate-400">
+          Pedido comercial
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function SourceBadge({ source }: { source: Order['source'] }) {
+  const normalizedSource = source || 'manual'
+
+  if (normalizedSource === 'portal') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+        <Globe2 size={14} />
+        Portal
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+      <UserRoundCog size={14} />
+      Manual
+    </span>
+  )
+}
+
+function ClientName({ order }: { order: Order }) {
+  return (
+    <div className="flex items-center gap-2">
+      <User size={16} className="shrink-0 text-slate-400" />
+      <span className="font-bold text-slate-800">
+        {order.clients?.name || 'Sin cliente'}
+      </span>
+    </div>
+  )
+}
+
+function DateBadge({ date }: { date: string }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
+      <CalendarDays size={15} />
+      {date ? new Date(date).toLocaleDateString('es-AR') : '-'}
+    </div>
+  )
+}
+
+function StatusBadge({ status }: { status: Order['status'] }) {
+  if (status === 'pending') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
+        <Clock3 size={14} />
+        Pendiente
+      </span>
+    )
+  }
+
+  if (status === 'confirmed') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+        <CheckCircle2 size={14} />
+        Convertido
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">
+      <XCircle size={14} />
+      Anulado
+    </span>
+  )
+}
+
+function OrderActions({
+  order,
+  cancelling,
+  onCancel,
+  mobile = false,
+}: {
+  order: Order
+  cancelling: boolean
+  onCancel: () => void
+  mobile?: boolean
+}) {
+  return (
+    <div className={`flex gap-2 ${mobile ? 'flex-col' : 'justify-end'}`}>
+      <Link
+        href={`/pedidos/${order.id}`}
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+      >
+        <FileText size={15} />
+        Ver
+      </Link>
+
+      {order.status === 'pending' && (
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={cancelling}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {cancelling ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <XCircle size={15} />
+          )}
+          Anular
+        </button>
+      )}
+
+      {order.status === 'confirmed' && order.budget_id && (
+        <Link
+          href={`/presupuestos/${order.budget_id}`}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+        >
+          <FileText size={15} />
+          Presupuesto
+        </Link>
+      )}
+    </div>
+  )
+}
+
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  loading,
+  tone,
+}: {
+  title: string
+  value: number
+  icon: any
+  loading: boolean
+  tone: 'blue' | 'amber' | 'green' | 'red'
+}) {
+  const styles = {
+    blue: 'bg-blue-50 text-blue-700',
+    amber: 'bg-amber-50 text-amber-700',
+    green: 'bg-emerald-50 text-emerald-700',
+    red: 'bg-red-50 text-red-700',
+  }
+
+  return (
+    <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${styles[tone]}`}
+        >
+          <Icon size={22} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-slate-500">{title}</p>
+
+          <h2 className="truncate text-2xl font-black text-slate-950">
+            {loading ? '...' : value}
+          </h2>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TableHead({
+  children,
+  align = 'left',
+}: {
+  children: React.ReactNode
+  align?: 'left' | 'right'
+}) {
+  return (
+    <th
+      className={`px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500 ${
+        align === 'right' ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function LoadingState() {
+  return (
+    <div className="flex flex-col items-center justify-center p-12 text-center">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
+        <Loader2 size={26} className="animate-spin" />
+      </div>
+
+      <h3 className="text-lg font-black text-slate-900">Cargando pedidos</h3>
+
+      <p className="mt-1 text-sm text-slate-500">
+        Estamos consultando los pedidos registrados.
+      </p>
+    </div>
+  )
+}
+
+function EmptyState() {
+  return (
+    <div className="p-10 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
+        <ClipboardList size={26} />
+      </div>
+
+      <h3 className="text-lg font-black text-slate-900">
+        No hay pedidos para mostrar
+      </h3>
+
+      <p className="mt-1 text-sm text-slate-500">
+        Cuando ingrese un pedido manual o desde el portal, aparecerá acá como pendiente.
+      </p>
+
+      <Link
+        href="/pedidos/nuevo"
+        className="mt-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
+      >
+        <Plus size={18} />
+        Nuevo pedido
+      </Link>
+    </div>
+  )
 }

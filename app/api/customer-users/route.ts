@@ -2,6 +2,19 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: Request) {
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  )
+
+  let authUserId: string | null = null
+
   try {
     const body = await req.json()
 
@@ -9,10 +22,46 @@ export async function POST(req: Request) {
     const username = String(body.username || '').trim().toLowerCase()
     const password = String(body.password || '').trim()
     const companyId = String(body.companyId || '').trim()
+    const clientId = String(body.clientId || '').trim()
 
-    if (!name || !username || !password || !companyId) {
+    if (!name || !username || !password || !companyId || !clientId) {
       return NextResponse.json(
         { error: 'Faltan datos obligatorios.' },
+        { status: 400 }
+      )
+    }
+
+    const { data: clientData, error: clientError } = await supabaseAdmin
+      .from('clients')
+      .select('id, name, cuit, active')
+      .eq('id', clientId)
+      .eq('company_id', companyId)
+      .single()
+
+    if (clientError || !clientData) {
+      return NextResponse.json(
+        { error: 'El cliente seleccionado no existe o no pertenece a la empresa.' },
+        { status: 400 }
+      )
+    }
+
+    if (clientData.active === false) {
+      return NextResponse.json(
+        { error: 'No se puede crear un acceso para un cliente inactivo.' },
+        { status: 400 }
+      )
+    }
+
+    const { data: existingCustomer } = await supabaseAdmin
+      .from('customer_users')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('client_id', clientId)
+      .maybeSingle()
+
+    if (existingCustomer) {
+      return NextResponse.json(
+        { error: 'Este cliente ya tiene un usuario de portal asociado.' },
         { status: 400 }
       )
     }
@@ -21,16 +70,19 @@ export async function POST(req: Request) {
       ? username
       : `${username}@clientes.local`
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
+    const { data: existingEmail } = await supabaseAdmin
+      .from('customer_users')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('email', email)
+      .maybeSingle()
+
+    if (existingEmail) {
+      return NextResponse.json(
+        { error: 'Ya existe un usuario cliente con ese email o usuario.' },
+        { status: 400 }
+      )
+    }
 
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -50,7 +102,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const authUserId = authData.user.id
+    authUserId = authData.user.id
 
     const { error: profileError } = await supabaseAdmin
       .from('users_profiles')
@@ -75,11 +127,13 @@ export async function POST(req: Request) {
         name,
         email,
         company_id: companyId,
+        client_id: clientId,
         auth_user_id: authUserId,
         active: true,
       })
 
     if (customerError) {
+      await supabaseAdmin.from('users_profiles').delete().eq('id', authUserId)
       await supabaseAdmin.auth.admin.deleteUser(authUserId)
 
       return NextResponse.json(
@@ -95,9 +149,15 @@ export async function POST(req: Request) {
         name,
         username,
         email,
+        clientId,
       },
     })
   } catch (error) {
+    if (authUserId) {
+      await supabaseAdmin.from('users_profiles').delete().eq('id', authUserId)
+      await supabaseAdmin.auth.admin.deleteUser(authUserId)
+    }
+
     return NextResponse.json(
       { error: 'Error interno al crear el usuario cliente.' },
       { status: 500 }

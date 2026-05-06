@@ -14,8 +14,10 @@ import {
   X,
   Sparkles,
   ClipboardList,
+  Bell,
 } from 'lucide-react'
 import LogoutButton from '@/app/components/LogoutButton'
+import NotificationsBell from '@/app/components/NotificationsBell'
 
 type AppShellProps = {
   children: React.ReactNode
@@ -28,6 +30,7 @@ const navItems = [
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
+  { href: '/notificaciones', label: 'Notificaciones', icon: Bell },
   { href: '/configuracion', label: 'Configuración', icon: Settings },
 ]
 
@@ -38,6 +41,7 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/pedidos')) return 'Pedidos'
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
+  if (pathname.startsWith('/notificaciones')) return 'Notificaciones'
   if (pathname.startsWith('/configuracion')) return 'Configuración'
 
   return 'Panel principal'
@@ -50,6 +54,7 @@ function getPageDescription(pathname: string) {
   if (pathname.startsWith('/pedidos')) return 'Carga de pedidos sin valores para convertir luego en presupuestos'
   if (pathname.startsWith('/presupuestos')) return 'Creación y seguimiento de presupuestos'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
+  if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'
 
   return 'Sistema de gestión'
@@ -198,12 +203,16 @@ export default function AppShell({ children }: AppShellProps) {
               </div>
             </div>
 
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <NotificationsBell />
+
+              <div className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm md:block">
                 Online
               </div>
 
-              <LogoutButton />
+              <div className="hidden sm:block">
+                <LogoutButton />
+              </div>
             </div>
           </div>
         </header>

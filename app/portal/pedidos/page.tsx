@@ -1,31 +1,52 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import {
   Loader2,
   Package,
   CalendarDays,
-  CircleDollarSign,
   XCircle,
   RefreshCw,
   ClipboardList,
-  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  FileText,
 } from 'lucide-react'
+
+type CustomerUser = {
+  id: string
+  company_id: string
+  client_id: string | null
+  name: string
+  email: string
+  active: boolean
+}
 
 type Order = {
   id: string
-  status: string
-  total_amount: number
+  company_id: string
+  client_id: string
+  order_number: number
+  order_code: string | null
+  order_date: string
+  status: 'pending' | 'confirmed' | 'cancelled'
+  source: 'manual' | 'portal' | string | null
+  budget_id: string | null
   notes: string | null
   created_at: string
 }
 
 export default function MisPedidosPage() {
+  const router = useRouter()
+
+  const [customer, setCustomer] = useState<CustomerUser | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
 
   useEffect(() => {
     loadOrders()
@@ -34,31 +55,60 @@ export default function MisPedidosPage() {
   async function loadOrders() {
     setLoading(true)
     setErrorMsg('')
+    setSuccessMsg('')
 
     const { data: userData } = await supabase.auth.getUser()
 
     if (!userData.user) {
-      setErrorMsg('No estás logueado.')
-      setLoading(false)
+      router.push('/auth/login')
       return
     }
 
-    const { data: customer, error: customerError } = await supabase
+    const { data: customerData, error: customerError } = await supabase
       .from('customer_users')
-      .select('id')
+      .select('id, company_id, client_id, name, email, active')
       .eq('auth_user_id', userData.user.id)
       .single()
 
-    if (customerError || !customer) {
+    if (customerError || !customerData) {
       setErrorMsg('No se encontró el cliente.')
       setLoading(false)
       return
     }
 
+    if (!customerData.active) {
+      setErrorMsg('Tu usuario está inactivo. Contactá al administrador.')
+      setLoading(false)
+      return
+    }
+
+    if (!customerData.client_id) {
+      setErrorMsg(
+        'Tu usuario todavía no tiene un cliente del sistema enlazado. Contactá al administrador.'
+      )
+      setLoading(false)
+      return
+    }
+
+    setCustomer(customerData)
+
     const { data, error } = await supabase
-      .from('customer_orders')
-      .select('*')
-      .eq('customer_user_id', customer.id)
+      .from('orders')
+      .select(`
+        id,
+        company_id,
+        client_id,
+        order_number,
+        order_code,
+        order_date,
+        status,
+        source,
+        budget_id,
+        notes,
+        created_at
+      `)
+      .eq('company_id', customerData.company_id)
+      .eq('client_id', customerData.client_id)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -71,26 +121,73 @@ export default function MisPedidosPage() {
     setLoading(false)
   }
 
+  function getOrderCode(order: Order) {
+    return order.order_code || `PED-${String(order.order_number).padStart(6, '0')}`
+  }
+
+  async function createCancelledNotification({
+    companyId,
+    orderId,
+    orderCode,
+    customerName,
+  }: {
+    companyId: string
+    orderId: string
+    orderCode: string
+    customerName: string
+  }) {
+    const res = await fetch('/api/notifications/order-cancelled', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        companyId,
+        orderId,
+        orderCode,
+        customerName,
+      }),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      console.error('Error creando notificación de cancelación:', data)
+      return false
+    }
+
+    return true
+  }
+
   async function cancelOrder(order: Order) {
+    if (!customer) return
+
     if (order.status !== 'pending') {
       alert('Solo podés cancelar pedidos pendientes.')
       return
     }
 
-    const confirmCancel = confirm('¿Seguro que querés cancelar este pedido?')
+    const orderCode = getOrderCode(order)
+
+    const confirmCancel = confirm(
+      `¿Seguro que querés cancelar el pedido ${orderCode}?`
+    )
 
     if (!confirmCancel) return
 
     setCancellingId(order.id)
     setErrorMsg('')
+    setSuccessMsg('')
 
     const { error } = await supabase
-      .from('customer_orders')
+      .from('orders')
       .update({
         status: 'cancelled',
         updated_at: new Date().toISOString(),
       })
       .eq('id', order.id)
+      .eq('company_id', customer.company_id)
+      .eq('client_id', customer.client_id)
       .eq('status', 'pending')
 
     if (error) {
@@ -99,38 +196,61 @@ export default function MisPedidosPage() {
       return
     }
 
-    await loadOrders()
+    const notificationCreated = await createCancelledNotification({
+      companyId: customer.company_id,
+      orderId: order.id,
+      orderCode,
+      customerName: customer.name,
+    })
+
+    setOrders((prev) =>
+      prev.map((item) =>
+        item.id === order.id
+          ? {
+              ...item,
+              status: 'cancelled',
+            }
+          : item
+      )
+    )
+
+    setSuccessMsg(
+      notificationCreated
+        ? `Pedido ${orderCode} cancelado correctamente.`
+        : `Pedido ${orderCode} cancelado correctamente, pero no se pudo notificar al administrador.`
+    )
+
     setCancellingId(null)
   }
 
   function getStatusLabel(status: string) {
-    if (status === 'pending') return 'Pendiente'
-    if (status === 'approved') return 'Aprobado'
-    if (status === 'rejected') return 'Rechazado'
-    if (status === 'delivered') return 'Entregado'
+    if (status === 'pending') return 'Pendiente de revisión'
+    if (status === 'confirmed') return 'Convertido en presupuesto'
     if (status === 'cancelled') return 'Cancelado'
     return status
   }
 
   function getStatusClass(status: string) {
     if (status === 'pending') return 'bg-amber-50 text-amber-700 border-amber-200'
-    if (status === 'approved') return 'bg-blue-50 text-blue-700 border-blue-200'
-    if (status === 'delivered') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-    if (status === 'rejected') return 'bg-red-50 text-red-700 border-red-200'
+    if (status === 'confirmed') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
     if (status === 'cancelled') return 'bg-slate-100 text-slate-600 border-slate-200'
     return 'bg-slate-100 text-slate-700 border-slate-200'
   }
 
   const totalOrders = orders.length
+
   const pendingOrders = useMemo(
     () => orders.filter((order) => order.status === 'pending').length,
     [orders]
   )
-  const totalAmount = useMemo(
-    () =>
-      orders
-        .filter((order) => order.status !== 'cancelled' && order.status !== 'rejected')
-        .reduce((acc, order) => acc + Number(order.total_amount || 0), 0),
+
+  const confirmedOrders = useMemo(
+    () => orders.filter((order) => order.status === 'confirmed').length,
+    [orders]
+  )
+
+  const cancelledOrders = useMemo(
+    () => orders.filter((order) => order.status === 'cancelled').length,
     [orders]
   )
 
@@ -152,11 +272,12 @@ export default function MisPedidosPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Consultá el estado de tus pedidos y cancelá los que todavía estén pendientes.
+              Consultá los pedidos enviados y cancelá los que todavía estén pendientes.
             </p>
           </div>
 
           <button
+            type="button"
             onClick={loadOrders}
             disabled={loading}
             className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15 disabled:opacity-60"
@@ -167,7 +288,7 @@ export default function MisPedidosPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <SummaryCard
           title="Pedidos realizados"
           value={totalOrders}
@@ -178,15 +299,22 @@ export default function MisPedidosPage() {
         <SummaryCard
           title="Pendientes"
           value={pendingOrders}
-          icon={AlertCircle}
+          icon={Clock3}
           tone="amber"
         />
 
         <SummaryCard
-          title="Total activo"
-          value={formatCurrency(totalAmount)}
-          icon={CircleDollarSign}
+          title="Presupuestados"
+          value={confirmedOrders}
+          icon={CheckCircle2}
           tone="green"
+        />
+
+        <SummaryCard
+          title="Cancelados"
+          value={cancelledOrders}
+          icon={XCircle}
+          tone="slate"
         />
       </section>
 
@@ -196,14 +324,22 @@ export default function MisPedidosPage() {
         </div>
       )}
 
+      {successMsg && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+          {successMsg}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex flex-col items-center justify-center rounded-[2rem] border border-slate-200 bg-white p-14 text-center shadow-sm">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
             <Loader2 size={28} className="animate-spin" />
           </div>
+
           <h3 className="text-lg font-black text-slate-950">
             Cargando pedidos
           </h3>
+
           <p className="mt-1 text-sm text-slate-500">
             Estamos buscando tus pedidos realizados.
           </p>
@@ -211,6 +347,7 @@ export default function MisPedidosPage() {
       ) : orders.length === 0 ? (
         <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-12 text-center shadow-sm">
           <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-blue-100 blur-3xl" />
+
           <div className="relative">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
               <Package size={30} />
@@ -227,7 +364,7 @@ export default function MisPedidosPage() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {orders.map((order, index) => (
+          {orders.map((order) => (
             <article
               key={order.id}
               className="group overflow-hidden rounded-[1.7rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
@@ -241,7 +378,7 @@ export default function MisPedidosPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-black text-slate-950">
-                        Pedido #{String(orders.length - index).padStart(3, '0')}
+                        {getOrderCode(order)}
                       </h2>
 
                       <span
@@ -259,23 +396,26 @@ export default function MisPedidosPage() {
                         {new Date(order.created_at).toLocaleDateString('es-AR')}
                       </span>
 
-                      <span className="inline-flex items-center gap-1 font-black text-blue-700">
-                        <CircleDollarSign size={15} />
-                        {formatCurrency(Number(order.total_amount || 0))}
-                      </span>
+                      {order.budget_id && (
+                        <span className="inline-flex items-center gap-1 text-blue-600">
+                          <FileText size={15} />
+                          Presupuesto generado
+                        </span>
+                      )}
                     </div>
 
                     {order.notes && (
-                      <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                      <p className="mt-2 text-sm font-semibold text-slate-500">
                         {order.notes}
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="flex shrink-0 justify-end">
-                  {order.status === 'pending' ? (
+                <div className="flex flex-col gap-2 sm:flex-row md:justify-end">
+                  {order.status === 'pending' && (
                     <button
+                      type="button"
                       onClick={() => cancelOrder(order)}
                       disabled={cancellingId === order.id}
                       className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
@@ -285,12 +425,9 @@ export default function MisPedidosPage() {
                       ) : (
                         <XCircle size={17} />
                       )}
+
                       {cancellingId === order.id ? 'Cancelando...' : 'Cancelar'}
                     </button>
-                  ) : (
-                    <span className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-400">
-                      Sin acciones
-                    </span>
                   )}
                 </div>
               </div>
@@ -309,18 +446,19 @@ function SummaryCard({
   tone,
 }: {
   title: string
-  value: number | string
-  icon: typeof Package
-  tone: 'blue' | 'green' | 'amber'
+  value: number
+  icon: any
+  tone: 'blue' | 'amber' | 'green' | 'slate'
 }) {
   const styles = {
     blue: 'bg-blue-50 text-blue-700',
-    green: 'bg-emerald-50 text-emerald-700',
     amber: 'bg-amber-50 text-amber-700',
+    green: 'bg-emerald-50 text-emerald-700',
+    slate: 'bg-slate-100 text-slate-700',
   }
 
   return (
-    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-3">
         <div
           className={`flex h-12 w-12 items-center justify-center rounded-2xl ${styles[tone]}`}
@@ -328,20 +466,11 @@ function SummaryCard({
           <Icon size={23} />
         </div>
 
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-slate-500">{title}</p>
-          <h3 className="truncate text-2xl font-black text-slate-950">
-            {value}
-          </h3>
+        <div>
+          <p className="text-sm font-bold text-slate-500">{title}</p>
+          <p className="text-2xl font-black text-slate-950">{value}</p>
         </div>
       </div>
     </div>
   )
-}
-
-function formatCurrency(value: number) {
-  return value.toLocaleString('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-  })
 }

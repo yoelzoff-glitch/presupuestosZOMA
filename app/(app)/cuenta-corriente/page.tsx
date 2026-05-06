@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import * as XLSX from 'xlsx'
 import {
   Wallet,
   Users,
@@ -14,7 +13,6 @@ import {
   CalendarDays,
   ReceiptText,
   FileText,
-  FileSpreadsheet,
 } from 'lucide-react'
 
 type Client = {
@@ -215,50 +213,6 @@ export default function CuentaCorrientePage() {
     }
   }, [movements])
 
-  function exportToXlsm() {
-    if (!selectedClient) return
-
-    const rows = movements.map((movement) => ({
-      Fecha: new Date(movement.movement_date).toLocaleDateString('es-AR'),
-      Tipo: movement.movement_type,
-      'Tipo de pago': movement.payment_type || '',
-      Descripción: movement.description || '',
-      Presupuesto:
-        movement.budgets?.budget_code ||
-        (movement.budgets?.budget_number
-          ? `000-${movement.budgets.budget_number}`
-          : ''),
-      Debe: Number(movement.debit || 0),
-      Haber: Number(movement.credit || 0),
-    }))
-
-    const resumen = [
-      {
-        Cliente: selectedClient.name,
-        CUIT: selectedClient.cuit,
-        'Total vendido': totals.debit,
-        'Total pagado': totals.credit,
-        'Saldo pendiente': totals.balance,
-      },
-    ]
-
-    const wb = XLSX.utils.book_new()
-
-    const wsResumen = XLSX.utils.json_to_sheet(resumen)
-    const wsMovimientos = XLSX.utils.json_to_sheet(rows)
-
-    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen')
-    XLSX.utils.book_append_sheet(wb, wsMovimientos, 'Movimientos')
-
-    const cleanName = selectedClient.name
-      .replace(/[^a-z0-9]/gi, '_')
-      .toLowerCase()
-
-    XLSX.writeFile(wb, `cuenta_corriente_${cleanName}.xlsm`, {
-      bookType: 'xlsm',
-    })
-  }
-
   const pendingBudgets = useMemo<PendingBudget[]>(() => {
     const grouped = new Map<string, PendingBudget>()
 
@@ -294,9 +248,18 @@ export default function CuentaCorrientePage() {
     (budget) => budget.id === selectedPaymentBudgetId
   )
 
+  const pendingBudgetsTotalBalance = useMemo(() => {
+    return pendingBudgets.reduce(
+      (acc, budget) => acc + Number(budget.balance || 0),
+      0
+    )
+  }, [pendingBudgets])
+
   const paymentFullAmount = selectedPaymentBudget
     ? selectedPaymentBudget.balance
-    : totals.balance
+    : pendingBudgetsTotalBalance > 0
+      ? pendingBudgetsTotalBalance
+      : totals.balance
 
   useEffect(() => {
     if (paymentType === 'Pago total') {
@@ -306,11 +269,13 @@ export default function CuentaCorrientePage() {
 
       if (selectedPaymentBudget) {
         setPaymentDescription(`Pago completo ${selectedPaymentBudget.label}`)
+      } else if (pendingBudgets.length > 0) {
+        setPaymentDescription('Pago completo de presupuestos pendientes')
       } else {
         setPaymentDescription('Pago completo de deuda')
       }
     }
-  }, [paymentType, paymentFullAmount, selectedPaymentBudget])
+  }, [paymentType, paymentFullAmount, selectedPaymentBudget, pendingBudgets.length])
 
   async function handleSavePayment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -338,17 +303,60 @@ export default function CuentaCorrientePage() {
       return
     }
 
-    if (paymentType === 'Pago total' && amount > totals.balance) {
-      setErrorMsg('El pago no puede superar la deuda total del cliente.')
-      return
-    }
-
     if (selectedPaymentBudget && amount > selectedPaymentBudget.balance) {
       setErrorMsg('El pago no puede superar la deuda del presupuesto seleccionado.')
       return
     }
 
+    if (
+      paymentType !== 'Pago total' &&
+      !selectedPaymentBudget &&
+      amount > totals.balance
+    ) {
+      setErrorMsg('El pago no puede superar la deuda total del cliente.')
+      return
+    }
+
     setSavingPayment(true)
+
+    if (
+      paymentType === 'Pago total' &&
+      !selectedPaymentBudget &&
+      pendingBudgets.length > 0
+    ) {
+      const movementsToInsert = pendingBudgets.map((budget) => ({
+        company_id: companyId,
+        client_id: selectedClientId,
+        budget_id: budget.id,
+        movement_type: 'Pago',
+        payment_type: 'Pago total',
+        description: `Pago completo ${budget.label}`,
+        debit: 0,
+        credit: Number(budget.balance || 0),
+      }))
+
+      const { error } = await supabase
+        .from('account_movements')
+        .insert(movementsToInsert)
+
+      setSavingPayment(false)
+
+      if (error) {
+        setErrorMsg('Error al registrar el pago total.')
+        console.error(error)
+        return
+      }
+
+      setSuccessMsg('Pago total registrado. Todos los presupuestos pendientes quedaron saldados.')
+      setPaymentAmount('')
+      setSelectedPaymentBudgetId('')
+      setPaymentType('Pago parcial')
+      setPaymentDescription('Pago recibido')
+      setShowPaymentForm(false)
+
+      await loadMovements(selectedClientId)
+      return
+    }
 
     const { error } = await supabase.from('account_movements').insert({
       company_id: companyId,
@@ -399,7 +407,7 @@ export default function CuentaCorrientePage() {
 
       if (paymentType === 'Pago total') {
         setPaymentAmount(
-          totals.balance > 0 ? String(Number(totals.balance.toFixed(2))) : ''
+          paymentFullAmount > 0 ? String(Number(paymentFullAmount.toFixed(2))) : ''
         )
       }
     }
@@ -417,6 +425,8 @@ export default function CuentaCorrientePage() {
 
       if (selectedPaymentBudget) {
         setPaymentDescription(`Pago completo ${selectedPaymentBudget.label}`)
+      } else if (pendingBudgets.length > 0) {
+        setPaymentDescription('Pago completo de presupuestos pendientes')
       } else {
         setPaymentDescription('Pago completo de deuda')
       }
@@ -569,29 +579,18 @@ export default function CuentaCorrientePage() {
                     </p>
                   </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <button
-                      type="button"
-                      onClick={exportToXlsm}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-5 py-3 text-sm font-bold text-green-700 transition hover:bg-green-100"
-                    >
-                      <FileSpreadsheet size={18} />
-                      Exportar XLSM
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPaymentForm(!showPaymentForm)
-                        setErrorMsg('')
-                        setSuccessMsg('')
-                      }}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"
-                    >
-                      <Plus size={18} />
-                      Registrar pago
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPaymentForm(!showPaymentForm)
+                      setErrorMsg('')
+                      setSuccessMsg('')
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"
+                  >
+                    <Plus size={18} />
+                    Registrar pago
+                  </button>
                 </div>
               </div>
 
@@ -629,15 +628,21 @@ export default function CuentaCorrientePage() {
                         Registrar pago
                       </h3>
                       <p className="text-sm font-semibold text-slate-500">
-                        Podés asociar el pago a un presupuesto pendiente del cliente.
+                        Podés asociar el pago a un presupuesto pendiente o usar pago total para saldar todos.
                       </p>
                     </div>
 
-                    {selectedPaymentBudget && (
+                    {selectedPaymentBudget ? (
                       <div className="rounded-2xl bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">
                         Deuda: {formatCurrency(selectedPaymentBudget.balance)}
                       </div>
-                    )}
+                    ) : paymentType === 'Pago total' && pendingBudgets.length > 0 ? (
+                      <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">
+                        Saldará {pendingBudgets.length} presupuesto
+                        {pendingBudgets.length === 1 ? '' : 's'} pendiente
+                        {pendingBudgets.length === 1 ? '' : 's'}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -651,7 +656,11 @@ export default function CuentaCorrientePage() {
                         onChange={(e) => handleBudgetSelection(e.target.value)}
                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                       >
-                        <option value="">Sin asociar a presupuesto</option>
+                        <option value="">
+                          {paymentType === 'Pago total'
+                            ? 'Sin asociar: saldar todos los pendientes'
+                            : 'Sin asociar a presupuesto'}
+                        </option>
 
                         {pendingBudgets.map((budget) => (
                           <option key={budget.id} value={budget.id}>
@@ -665,6 +674,14 @@ export default function CuentaCorrientePage() {
                           Este cliente no tiene presupuestos pendientes para asociar.
                         </p>
                       )}
+
+                      {paymentType === 'Pago total' &&
+                        !selectedPaymentBudget &&
+                        pendingBudgets.length > 0 && (
+                          <p className="mt-2 text-xs font-bold text-emerald-600">
+                            Al no elegir un presupuesto puntual, se generará un pago por cada presupuesto pendiente.
+                          </p>
+                        )}
                     </label>
 
                     <label className="block">
@@ -713,7 +730,9 @@ export default function CuentaCorrientePage() {
                           Se completa automáticamente con la deuda{' '}
                           {selectedPaymentBudget
                             ? 'del presupuesto'
-                            : 'total del cliente'}
+                            : pendingBudgets.length > 0
+                              ? 'de todos los presupuestos pendientes'
+                              : 'total del cliente'}
                           .
                         </p>
                       )}
