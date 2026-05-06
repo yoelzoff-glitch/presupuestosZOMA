@@ -122,18 +122,20 @@ export default function ConfiguracionPage() {
           }
         )
 
-        if (!response.redirected) {
-          const errorData = await response.json()
+        const data = await response.json()
 
-          alert(
-            errorData?.error ||
-              'No se pudo iniciar Mercado Pago'
-          )
-
+        if (!response.ok) {
+          alert(data?.error || 'No se pudo iniciar Mercado Pago')
           return
         }
 
-        window.location.href = response.url
+        if (!data?.auth_url) {
+          alert('No se recibió la URL de Mercado Pago')
+          return
+        }
+
+        window.location.href = data.auth_url
+        
       } catch (error) {
         console.error(error)
         alert('Error conectando Mercado Pago')

@@ -67,5 +67,7 @@ export async function GET(req: NextRequest) {
     profile.company_id
   )
 
-  return NextResponse.redirect(authUrl.toString())
+  return NextResponse.json({
+    auth_url: authUrl.toString(),
+  })
 }
