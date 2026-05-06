@@ -138,9 +138,9 @@ export default function ConfiguracionPage() {
         console.error(error)
         alert('Error conectando Mercado Pago')
       }
-   }
+    }
     
-  }
+  
 
   return (
     <div className="space-y-6">
