@@ -64,6 +64,7 @@ export default function PortalCuentaCorrientePage() {
   const [movements, setMovements] = useState<Movement[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
+  const [payingBudgetId, setPayingBudgetId] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -171,6 +172,38 @@ export default function PortalCuentaCorrientePage() {
 
     setMovements(visibleMovements)
     setLoading(false)
+  }
+
+  async function payBudget(budgetId: string) {
+    try {
+      setPayingBudgetId(budgetId)
+
+      const response = await fetch('/api/mercadopago/create-preference', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          budget_id: budgetId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        alert(data.error || 'No se pudo iniciar el pago.')
+        return
+      }
+
+      if (data.init_point) {
+        window.location.href = data.init_point
+      }
+    } catch (error) {
+      console.error(error)
+      alert('No se pudo iniciar el pago.')
+    } finally {
+      setPayingBudgetId(null)
+    }
   }
 
   const totals = useMemo(() => {
@@ -373,6 +406,20 @@ export default function PortalCuentaCorrientePage() {
                       strong
                     />
                   </div>
+
+                  <button
+                    type="button"
+                    disabled={payingBudgetId === budget.id}
+                    onClick={() => payBudget(budget.id)}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {payingBudgetId === budget.id && (
+                      <Loader2 size={16} className="animate-spin" />
+                    )}
+                    {payingBudgetId === budget.id
+                      ? 'Redirigiendo...'
+                      : 'Pagar con Mercado Pago'}
+                  </button>
                 </div>
               ))}
             </div>
@@ -445,7 +492,7 @@ export default function PortalCuentaCorrientePage() {
                             )}
 
                             {movement.budgets && (
-                              <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-blue-500">
+                              <p className="mt-2 inline-flex items-center gap-1 text-xs font-black text-blue-600">
                                 <FileText size={13} />
                                 Presupuesto:{' '}
                                 {movement.budgets.budget_code ||
@@ -455,10 +502,10 @@ export default function PortalCuentaCorrientePage() {
                           </td>
 
                           <td
-                            className={`px-5 py-4 text-right text-base font-black ${
-                              movement.movement_type === 'Venta'
-                                ? 'text-slate-700'
-                                : 'text-green-600'
+                            className={`px-5 py-4 text-right text-lg font-black ${
+                              movement.movement_type === 'Pago'
+                                ? 'text-emerald-600'
+                                : 'text-slate-800'
                             }`}
                           >
                             {formatCurrency(amount)}
@@ -480,34 +527,45 @@ export default function PortalCuentaCorrientePage() {
                   return (
                     <article
                       key={movement.id}
-                      className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                      className="rounded-3xl border border-slate-100 bg-slate-50 p-4"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <DateBadge date={movement.movement_date} />
-                          <p className="mt-3 font-black text-slate-950">
-                            {movement.description || '-'}
-                          </p>
-
-                          {movement.budgets && (
-                            <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-blue-500">
-                              <FileText size={13} />
-                              {movement.budgets.budget_code ||
-                                `000-${movement.budgets.budget_number}`}
-                            </p>
-                          )}
+                          <div className="mt-3">
+                            <MovementBadge type={movement.movement_type} />
+                          </div>
                         </div>
 
-                        <MovementBadge type={movement.movement_type} />
+                        <p
+                          className={`text-lg font-black ${
+                            movement.movement_type === 'Pago'
+                              ? 'text-emerald-600'
+                              : 'text-slate-800'
+                          }`}
+                        >
+                          {formatCurrency(amount)}
+                        </p>
                       </div>
 
-                      <div className="mt-4">
-                        <MiniData
-                          label="Importe"
-                          value={formatCurrency(amount)}
-                          strong={movement.movement_type === 'Pago'}
-                        />
-                      </div>
+                      <p className="mt-4 font-black text-slate-900">
+                        {movement.description || '-'}
+                      </p>
+
+                      {movement.payment_type && (
+                        <p className="mt-1 text-xs font-bold text-slate-400">
+                          {movement.payment_type}
+                        </p>
+                      )}
+
+                      {movement.budgets && (
+                        <p className="mt-2 inline-flex items-center gap-1 text-xs font-black text-blue-600">
+                          <FileText size={13} />
+                          Presupuesto:{' '}
+                          {movement.budgets.budget_code ||
+                            `000-${movement.budgets.budget_number}`}
+                        </p>
+                      )}
                     </article>
                   )
                 })}
@@ -520,6 +578,15 @@ export default function PortalCuentaCorrientePage() {
   )
 }
 
+function formatCurrency(value: number) {
+  return Number(value || 0).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 function InfoCard({
   title,
   value,
@@ -529,30 +596,26 @@ function InfoCard({
   title: string
   value: string
   icon: any
-  tone: 'blue' | 'green' | 'slate'
+  tone: 'blue' | 'slate' | 'green'
 }) {
-  const styles = {
+  const tones = {
     blue: 'bg-blue-50 text-blue-700',
-    green: 'bg-emerald-50 text-emerald-700',
     slate: 'bg-slate-100 text-slate-700',
+    green: 'bg-emerald-50 text-emerald-700',
   }
 
   return (
-    <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex min-w-0 items-center gap-3">
+    <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex items-center gap-4">
         <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${styles[tone]}`}
+          className={`flex h-14 w-14 items-center justify-center rounded-3xl ${tones[tone]}`}
         >
-          <Icon size={22} />
+          <Icon size={26} />
         </div>
 
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-slate-500">
-            {title}
-          </p>
-          <h2 className="truncate text-lg font-black text-slate-950">
-            {value}
-          </h2>
+        <div className="min-w-0">
+          <p className="text-sm font-black text-slate-500">{title}</p>
+          <p className="truncate text-xl font-black text-slate-950">{value}</p>
         </div>
       </div>
     </div>
@@ -568,29 +631,25 @@ function StatCard({
   title: string
   value: string
   icon: any
-  tone: 'green' | 'red'
+  tone: 'red' | 'green'
 }) {
-  const styles = {
-    green: 'bg-emerald-50 text-emerald-700',
+  const tones = {
     red: 'bg-red-50 text-red-700',
+    green: 'bg-emerald-50 text-emerald-700',
   }
 
   return (
-    <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex min-w-0 items-center gap-4">
+    <div className="rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm">
+      <div className="flex items-center gap-5">
         <div
-          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${styles[tone]}`}
+          className={`flex h-16 w-16 items-center justify-center rounded-3xl ${tones[tone]}`}
         >
-          <Icon size={26} />
+          <Icon size={30} />
         </div>
 
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-slate-500">
-            {title}
-          </p>
-          <h2 className="truncate text-3xl font-black leading-tight text-slate-950">
-            {value}
-          </h2>
+        <div>
+          <p className="text-sm font-black text-slate-500">{title}</p>
+          <p className="text-3xl font-black text-slate-950">{value}</p>
         </div>
       </div>
     </div>
@@ -607,18 +666,38 @@ function MiniData({
   strong?: boolean
 }) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-3">
+    <div className="rounded-2xl bg-slate-50 p-4">
       <p className="text-xs font-black uppercase tracking-widest text-slate-400">
         {label}
       </p>
       <p
-        className={`mt-1 text-sm font-black ${
-          strong ? 'text-blue-700' : 'text-slate-900'
+        className={`mt-1 ${
+          strong
+            ? 'text-base font-black text-blue-700'
+            : 'text-sm font-bold text-slate-700'
         }`}
       >
         {value}
       </p>
     </div>
+  )
+}
+
+function MovementBadge({ type }: { type: 'Venta' | 'Pago' }) {
+  if (type === 'Pago') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+        <ArrowDownCircle size={15} />
+        Pago
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+      <ArrowUpCircle size={15} />
+      Cargo
+    </span>
   )
 }
 
@@ -628,24 +707,6 @@ function DateBadge({ date }: { date: string }) {
       <CalendarDays size={15} />
       {date ? new Date(date).toLocaleDateString('es-AR') : '-'}
     </div>
-  )
-}
-
-function MovementBadge({ type }: { type: 'Venta' | 'Pago' }) {
-  if (type === 'Venta') {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-        <ArrowUpCircle size={14} />
-        Cargo
-      </span>
-    )
-  }
-
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-700">
-      <ArrowDownCircle size={14} />
-      Pago
-    </span>
   )
 }
 
@@ -665,13 +726,4 @@ function TableHead({
       {children}
     </th>
   )
-}
-
-function formatCurrency(value: number) {
-  return value.toLocaleString('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }

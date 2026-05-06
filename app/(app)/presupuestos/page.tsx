@@ -30,6 +30,8 @@ type Budget = {
   budget_date: string
   total_amount: number
   status: string
+  payment_status: 'unpaid' | 'partial' | 'paid'
+  paid_amount: number
   created_at: string
   client: {
     name: string
@@ -90,6 +92,8 @@ export default function PresupuestosPage() {
         budget_date,
         total_amount,
         status,
+        payment_status,
+        paid_amount,
         created_at,
         clients (
           name,
@@ -255,6 +259,30 @@ export default function PresupuestosPage() {
   const approvedCount = budgets.filter((b) => b.status === 'approved').length
   const draftCount = budgets.filter((b) => b.status === 'draft').length
   const cancelledCount = budgets.filter((b) => b.status === 'cancelled').length
+  function getPaymentBadge(paymentStatus?: string) {
+    switch (paymentStatus) {
+      case 'paid':
+        return (
+          <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+            Pagado
+          </span>
+        )
+
+      case 'partial':
+        return (
+          <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
+            Pago parcial
+          </span>
+        )
+
+      default:
+        return (
+          <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+            Sin pagar
+          </span>
+        )
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -423,7 +451,30 @@ export default function PresupuestosPage() {
     </div>
   )
 }
+function getPaymentBadge(paymentStatus?: string) {
+  switch (paymentStatus) {
+    case 'paid':
+      return (
+        <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+          Pagado
+        </span>
+      )
 
+    case 'partial':
+      return (
+        <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
+          Pago parcial
+        </span>
+      )
+
+    default:
+      return (
+        <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+          Sin pagar
+        </span>
+      )
+  }
+}
 function BudgetRow({
   budget,
   actionLoadingId,
@@ -459,6 +510,8 @@ function BudgetRow({
       <td className="px-5 py-4">
         <StatusBadge status={budget.status} />
       </td>
+      
+      {getPaymentBadge(budget.payment_status)}
 
       <td
         className={`px-5 py-4 text-right text-lg font-black ${
