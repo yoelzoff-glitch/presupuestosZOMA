@@ -6,26 +6,47 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-export async function POST(req: NextRequest) {
+async function handleWebhook(req: NextRequest) {
   try {
-    const body = await req.json()
+    const url = new URL(req.url)
+    let body: any = {}
+
+    try {
+      body = await req.json()
+    } catch {
+      body = {}
+    }
+
+    console.log('MP WEBHOOK QUERY:', Object.fromEntries(url.searchParams))
+    console.log('MP WEBHOOK BODY:', body)
 
     const paymentId =
       body?.data?.id ||
       body?.id ||
-      body?.resource?.split('/').pop()
+      url.searchParams.get('data.id') ||
+      url.searchParams.get('id')
+
+    const topic =
+      body?.type ||
+      body?.topic ||
+      url.searchParams.get('type') ||
+      url.searchParams.get('topic')
+
+    console.log('MP PAYMENT ID:', paymentId)
+    console.log('MP TOPIC:', topic)
 
     if (!paymentId) {
-      return NextResponse.json({ received: true })
+      return NextResponse.json({ received: true, message: 'No payment id' })
     }
 
-    const { data: mpAccounts } = await supabaseAdmin
+    const { data: mpAccounts, error: accountsError } = await supabaseAdmin
       .from('mp_accounts')
       .select('company_id, access_token')
       .eq('connected', true)
 
-    if (!mpAccounts || mpAccounts.length === 0) {
-      return NextResponse.json({ received: true })
+    if (accountsError || !mpAccounts?.length) {
+      console.log('No MP accounts:', accountsError)
+      return NextResponse.json({ received: true, message: 'No MP accounts' })
     }
 
     let mpPayment: any = null
@@ -41,56 +62,65 @@ export async function POST(req: NextRequest) {
         }
       )
 
+      const text = await response.text()
+      console.log('MP PAYMENT RESPONSE:', response.status, text)
+
       if (response.ok) {
-        mpPayment = await response.json()
+        mpPayment = JSON.parse(text)
         companyId = account.company_id
         break
       }
     }
 
     if (!mpPayment || !companyId) {
-      return NextResponse.json({ received: true })
+      return NextResponse.json({ received: true, message: 'Payment not found' })
     }
 
-    const externalReference = mpPayment.external_reference
-    const status = mpPayment.status
-
     const mappedStatus =
-      status === 'approved'
+      mpPayment.status === 'approved'
         ? 'approved'
-        : status === 'rejected'
+        : mpPayment.status === 'rejected'
           ? 'rejected'
-          : status === 'cancelled'
+          : mpPayment.status === 'cancelled'
             ? 'cancelled'
-            : status === 'refunded'
+            : mpPayment.status === 'refunded'
               ? 'refunded'
               : 'pending'
 
-    const paymentMethod =
-      mpPayment.payment_method_id ||
-      mpPayment.payment_type_id ||
-      null
-
-    const updateData: any = {
-      status: mappedStatus,
-      mp_payment_id: String(mpPayment.id),
-      payment_method: paymentMethod,
-      updated_at: new Date().toISOString(),
-    }
-
-    if (mappedStatus === 'approved') {
-      updateData.paid_at = new Date().toISOString()
-    }
-
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from('payments')
-      .update(updateData)
+      .update({
+        status: mappedStatus,
+        mp_payment_id: String(mpPayment.id),
+        payment_method:
+          mpPayment.payment_method_id ||
+          mpPayment.payment_type_id ||
+          null,
+        paid_at: mappedStatus === 'approved' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      })
       .eq('company_id', companyId)
-      .eq('mp_external_reference', externalReference)
+      .eq('mp_external_reference', mpPayment.external_reference)
 
-    return NextResponse.json({ received: true })
+    if (updateError) {
+      console.log('PAYMENT UPDATE ERROR:', updateError)
+    }
+
+    return NextResponse.json({
+      received: true,
+      status: mappedStatus,
+      external_reference: mpPayment.external_reference,
+    })
   } catch (error) {
-    console.error('MP webhook error:', error)
+    console.error('MP WEBHOOK ERROR:', error)
     return NextResponse.json({ received: true })
   }
+}
+
+export async function POST(req: NextRequest) {
+  return handleWebhook(req)
+}
+
+export async function GET(req: NextRequest) {
+  return handleWebhook(req)
 }
