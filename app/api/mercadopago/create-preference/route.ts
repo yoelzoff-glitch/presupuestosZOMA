@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
             },
           ],
           external_reference: externalReference,
-              back_urls: {
+          back_urls: {
                 success: 'https://presupuestos-zoma.vercel.app/portal/pagos/success',
                 failure: 'https://presupuestos-zoma.vercel.app/portal/pagos/failure',
                 pending: 'https://presupuestos-zoma.vercel.app/portal/pagos/pending',
