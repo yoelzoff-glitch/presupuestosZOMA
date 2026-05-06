@@ -88,12 +88,6 @@ export async function POST(req: NextRequest) {
           ],
           external_reference: externalReference,
           notification_url: 'https://presupuestos-zoma.vercel.app/api/mercadopago/webhook',
-          back_urls: {
-                success: 'https://presupuestos-zoma.vercel.app/portal/pagos/success',
-                failure: 'https://presupuestos-zoma.vercel.app/portal/pagos/failure',
-                pending: 'https://presupuestos-zoma.vercel.app/portal/pagos/pending',
-               },
-               auto_return: 'approved',
         }),
       }
     )
