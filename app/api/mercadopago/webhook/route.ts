@@ -139,6 +139,62 @@ async function handleWebhook(req: NextRequest) {
           console.log('ACCOUNT MOVEMENT INSERT ERROR:', movementError)
         }
       }
+
+      if (localPayment.budget_id) {
+        const { data: approvedPayments, error: approvedPaymentsError } =
+          await supabaseAdmin
+            .from('payments')
+            .select('amount')
+            .eq('budget_id', localPayment.budget_id)
+            .eq('status', 'approved')
+
+        if (approvedPaymentsError) {
+          console.log('APPROVED PAYMENTS ERROR:', approvedPaymentsError)
+        }
+
+        const totalPaid =
+          approvedPayments?.reduce(
+            (sum, item) => sum + Number(item.amount || 0),
+            0
+          ) || 0
+
+        const { data: budget, error: budgetError } = await supabaseAdmin
+          .from('budgets')
+          .select('total_amount')
+          .eq('id', localPayment.budget_id)
+          .single()
+
+        if (budgetError) {
+          console.log('BUDGET READ ERROR:', budgetError)
+        }
+
+        if (budget) {
+          const totalAmount = Number(budget.total_amount || 0)
+
+          const paymentStatus =
+            totalPaid <= 0
+              ? 'unpaid'
+              : totalPaid >= totalAmount
+                ? 'paid'
+                : 'partial'
+
+          const { error: budgetUpdateError } = await supabaseAdmin
+            .from('budgets')
+            .update({
+              payment_status: paymentStatus,
+              paid_amount: totalPaid,
+              paid_at:
+                paymentStatus === 'paid'
+                  ? new Date().toISOString()
+                  : null,
+            })
+            .eq('id', localPayment.budget_id)
+
+          if (budgetUpdateError) {
+            console.log('BUDGET UPDATE ERROR:', budgetUpdateError)
+          }
+        }
+      }
     }
 
     return NextResponse.json({
