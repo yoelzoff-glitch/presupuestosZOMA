@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Lock, Mail, Building2 } from 'lucide-react'
 
 export default function Register() {
   const router = useRouter()
 
+  const [companyName, setCompanyName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -21,7 +22,7 @@ export default function Register() {
     setErrorMsg('')
     setSuccessMsg('')
 
-    if (!email.trim() || !password.trim()) {
+    if (!companyName.trim() || !email.trim() || !password.trim()) {
       setErrorMsg('Completá todos los campos.')
       return
     }
@@ -33,21 +34,58 @@ export default function Register() {
 
     setLoading(true)
 
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-    })
+    const { data: signUpData, error: signUpError } =
+      await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      })
 
-    setLoading(false)
-
-    if (error) {
-      setErrorMsg(error.message)
+    if (signUpError || !signUpData.user) {
+      setLoading(false)
+      setErrorMsg(signUpError?.message || 'No se pudo crear la cuenta.')
       return
     }
 
-    setSuccessMsg('Cuenta creada correctamente')
+    const userId = signUpData.user.id
 
-    // redirige al login después de 1 segundo
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .insert({
+        name: companyName.trim(),
+      })
+      .select('id')
+      .single()
+
+    if (companyError || !company) {
+      setLoading(false)
+      setErrorMsg(
+        companyError?.message ||
+          'La cuenta se creó, pero no se pudo crear la empresa.'
+      )
+      return
+    }
+
+    const { error: profileError } = await supabase
+      .from('users_profiles')
+      .insert({
+        id: userId,
+        company_id: company.id,
+        full_name: email.trim(),
+        role: 'admin',
+      })
+
+    setLoading(false)
+
+    if (profileError) {
+      setErrorMsg(
+        profileError.message ||
+          'La empresa se creó, pero no se pudo crear el perfil.'
+      )
+      return
+    }
+
+    setSuccessMsg('Cuenta, empresa y perfil creados correctamente.')
+
     setTimeout(() => {
       router.replace('/auth/login')
     }, 1000)
@@ -64,7 +102,9 @@ export default function Register() {
             <p className="text-sm font-semibold text-blue-600">
               Crear cuenta
             </p>
+
             <h2 className="mt-2 text-3xl font-black">Registro</h2>
+
             <p className="mt-2 text-sm text-slate-500">
               Ingresá tus datos para comenzar.
             </p>
@@ -85,11 +125,30 @@ export default function Register() {
           <div className="space-y-4">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">
+                Nombre de la empresa
+              </span>
+
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
+                <Building2 size={18} className="text-slate-400" />
+
+                <input
+                  type="text"
+                  value={companyName}
+                  placeholder="Mi empresa"
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full bg-transparent text-sm outline-none"
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">
                 Email
               </span>
 
               <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
                 <Mail size={18} className="text-slate-400" />
+
                 <input
                   type="email"
                   value={email}
@@ -121,7 +180,11 @@ export default function Register() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="text-slate-400 hover:text-slate-700"
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
                 </button>
               </div>
             </label>
