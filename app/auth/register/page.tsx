@@ -48,41 +48,35 @@ export default function Register() {
 
     const userId = signUpData.user.id
 
-    const { data: company, error: companyError } = await supabase
-      .from('companies')
-      .insert({
-        name: companyName.trim(),
-      })
-      .select('id')
-      .single()
+    const registerCompanyResponse = await fetch(
+        '/api/register-company',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            company_name: companyName.trim(),
+            email: email.trim(),
+          }),
+        }
+      )
 
-    if (companyError || !company) {
+      const registerCompanyData =
+        await registerCompanyResponse.json()
+
       setLoading(false)
-      setErrorMsg(
-        companyError?.message ||
-          'La cuenta se creó, pero no se pudo crear la empresa.'
-      )
-      return
-    }
 
-    const { error: profileError } = await supabase
-      .from('users_profiles')
-      .insert({
-        id: userId,
-        company_id: company.id,
-        full_name: email.trim(),
-        role: 'admin',
-      })
+      if (!registerCompanyResponse.ok) {
+        setErrorMsg(
+          registerCompanyData?.detail ||
+            registerCompanyData?.error ||
+            'La cuenta se creó, pero no se pudo crear la empresa.'
+        )
 
-    setLoading(false)
-
-    if (profileError) {
-      setErrorMsg(
-        profileError.message ||
-          'La empresa se creó, pero no se pudo crear el perfil.'
-      )
-      return
-    }
+        return
+      }
 
     setSuccessMsg('Cuenta, empresa y perfil creados correctamente.')
 
