@@ -503,7 +503,7 @@ export default function PortalPage() {
               </h3>
 
               <p className="mt-1 text-sm text-slate-500">
-                Probá cambiar la búsqueda.
+                Probá cambiar la búsqueda. 
               </p>
             </div>
           )}
