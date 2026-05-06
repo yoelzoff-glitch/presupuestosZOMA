@@ -1,12 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getValidMercadoPagoAccessToken } from '@/lib/mercadopago/refreshAccessToken'
+import { verifyMercadoPagoWebhookSignature } from '@/lib/mercadopago/verifyWebhookSignature'
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 async function handleWebhook(req: NextRequest) {
+  const isValidSignature =
+    verifyMercadoPagoWebhookSignature(req)
+
+    if (!isValidSignature) {
+      console.error('Firma webhook Mercado Pago inválida')
+
+      return NextResponse.json(
+        {
+         received: false,
+         error: 'Invalid signature',
+        },
+        {
+         status: 401,
+        }
+    )
+  }
+
   try {
     const url = new URL(req.url)
     let body: any = {}
