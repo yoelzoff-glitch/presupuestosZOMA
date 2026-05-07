@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
               }`,
               quantity: 1,
               currency_id: 'ARS',
-              unit_price: Number(budget.total_amount),
+              unit_price: Math.round(Number(budget.total_amount)),
             },
           ],
 
@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
           },
 
           auto_return: 'approved',
+          binary_mode: true,
         }),
       }
     )
