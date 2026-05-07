@@ -103,9 +103,9 @@ export async function POST(req: NextRequest) {
             `${appUrl}/api/mercadopago/webhook`,
 
           back_urls: {
-            success: `${appUrl}/portal/success`,
-            failure: `${appUrl}/portal/failure`,
-            pending: `${appUrl}/portal/pending`,
+            success: `${appUrl}/portal/pagos/success`,
+            failure: `${appUrl}/portal/pagos/failure`,
+            pending: `${appUrl}/portal/pagos/pending`,
           },
 
           auto_return: 'approved',
