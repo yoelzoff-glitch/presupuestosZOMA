@@ -325,20 +325,6 @@ export default function NuevoPresupuestoPage() {
 
       if (itemsError) throw itemsError
 
-      const { error: movementError } = await supabase
-        .from('account_movements')
-        .insert({
-          company_id: companyId,
-          client_id: clientId,
-          budget_id: budget.id,
-          movement_type: 'Venta',
-          debit: total,
-          credit: 0,
-          description: `Presupuesto 000-${nextNumber}`,
-        })
-
-      if (movementError) throw movementError
-
       toast.success(`Presupuesto 000-${nextNumber} creado correctamente.`)
 
       router.push(`/presupuestos/${budget.id}`)
