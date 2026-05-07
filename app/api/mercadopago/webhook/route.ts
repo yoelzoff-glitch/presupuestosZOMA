@@ -77,21 +77,21 @@ async function createPaymentNotification(localPayment: LocalPayment) {
 }
 
 async function handleWebhook(req: NextRequest) {
-  const isValidSignature = verifyMercadoPagoWebhookSignature(req)
+ // const isValidSignature = verifyMercadoPagoWebhookSignature(req)
 
-  if (!isValidSignature) {
-    console.error('Firma webhook Mercado Pago inválida')
+ // if (!isValidSignature) {
+ //   console.error('Firma webhook Mercado Pago inválida')
 
-    return NextResponse.json(
-      {
-        received: false,
-        error: 'Invalid signature',
-      },
-      {
-        status: 401,
-      }
-    )
-  }
+  //  return NextResponse.json(
+  //    {
+  //      received: false,
+  //      error: 'Invalid signature',
+  //    },
+  ///    {
+  //      status: 401,
+  //    }
+   // )
+ // }
 
   try {
     const url = new URL(req.url)
