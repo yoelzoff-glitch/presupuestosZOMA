@@ -13,6 +13,7 @@ import {
   CalendarDays,
   ReceiptText,
   FileText,
+  Trash2,
 } from 'lucide-react'
 
 type Client = {
@@ -57,6 +58,7 @@ export default function CuentaCorrientePage() {
   const [loading, setLoading] = useState(true)
   const [movementsLoading, setMovementsLoading] = useState(false)
   const [savingPayment, setSavingPayment] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState('')
@@ -435,6 +437,40 @@ export default function CuentaCorrientePage() {
     setShowPaymentForm(false)
 
     await loadMovements(selectedClientId)
+  }
+
+  async function handleDeleteMovement(movementId: string, budgetId: string | null) {
+    if (!companyId) return
+
+    const confirmDelete = window.confirm(
+      '¿Estás seguro de que querés eliminar este movimiento? Si es un pago, el presupuesto asociado volverá a quedar pendiente.'
+    )
+
+    if (!confirmDelete) return
+
+    setDeletingId(movementId)
+
+    try {
+      const { error } = await supabase
+        .from('account_movements')
+        .delete()
+        .eq('id', movementId)
+        .eq('company_id', companyId)
+
+      if (error) throw error
+
+      if (budgetId) {
+        await updateBudgetPaymentStatus(budgetId)
+      }
+
+      setSuccessMsg('Movimiento eliminado correctamente.')
+      await loadMovements(selectedClientId)
+    } catch (err) {
+      console.error(err)
+      setErrorMsg('No se pudo eliminar el movimiento.')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   function handleBudgetSelection(budgetId: string) {
@@ -876,6 +912,9 @@ export default function CuentaCorrientePage() {
                           <th className="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-slate-500">
                             Haber
                           </th>
+                          <th className="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-slate-500">
+                            Acciones
+                          </th>
                         </tr>
                       </thead>
 
@@ -936,6 +975,27 @@ export default function CuentaCorrientePage() {
                               {Number(movement.credit || 0) > 0
                                 ? formatCurrency(Number(movement.credit))
                                 : '-'}
+                            </td>
+
+                            <td className="px-5 py-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDeleteMovement(
+                                    movement.id,
+                                    movement.budget_id
+                                  )
+                                }
+                                disabled={deletingId === movement.id}
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                                title="Eliminar movimiento"
+                              >
+                                {deletingId === movement.id ? (
+                                  <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                  <Trash2 size={16} />
+                                )}
+                              </button>
                             </td>
                           </tr>
                         ))}
