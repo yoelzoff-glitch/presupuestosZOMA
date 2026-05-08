@@ -28,8 +28,8 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/productos', label: 'Productos', icon: Package },
-  { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
+  { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
   { href: '/notificaciones', label: 'Notificaciones', icon: Bell },
   { href: '/configuracion', label: 'Configuración', icon: Settings },
@@ -52,8 +52,8 @@ function getPageDescription(pathname: string) {
   if (pathname === '/') return 'Resumen general de la gestión comercial'
   if (pathname.startsWith('/clientes')) return 'Administración de clientes y datos comerciales'
   if (pathname.startsWith('/productos')) return 'Gestión de productos, precios y catálogo'
-  if (pathname.startsWith('/pedidos')) return 'Carga de pedidos sin valores para convertir luego en presupuestos'
-  if (pathname.startsWith('/presupuestos')) return 'Creación y seguimiento de presupuestos'
+  if (pathname.startsWith('/presupuestos')) return 'Creación de propuestas comerciales'
+  if (pathname.startsWith('/pedidos')) return 'Gestión de órdenes de venta confirmadas'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
   if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'

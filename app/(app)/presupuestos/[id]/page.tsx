@@ -21,6 +21,7 @@ import {
   Clock3,
   MapPin,
   Wallet,
+  ClipboardList,
 } from 'lucide-react'
 
 type Budget = {
@@ -69,7 +70,9 @@ export default function PresupuestoDetallePage() {
   const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
   const [sendingToAccount, setSendingToAccount] = useState(false)
+  const [convertingToOrder, setConvertingToOrder] = useState(false)
   const [alreadyInAccount, setAlreadyInAccount] = useState(false)
+  const [associatedOrderId, setAssociatedOrderId] = useState<string | null>(null)
 
   useEffect(() => {
     if (id) loadBudget()
@@ -158,6 +161,16 @@ export default function PresupuestoDetallePage() {
     }
 
     setItems(itemsData || [])
+
+    // Check if there's an associated order
+    const { data: orderData } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('budget_id', id)
+      .maybeSingle()
+
+    setAssociatedOrderId(orderData?.id || null)
+
     setLoading(false)
   }
 
@@ -212,6 +225,83 @@ export default function PresupuestoDetallePage() {
       toast.error(err?.message || 'Error al enviar a cuenta corriente.')
     } finally {
       setSendingToAccount(false)
+    }
+  }
+
+  async function getNextOrderNumber(currentCompanyId: string) {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('order_number')
+      .eq('company_id', currentCompanyId)
+      .order('order_number', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) throw error
+    return (data?.order_number ?? 0) + 1
+  }
+
+  async function convertToOrder() {
+    if (!budget) return
+
+    if (budget.status === 'cancelled') {
+      toast.error('No se puede convertir un presupuesto anulado.')
+      return
+    }
+
+    if (associatedOrderId) {
+      toast.info('Este presupuesto ya fue convertido en pedido.')
+      return
+    }
+
+    try {
+      setConvertingToOrder(true)
+
+      const nextOrderNumber = await getNextOrderNumber(budget.company_id)
+
+      // 1. Create order
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          company_id: budget.company_id,
+          client_id: budget.client_id,
+          budget_id: budget.id,
+          order_number: nextOrderNumber,
+          order_date: new Date().toISOString(),
+          status: 'confirmed',
+          source: 'manual',
+        })
+        .select('id')
+        .single()
+
+      if (orderError) throw orderError
+
+      // 2. Create order items
+      const orderItems = items.map((item) => ({
+        company_id: budget.company_id,
+        order_id: orderData.id,
+        product_id: item.product_code ? null : null, // This is simplified
+        product_code: item.product_code,
+        product_name: item.product_name,
+        category: item.category,
+        quantity: item.quantity,
+      }))
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems)
+
+      if (itemsError) throw itemsError
+
+      setAssociatedOrderId(orderData.id)
+      toast.success('¡Presupuesto convertido a pedido correctamente!')
+      
+      // Optional: Redirect to order? 
+      // router.push(`/pedidos/${orderData.id}`)
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al convertir a pedido.')
+    } finally {
+      setConvertingToOrder(false)
     }
   }
 
@@ -496,8 +586,34 @@ export default function PresupuestoDetallePage() {
 
               <button
                 type="button"
+                onClick={convertToOrder}
+                disabled={
+                  convertingToOrder ||
+                  Boolean(associatedOrderId) ||
+                  budget.status === 'cancelled'
+                }
+                className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg transition ${
+                  associatedOrderId || budget.status === 'cancelled'
+                    ? 'cursor-not-allowed bg-slate-500 shadow-slate-900/20'
+                    : 'bg-blue-600 shadow-blue-900/30 hover:bg-blue-500'
+                }`}
+              >
+                {convertingToOrder ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <ClipboardList size={18} />
+                )}
+                {associatedOrderId
+                  ? 'Ya es un pedido'
+                  : convertingToOrder
+                  ? 'Convirtiendo...'
+                  : 'Convertir a pedido'}
+              </button>
+
+              <button
+                type="button"
                 onClick={() => window.print()}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/30 transition hover:bg-slate-700"
               >
                 <Printer size={18} />
                 Imprimir / PDF
