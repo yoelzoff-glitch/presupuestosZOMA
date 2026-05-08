@@ -10,6 +10,7 @@ import {
   Wallet,
   Menu,
   X,
+  LifeBuoy,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -75,6 +76,16 @@ export default function PortalLayout({
               <Wallet size={16} />
               Cuenta corriente
             </Link>
+
+            <a
+              href="https://wa.me/5491100000000?text=Hola,%20necesito%20ayuda%20con%20el%20portal%20de%20pedidos"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+            >
+              <LifeBuoy size={16} />
+              Soporte
+            </a>
 
             <button
               type="button"
@@ -152,6 +163,16 @@ export default function PortalLayout({
             <Wallet size={16} />
             Cuenta corriente
           </Link>
+
+          <a
+            href="https://wa.me/5491100000000?text=Hola,%20necesito%20ayuda%20con%20el%20portal%20de%20pedidos"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+          >
+            <LifeBuoy size={16} />
+            Soporte
+          </a>
 
           <button
             type="button"

@@ -15,6 +15,7 @@ import {
   Sparkles,
   ClipboardList,
   Bell,
+  LifeBuoy,
 } from 'lucide-react'
 import LogoutButton from '@/app/components/LogoutButton'
 import NotificationsBell from '@/app/components/NotificationsBell'
@@ -119,7 +120,17 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="border-t border-white/10 p-4 space-y-4">
+        <a
+          href="https://wa.me/5491100000000?text=Hola,%20necesito%20ayuda%20o%20soporte%20técnico%20con%20el%20sistema"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full rounded-2xl bg-blue-600/20 text-blue-400 px-4 py-3 text-sm font-bold transition hover:bg-blue-600 hover:text-white"
+        >
+          <LifeBuoy size={18} />
+          Soporte Técnico
+        </a>
+
         <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
             Estado
