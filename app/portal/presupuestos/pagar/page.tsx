@@ -296,9 +296,7 @@ export default function PagarCuentaCorrientePage() {
                 key={label}
                 type="button"
                 onClick={() =>
-                  setAmountInput(
-                    Math.round(preset).toLocaleString('es-AR').replace(/\./g, ',')
-                  )
+                  setAmountInput(String(Math.round(preset)))
                 }
                 className="rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-xs font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
               >
