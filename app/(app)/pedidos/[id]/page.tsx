@@ -35,6 +35,8 @@ type Order = {
   order_date: string | null
   status: OrderStatus
   budget_id: string | null
+  source: string | null
+  total_amount: number | null
   notes: string | null
   created_at: string | null
   clients?: {
@@ -53,6 +55,7 @@ type OrderItem = {
   product_name: string
   category: string | null
   quantity: number
+  unit_price: number | null
 }
 
 type Product = {
@@ -123,6 +126,8 @@ export default function PedidoDetallePage() {
         order_date,
         status,
         budget_id,
+        source,
+        total_amount,
         notes,
         created_at,
         clients (
@@ -159,7 +164,8 @@ export default function PedidoDetallePage() {
         product_code,
         product_name,
         category,
-        quantity
+        quantity,
+        unit_price
       `)
       .eq('company_id', currentCompanyId)
       .eq('order_id', orderId)
@@ -217,9 +223,14 @@ export default function PedidoDetallePage() {
       }
     } else {
       loadedItems.forEach((item) => {
-        const product = productsData.find((p) => p.id === item.product_id)
-        const price = Number(product?.cost_price || 0)
-        initialPrices[item.id] = String(price)
+        // Priorizar el precio guardado en el ítem (portal)
+        if (item.unit_price !== null && item.unit_price !== undefined) {
+          initialPrices[item.id] = String(item.unit_price)
+        } else {
+          const product = productsData.find((p) => p.id === item.product_id)
+          const price = Number(product?.cost_price || 0)
+          initialPrices[item.id] = String(price)
+        }
       })
     }
 
@@ -590,7 +601,8 @@ export default function PedidoDetallePage() {
   }
 
   const orderLabel = getOrderLabel(order)
-  const canConvert = order.status === 'pending' && !order.budget_id
+  const isPortalOrder = order.source === 'portal'
+  const canConvert = order.status === 'pending' && !order.budget_id && !isPortalOrder
   const isConverted = order.status === 'confirmed' || Boolean(order.budget_id)
   const isCancelled = order.status === 'cancelled'
 
@@ -620,8 +632,9 @@ export default function PedidoDetallePage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Revisá los productos solicitados y ajustá los precios antes de
-              convertir el pedido en presupuesto.
+              {isPortalOrder 
+                ? 'Detalle de la orden de venta enviada desde el portal de clientes.' 
+                : 'Revisá los productos solicitados y ajustá los precios antes de convertir el pedido en presupuesto.'}
             </p>
           </div>
 
@@ -720,8 +733,8 @@ export default function PedidoDetallePage() {
 
         <InfoCard
           icon={DollarSign}
-          title="Total a presupuestar"
-          value={formatCurrency(totalAmount)}
+          title={isPortalOrder || isConverted ? "Total" : "Total a presupuestar"}
+          value={formatCurrency(order.total_amount || totalAmount)}
         />
       </section>
 

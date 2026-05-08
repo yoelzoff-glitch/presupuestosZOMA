@@ -285,6 +285,12 @@ export default function PortalPage() {
       const nextNumber = await getNextOrderNumber(customer.company_id)
       const orderCode = `PED-${String(nextNumber).padStart(6, '0')}`
 
+      // Calculate totals
+      const totalAmount = cart.reduce((acc, item) => {
+        return acc + Number(item.product.cost_price || 0) * item.quantity
+      }, 0)
+
+      // 1. Insert Order as confirmed
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -292,8 +298,9 @@ export default function PortalPage() {
           client_id: customer.client_id,
           order_number: nextNumber,
           order_code: orderCode,
-          status: 'pending',
+          status: 'confirmed',
           source: 'portal',
+          total_amount: totalAmount,
           notes: notes.trim() || 'Pedido enviado desde portal cliente',
         })
         .select('id')
@@ -304,6 +311,7 @@ export default function PortalPage() {
 
       const orderId = orderData.id
 
+      // 2. Insert Items with unit prices
       const itemsToInsert = cart.map((item) => ({
         company_id: customer.company_id,
         order_id: orderId,
@@ -312,6 +320,7 @@ export default function PortalPage() {
         product_name: item.product.name,
         category: item.product.category,
         quantity: item.quantity,
+        unit_price: Number(item.product.cost_price || 0),
       }))
 
       const { error: itemsError } = await supabase
@@ -320,6 +329,24 @@ export default function PortalPage() {
 
       if (itemsError) throw itemsError
 
+      // 3. Create Account Movement (Venta)
+      const { error: movementError } = await supabase
+        .from('account_movements')
+        .insert({
+          company_id: customer.company_id,
+          client_id: customer.client_id,
+          movement_date: new Date().toISOString().split('T')[0],
+          movement_type: 'Venta',
+          description: `Venta - Pedido ${orderCode}`,
+          debit: totalAmount,
+          credit: 0,
+        })
+
+      if (movementError) {
+        console.error('Error creando movimiento:', movementError)
+      }
+
+      // 4. Notification
       const notificationCreated = await createOrderNotification({
         companyId: customer.company_id,
         orderId,
@@ -327,18 +354,7 @@ export default function PortalPage() {
         customerName: customer.name,
       })
 
-      if (!notificationCreated) {
-        console.warn(
-          'El pedido se creó correctamente, pero falló la notificación al admin.'
-        )
-      }
-
-      setSuccessMsg(
-        notificationCreated
-          ? `Pedido ${orderCode} enviado correctamente. Ingresó como pendiente.`
-          : `Pedido ${orderCode} enviado correctamente, pero no se pudo generar la notificación.`
-      )
-
+      setSuccessMsg(`¡Pedido ${orderCode} enviado correctamente! Ya puedes verlo en tu historial.`)
       setCart([])
       setNotes('')
     } catch (error) {
