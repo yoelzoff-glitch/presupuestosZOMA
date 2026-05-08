@@ -358,7 +358,7 @@ export default function DashboardPage() {
                   <Tooltip 
                     cursor={{ fill: '#f8fafc' }}
                     contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [`$${value.toLocaleString('es-AR')}`, 'Ventas']}
+                    formatter={(value: any) => [`$${Number(value).toLocaleString('es-AR')}`, 'Ventas']}
                   />
                   <Bar dataKey="total" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={40} />
                 </BarChart>
