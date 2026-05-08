@@ -1,9 +1,8 @@
-'use client'
-
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
+import Link from 'next/link'
+import { Eye, EyeOff, Loader2, Lock, Mail, ChevronRight } from 'lucide-react'
 
 export default function Login() {
   const router = useRouter()
@@ -16,7 +15,6 @@ export default function Login() {
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-
     setErrorMsg('')
 
     if (!email.trim() || !password.trim()) {
@@ -25,9 +23,7 @@ export default function Login() {
     }
 
     setLoading(true)
-
     const loginValue = email.trim().toLowerCase()
-
     const loginEmail = loginValue.includes('@')
       ? loginValue
       : `${loginValue}@clientes.local`
@@ -68,105 +64,160 @@ export default function Login() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="grid min-h-screen lg:grid-cols-2">
-        <section className="hidden flex-col justify-between border-r border-white/10 bg-slate-900/60 p-10 lg:flex">
-          <div>
-            <div className="inline-flex rounded-2xl bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-300 ring-1 ring-blue-400/20">
-              Sistema de presupuestos
+    <main className="relative min-h-screen overflow-hidden bg-[#020617] text-white">
+      {/* Background Decorative Elements */}
+      <div className="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-blue-600/20 blur-[120px]" />
+      <div className="absolute -right-24 bottom-0 h-[500px] w-[500px] rounded-full bg-indigo-600/10 blur-[150px]" />
+
+      <div className="relative flex min-h-screen">
+        {/* Left Side: Visual/Branding */}
+        <section className="relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
+          <div className="absolute inset-0 z-0 opacity-40">
+            <img
+              src="/auth_bg_abstract_1778228532764.png"
+              alt="Background"
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-[#020617]/40" />
+          </div>
+
+          <div className="relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/40">
+                <Lock className="text-white" size={24} />
+              </div>
+              <span className="text-2xl font-black tracking-tighter text-white">
+                ZOMA <span className="text-blue-500">ERP</span>
+              </span>
             </div>
+          </div>
 
-            <h1 className="mt-8 max-w-xl text-5xl font-black tracking-tight">
-              Gestión simple, rápida y profesional.
+          <div className="relative z-10">
+            <h1 className="text-6xl font-black leading-[1.1] tracking-tight">
+              Gestioná tu empresa <br />
+              con <span className="text-blue-500 underline decoration-blue-500/30 underline-offset-8">inteligencia.</span>
             </h1>
-
-            <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">
-              Cargá clientes, productos y presupuestos desde una plataforma
-              clara, moderna y preparada para trabajar en equipo.
+            <p className="mt-8 max-w-lg text-lg font-medium leading-relaxed text-slate-400">
+              La plataforma definitiva para presupuestos, ventas y cuentas corrientes. 
+              Simple para tus clientes, potente para tu equipo.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-blue-950/30 backdrop-blur">
-            <p className="text-sm text-slate-400">Acceso seguro</p>
-            <p className="mt-2 text-2xl font-bold">Presupuestos ZOMA</p>
+          <div className="relative z-10 flex items-center gap-8">
+            <div className="flex -space-x-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-12 w-12 rounded-full border-4 border-[#020617] bg-slate-800 ring-2 ring-blue-500/20" />
+              ))}
+            </div>
+            <p className="text-sm font-bold text-slate-400">
+              Más de <span className="text-white">100+ empresas</span> confían en nosotros
+            </p>
           </div>
         </section>
 
-        <section className="flex items-center justify-center px-6 py-10">
-          <form
-            onSubmit={handleLogin}
-            className="w-full max-w-md rounded-3xl border border-white/10 bg-white p-7 text-slate-950 shadow-2xl"
-          >
-            <div className="mb-8">
-              <p className="text-sm font-semibold text-blue-600">
-                Bienvenido de nuevo
-              </p>
-              <h2 className="mt-2 text-3xl font-black">Iniciar sesión</h2>
-              <p className="mt-2 text-sm text-slate-500">
-                Ingresá con tu email o usuario y contraseña.
+        {/* Right Side: Login Form */}
+        <section className="flex w-full items-center justify-center p-6 lg:w-1/2 lg:p-12">
+          <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <div className="mb-10 text-center lg:text-left">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-400 ring-1 ring-blue-400/20">
+                Acceso exclusivo
+              </div>
+              <h2 className="text-4xl font-black tracking-tight text-white">
+                ¡Hola de nuevo!
+              </h2>
+              <p className="mt-3 font-medium text-slate-500">
+                Ingresá tus credenciales para acceder al panel.
               </p>
             </div>
 
-            {errorMsg && (
-              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                {errorMsg}
+            <form
+              onSubmit={handleLogin}
+              className="space-y-6 rounded-[2.5rem] border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl lg:p-10"
+            >
+              {errorMsg && (
+                <div className="flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-400">
+                  <div className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                  {errorMsg}
+                </div>
+              )}
+
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-400 ml-1">
+                    Email o Usuario
+                  </label>
+                  <div className="group relative transition-all">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-blue-500">
+                      <Mail size={20} />
+                    </div>
+                    <input
+                      type="text"
+                      value={email}
+                      placeholder="ej: juanperez o mail@ejemplo.com"
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 py-4 pl-12 pr-4 text-sm font-bold text-white outline-none transition-all focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-400 ml-1">
+                    Contraseña
+                  </label>
+                  <div className="group relative transition-all">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-blue-500">
+                      <Lock size={20} />
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      placeholder="••••••••"
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 py-4 pl-12 pr-12 text-sm font-bold text-white outline-none transition-all focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
-
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Email o usuario
-                </span>
-
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-                  <Mail size={18} className="text-slate-400" />
-                  <input
-                    type="text"
-                    value={email}
-                    placeholder="tuemail@gmail.com o cliente1"
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-                  />
-                </div>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Contraseña
-                </span>
-
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-                  <Lock size={18} className="text-slate-400" />
-
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    placeholder="••••••••"
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-slate-400 hover:text-slate-700"
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </label>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-blue-600 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-[0.98] disabled:opacity-70"
               >
-                {loading && <Loader2 size={18} className="animate-spin" />}
-                {loading ? 'Ingresando...' : 'Ingresar'}
+                {loading ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <>
+                    Ingresar al sistema
+                    <ChevronRight size={18} className="transition-transform group-hover:translate-x-1" />
+                  </>
+                )}
               </button>
-            </div>
-          </form>
+
+              <div className="pt-4 text-center">
+                <p className="text-sm font-bold text-slate-500">
+                  ¿No tenés cuenta?{' '}
+                  <Link
+                    href="/auth/register"
+                    className="text-blue-400 transition-colors hover:text-blue-300"
+                  >
+                    Registrá tu empresa
+                  </Link>
+                </p>
+              </div>
+            </form>
+
+            <p className="mt-12 text-center text-xs font-bold uppercase tracking-widest text-slate-600">
+              &copy; {new Date().getFullYear()} ZOMA TECHNOLOGY &bull; V2.0
+            </p>
+          </div>
         </section>
       </div>
     </main>
