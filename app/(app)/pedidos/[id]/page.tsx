@@ -87,6 +87,8 @@ export default function PedidoDetallePage() {
   const [loading, setLoading] = useState(true)
   const [converting, setConverting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
   useEffect(() => {
     if (orderId) {
@@ -254,15 +256,11 @@ export default function PedidoDetallePage() {
     }))
   }
 
-  const budgetItemsPreview = useMemo(() => {
-    return buildBudgetItems()
-  }, [items, products, companyId, itemPrices])
+  const budgetItemsPreview = buildBudgetItems()
 
-  const totalAmount = useMemo(() => {
-    return budgetItemsPreview.reduce((acc, item) => {
-      return acc + Number(item.quantity || 0) * Number(item.unit_price || 0)
-    }, 0)
-  }, [budgetItemsPreview])
+  const totalAmount = budgetItemsPreview.reduce((acc, item) => {
+    return acc + Number(item.quantity || 0) * Number(item.unit_price || 0)
+  }, 0)
 
   const productsWithoutPrice = budgetItemsPreview.filter(
     (item) => Number(item.unit_price || 0) <= 0
@@ -272,7 +270,7 @@ export default function PedidoDetallePage() {
     (item) => Number(item.unit_price || 0) < 0
   ).length
 
-  async function convertToBudget() {
+  function handleConvertClick() {
     if (!companyId || !order) return
 
     if (order.status !== 'pending') {
@@ -295,20 +293,13 @@ export default function PedidoDetallePage() {
       return
     }
 
-    if (productsWithoutPrice > 0) {
-      const confirmWithoutPrice = window.confirm(
-        `Hay ${productsWithoutPrice} producto(s) con precio $0. ¿Querés convertir igual el pedido?`
-      )
+    setShowConfirmModal(true)
+  }
 
-      if (!confirmWithoutPrice) return
-    }
+  async function convertToBudget() {
+    if (!companyId || !order) return
 
-    const confirmConvert = window.confirm(
-      '¿Querés convertir este pedido en presupuesto? Se usarán los precios cargados en esta pantalla y se generará la deuda en cuenta corriente.'
-    )
-
-    if (!confirmConvert) return
-
+    setShowConfirmModal(false)
     setConverting(true)
 
     try {
@@ -401,7 +392,7 @@ export default function PedidoDetallePage() {
 
       toast.success('Pedido convertido a presupuesto correctamente.')
       router.push(`/presupuestos/${budgetId}`)
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error convirtiendo pedido a presupuesto:', error)
 
       toast.error(
@@ -414,7 +405,7 @@ export default function PedidoDetallePage() {
     }
   }
 
-  async function cancelOrder() {
+  function handleCancelClick() {
     if (!companyId || !order) return
 
     if (order.status === 'confirmed' || order.budget_id) {
@@ -427,13 +418,13 @@ export default function PedidoDetallePage() {
       return
     }
 
-    const confirmCancel = window.confirm(
-      `¿Seguro que querés anular el pedido ${
-        order.order_code || `PED-${order.order_number}`
-      }?`
-    )
+    setShowCancelModal(true)
+  }
 
-    if (!confirmCancel) return
+  async function executeCancelOrder() {
+    if (!companyId || !order) return
+    
+    setShowCancelModal(false)
 
     setCancelling(true)
 
@@ -552,7 +543,7 @@ export default function PedidoDetallePage() {
               <>
                 <button
                   type="button"
-                  onClick={cancelOrder}
+                  onClick={handleCancelClick}
                   disabled={cancelling || converting}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-400/30 bg-red-500/15 px-5 py-3 text-sm font-black text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -566,7 +557,7 @@ export default function PedidoDetallePage() {
 
                 <button
                   type="button"
-                  onClick={convertToBudget}
+                  onClick={handleConvertClick}
                   disabled={converting || cancelling}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -648,6 +639,88 @@ export default function PedidoDetallePage() {
       {isConverted && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-700">
           Este pedido ya fue convertido en presupuesto. No se puede convertir nuevamente.
+        </div>
+      )}
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 shadow-2xl">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
+              <XCircle size={32} />
+            </div>
+
+            <h2 className="text-2xl font-black text-slate-900">
+              Anular pedido
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              ¿Seguro que querés anular el pedido {orderLabel}? Esta acción
+              no se puede deshacer.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                className="rounded-2xl px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+
+              <button
+                type="button"
+                onClick={executeCancelOrder}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-400/30 bg-red-500/15 px-5 py-3 text-sm font-black text-red-500 transition hover:bg-red-500 hover:text-white"
+              >
+                Sí, anular pedido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 shadow-2xl">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-600">
+              <FileText size={32} />
+            </div>
+
+            <h2 className="text-2xl font-black text-slate-900">
+              Convertir a presupuesto
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              ¿Querés convertir este pedido en presupuesto? Se usarán los precios
+              cargados en esta pantalla y se generará la deuda en cuenta
+              corriente.
+            </p>
+
+            {productsWithoutPrice > 0 && (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
+                ¡Atención! Hay {productsWithoutPrice} producto
+                {productsWithoutPrice === 1 ? '' : 's'} con precio $0.
+              </div>
+            )}
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="rounded-2xl px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={convertToBudget}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
+              >
+                Convertir a presupuesto
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -886,7 +959,7 @@ export default function PedidoDetallePage() {
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
-            onClick={cancelOrder}
+            onClick={handleCancelClick}
             disabled={cancelling || converting}
             className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-black text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -900,7 +973,7 @@ export default function PedidoDetallePage() {
 
           <button
             type="button"
-            onClick={convertToBudget}
+            onClick={handleConvertClick}
             disabled={converting || cancelling || productsWithNegativePrice > 0}
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           >

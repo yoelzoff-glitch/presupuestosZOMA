@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   Settings,
   Users,
@@ -29,6 +30,7 @@ export default function ConfiguracionPage() {
   const [mpStatus, setMpStatus] = useState<MpStatus | null>(null)
   const [loadingMp, setLoadingMp] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false)
 
   useEffect(() => {
     loadMpStatus()
@@ -61,44 +63,43 @@ export default function ConfiguracionPage() {
     }
   }
 
-  async function handleDisconnect() {
-      if (!companyId) return
+  function handleDisconnect() {
+    if (!companyId) return
+    setShowDisconnectModal(true)
+  }
 
-      const confirmDisconnect = confirm(
-        '¿Seguro que querés desconectar Mercado Pago?'
-      )
+  async function executeDisconnect() {
+    if (!companyId) return
 
-      if (!confirmDisconnect) return
+    setShowDisconnectModal(false)
 
-      try {
-        setDisconnecting(true)
+    try {
+      setDisconnecting(true)
 
-        const response = await fetch(
-          '/api/mercadopago/disconnect',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              company_id: companyId,
-            }),
-          }
-        )
+      const response = await fetch('/api/mercadopago/disconnect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company_id: companyId,
+        }),
+      })
 
-        if (!response.ok) {
-          alert('No se pudo desconectar Mercado Pago')
-          return
-        }
-
-        await loadMpStatus()
-      } catch (error) {
-        console.error(error)
-        alert('Ocurrió un error')
-      } finally {
-        setDisconnecting(false)
+      if (!response.ok) {
+        toast.error('No se pudo desconectar Mercado Pago')
+        return
       }
+
+      toast.success('Mercado Pago desconectado exitosamente')
+      await loadMpStatus()
+    } catch (error) {
+      console.error(error)
+      toast.error('Ocurrió un error al desconectar')
+    } finally {
+      setDisconnecting(false)
     }
+  }
 
     async function handleConnectMercadoPago() {
       try {
@@ -125,12 +126,12 @@ export default function ConfiguracionPage() {
         const data = await response.json()
 
         if (!response.ok) {
-          alert(data?.error || 'No se pudo iniciar Mercado Pago')
+          toast.error(data?.error || 'No se pudo iniciar Mercado Pago')
           return
         }
 
         if (!data?.auth_url) {
-          alert('No se recibió la URL de Mercado Pago')
+          toast.error('No se recibió la URL de Mercado Pago')
           return
         }
 
@@ -138,7 +139,7 @@ export default function ConfiguracionPage() {
         
       } catch (error) {
         console.error(error)
-        alert('Error conectando Mercado Pago')
+        toast.error('Error conectando Mercado Pago')
       }
     }
     
@@ -160,6 +161,42 @@ export default function ConfiguracionPage() {
           Desde esta sección se pueden administrar los parámetros generales del sistema de presupuestos.
         </p>
       </section>
+
+      {showDisconnectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 shadow-2xl">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
+              <XCircle size={32} />
+            </div>
+
+            <h2 className="text-2xl font-black text-slate-900">
+              Desconectar Mercado Pago
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              ¿Seguro que querés desconectar Mercado Pago? Dejarás de recibir pagos automáticos.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDisconnectModal(false)}
+                className="rounded-2xl px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={executeDisconnect}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500"
+              >
+                Sí, desconectar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {/* Empresa */}

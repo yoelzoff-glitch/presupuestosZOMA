@@ -126,10 +126,18 @@ async function handleWebhook(req: NextRequest) {
       return NextResponse.json({ received: true, message: 'No payment id' })
     }
 
-    const { data: mpAccounts, error: accountsError } = await supabaseAdmin
+    const mpUserId = body?.user_id || url.searchParams.get('user_id')
+
+    let query = supabaseAdmin
       .from('mp_accounts')
       .select('company_id, access_token')
       .eq('connected', true)
+
+    if (mpUserId) {
+      query = query.eq('mp_user_id', mpUserId)
+    }
+
+    const { data: mpAccounts, error: accountsError } = await query
 
     if (accountsError || !mpAccounts?.length) {
       console.log('No MP accounts:', accountsError)
