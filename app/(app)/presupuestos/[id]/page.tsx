@@ -69,7 +69,6 @@ export default function PresupuestoDetallePage() {
   const [items, setItems] = useState<BudgetItem[]>([])
   const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
-  const [sendingToAccount, setSendingToAccount] = useState(false)
   const [convertingToOrder, setConvertingToOrder] = useState(false)
   const [alreadyInAccount, setAlreadyInAccount] = useState(false)
   const [associatedOrderId, setAssociatedOrderId] = useState<string | null>(null)
@@ -174,59 +173,6 @@ export default function PresupuestoDetallePage() {
     setLoading(false)
   }
 
-  async function sendToAccountCurrent() {
-    if (!budget) return
-
-    if (budget.status === 'cancelled') {
-      toast.error('No se puede pasar a cuenta corriente un presupuesto anulado.')
-      return
-    }
-
-    if (alreadyInAccount) {
-      toast.info('Este presupuesto ya fue enviado a cuenta corriente.')
-      return
-    }
-
-    try {
-      setSendingToAccount(true)
-
-      const budgetLabel = budget.budget_code || `000-${budget.budget_number}`
-
-      const { data: existingMovement, error: existingMovementError } = await supabase
-        .from('account_movements')
-        .select('id')
-        .eq('budget_id', budget.id)
-        .eq('movement_type', 'Venta')
-        .maybeSingle()
-
-      if (existingMovementError) throw existingMovementError
-
-      if (existingMovement) {
-        setAlreadyInAccount(true)
-        toast.info('Este presupuesto ya fue enviado a cuenta corriente.')
-        return
-      }
-
-      const { error } = await supabase.from('account_movements').insert({
-        company_id: budget.company_id,
-        client_id: budget.client_id,
-        budget_id: budget.id,
-        movement_type: 'Venta',
-        debit: Number(budget.total_amount || calculatedTotal || 0),
-        credit: 0,
-        description: `Presupuesto ${budgetLabel}`,
-      })
-
-      if (error) throw error
-
-      setAlreadyInAccount(true)
-      toast.success('Presupuesto enviado a cuenta corriente.')
-    } catch (err: any) {
-      toast.error(err?.message || 'Error al enviar a cuenta corriente.')
-    } finally {
-      setSendingToAccount(false)
-    }
-  }
 
   async function getNextOrderNumber(currentCompanyId: string) {
     const { data, error } = await supabase
@@ -557,32 +503,6 @@ export default function PresupuestoDetallePage() {
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <StatusBadge status={budget.status || 'issued'} />
-
-              <button
-                type="button"
-                onClick={sendToAccountCurrent}
-                disabled={
-                  sendingToAccount ||
-                  alreadyInAccount ||
-                  budget.status === 'cancelled'
-                }
-                className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg transition ${
-                  alreadyInAccount || budget.status === 'cancelled'
-                    ? 'cursor-not-allowed bg-slate-500 shadow-slate-900/20'
-                    : 'bg-emerald-600 shadow-emerald-900/30 hover:bg-emerald-500'
-                }`}
-              >
-                {sendingToAccount ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Wallet size={18} />
-                )}
-                {alreadyInAccount
-                  ? 'Ya está en cuenta corriente'
-                  : sendingToAccount
-                  ? 'Enviando...'
-                  : 'Pasar a cuenta corriente'}
-              </button>
 
               <button
                 type="button"

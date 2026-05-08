@@ -21,6 +21,7 @@ import {
   Tag,
   User,
   XCircle,
+  Wallet,
 } from 'lucide-react'
 
 type OrderStatus = 'pending' | 'confirmed' | 'cancelled' | string
@@ -89,6 +90,8 @@ export default function PedidoDetallePage() {
   const [cancelling, setCancelling] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
+  const [sendingToAccount, setSendingToAccount] = useState(false)
+  const [alreadyInAccount, setAlreadyInAccount] = useState(false)
 
   useEffect(() => {
     if (orderId) {
@@ -205,6 +208,19 @@ export default function PedidoDetallePage() {
     setItems(loadedItems)
     setProducts(productsData)
     setItemPrices(initialPrices)
+
+    // Check if already in account current
+    if (normalizedOrder.budget_id) {
+      const { data: movement } = await supabase
+        .from('account_movements')
+        .select('id')
+        .eq('budget_id', normalizedOrder.budget_id)
+        .eq('movement_type', 'Venta')
+        .maybeSingle()
+      
+      if (movement) setAlreadyInAccount(true)
+    }
+
     setLoading(false)
   }
 
@@ -450,6 +466,60 @@ export default function PedidoDetallePage() {
     await loadOrder()
   }
 
+  async function sendToAccountCurrent() {
+    if (!order || !companyId) return
+
+    if (order.status === 'cancelled') {
+      toast.error('No se puede pasar a cuenta corriente un pedido anulado.')
+      return
+    }
+
+    if (!order.budget_id) {
+      toast.error('Este pedido no tiene un presupuesto asociado para vincular el movimiento.')
+      return
+    }
+
+    if (alreadyInAccount) {
+      toast.info('Este pedido ya fue enviado a cuenta corriente.')
+      return
+    }
+
+    try {
+      setSendingToAccount(true)
+
+      const orderLabel = order.order_code || `PED-${order.order_number}`
+      
+      // We calculate total from current prices/quantities if it's pending, 
+      // but if it's already confirmed, it should have a budget with a total.
+      const { data: budgetData } = await supabase
+        .from('budgets')
+        .select('total_amount')
+        .eq('id', order.budget_id)
+        .single()
+
+      const total = budgetData?.total_amount || totalAmount
+
+      const { error } = await supabase.from('account_movements').insert({
+        company_id: companyId,
+        client_id: order.client_id,
+        budget_id: order.budget_id,
+        movement_type: 'Venta',
+        debit: Number(total),
+        credit: 0,
+        description: `Pedido ${orderLabel}`,
+      })
+
+      if (error) throw error
+
+      setAlreadyInAccount(true)
+      toast.success('Pedido enviado a cuenta corriente.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al enviar a cuenta corriente.')
+    } finally {
+      setSendingToAccount(false)
+    }
+  }
+
   function getOrderLabel(orderValue: Order) {
     return orderValue.order_code || `PED-${orderValue.order_number}`
   }
@@ -572,13 +642,33 @@ export default function PedidoDetallePage() {
             )}
 
             {isConverted && order.budget_id && (
-              <Link
-                href={`/presupuestos/${order.budget_id}`}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-900/20 transition hover:bg-emerald-500"
-              >
-                <FileText size={18} />
-                Ver presupuesto
-              </Link>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={sendToAccountCurrent}
+                  disabled={sendingToAccount || alreadyInAccount || isCancelled}
+                  className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg transition ${
+                    alreadyInAccount || isCancelled
+                      ? 'bg-slate-500 shadow-slate-900/20'
+                      : 'bg-emerald-600 shadow-emerald-900/30 hover:bg-emerald-500'
+                  }`}
+                >
+                  {sendingToAccount ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Wallet size={18} />
+                  )}
+                  {alreadyInAccount ? 'En cuenta corriente' : 'Pasar a cuenta corriente'}
+                </button>
+
+                <Link
+                  href={`/presupuestos/${order.budget_id}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-700"
+                >
+                  <FileText size={18} />
+                  Ver presupuesto
+                </Link>
+              </div>
             )}
           </div>
         </div>
