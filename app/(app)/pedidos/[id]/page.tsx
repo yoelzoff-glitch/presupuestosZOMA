@@ -240,16 +240,15 @@ export default function PedidoDetallePage() {
     setItemPrices(initialPrices)
 
     // Check if already in account current
-    if (normalizedOrder.budget_id) {
-      const { data: movement } = await supabase
-        .from('account_movements')
-        .select('id')
-        .eq('budget_id', normalizedOrder.budget_id)
-        .eq('movement_type', 'Venta')
-        .maybeSingle()
-      
-      if (movement) setAlreadyInAccount(true)
-    }
+    const orderCodeForSearch = normalizedOrder.order_code || `PED-${normalizedOrder.order_number}`
+    
+    const { data: movement } = await supabase
+      .from('account_movements')
+      .select('id')
+      .or(`budget_id.eq.${normalizedOrder.budget_id || '00000000-0000-0000-0000-000000000000'},description.ilike.%${orderCodeForSearch}%`)
+      .maybeSingle()
+    
+    if (movement) setAlreadyInAccount(true)
 
     setLoading(false)
   }
@@ -565,14 +564,18 @@ export default function PedidoDetallePage() {
       const orderLabel = order.order_code || `PED-${order.order_number}`
       
       // We calculate total from current prices/quantities if it's pending, 
-      // but if it's already confirmed, it should have a budget with a total.
-      const { data: budgetData } = await supabase
-        .from('budgets')
-        .select('total_amount')
-        .eq('id', order.budget_id)
-        .single()
+      // but if it's already confirmed, it should have a budget or a saved total_amount.
+      let total = order.total_amount || totalAmount
 
-      const total = budgetData?.total_amount || totalAmount
+      if (order.budget_id) {
+        const { data: budgetData } = await supabase
+          .from('budgets')
+          .select('total_amount')
+          .eq('id', order.budget_id)
+          .single()
+        
+        if (budgetData) total = budgetData.total_amount
+      }
 
       const { error } = await supabase.from('account_movements').insert({
         company_id: companyId,
@@ -750,7 +753,7 @@ export default function PedidoDetallePage() {
               </>
             )}
 
-            {isConverted && order.budget_id && (
+            {isConverted && (isPortalOrder || order.budget_id) && (
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
@@ -767,16 +770,20 @@ export default function PedidoDetallePage() {
                   ) : (
                     <Wallet size={18} />
                   )}
-                  {alreadyInAccount ? 'En cuenta corriente' : 'Pasar a cuenta corriente'}
+                  {alreadyInAccount
+                    ? 'En cuenta corriente'
+                    : 'Pasar a cuenta corriente'}
                 </button>
 
-                <Link
-                  href={`/presupuestos/${order.budget_id}`}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-700"
-                >
-                  <FileText size={18} />
-                  Ver presupuesto
-                </Link>
+                {order.budget_id && (
+                  <Link
+                    href={`/presupuestos/${order.budget_id}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-700"
+                  >
+                    <FileText size={18} />
+                    Ver presupuesto
+                  </Link>
+                )}
               </div>
             )}
           </div>
