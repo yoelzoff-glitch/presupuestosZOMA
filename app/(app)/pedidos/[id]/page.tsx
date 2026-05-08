@@ -197,12 +197,31 @@ export default function PedidoDetallePage() {
 
     const initialPrices: Record<string, string> = {}
 
-    loadedItems.forEach((item) => {
-      const product = productsData.find((p) => p.id === item.product_id)
-      const price = Number(product?.cost_price || 0)
-
-      initialPrices[item.id] = String(price)
-    })
+    // If order has budget, fetch original prices from budget_items
+    if (normalizedOrder.budget_id) {
+      const { data: bItemsData } = await supabase
+        .from('budget_items')
+        .select('product_code, unit_price')
+        .eq('budget_id', normalizedOrder.budget_id)
+      
+      if (bItemsData) {
+        loadedItems.forEach((item) => {
+          const bItem = bItemsData.find(bi => bi.product_code === item.product_code)
+          if (bItem) {
+            initialPrices[item.id] = String(bItem.unit_price)
+          } else {
+            const product = productsData.find((p) => p.id === item.product_id)
+            initialPrices[item.id] = String(product?.cost_price || 0)
+          }
+        })
+      }
+    } else {
+      loadedItems.forEach((item) => {
+        const product = productsData.find((p) => p.id === item.product_id)
+        const price = Number(product?.cost_price || 0)
+        initialPrices[item.id] = String(price)
+      })
+    }
 
     setOrder(normalizedOrder)
     setItems(loadedItems)
@@ -861,13 +880,15 @@ export default function PedidoDetallePage() {
               </h2>
 
               <p className="mt-1 text-sm font-semibold text-slate-500">
-                Los precios de esta pantalla serán los que pasen al presupuesto.
+                {canConvert 
+                  ? 'Los precios de esta pantalla serán los que pasen al presupuesto.'
+                  : 'Detalle de los productos y precios acordados en el presupuesto.'}
               </p>
             </div>
 
             <div className="rounded-2xl bg-slate-950 px-5 py-3 text-white">
               <p className="text-xs font-black uppercase tracking-widest text-blue-200">
-                Total a presupuestar
+                {canConvert ? 'Total a presupuestar' : 'Total del pedido'}
               </p>
               <p className="text-2xl font-black">
                 {formatCurrency(totalAmount)}
