@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
         budget_number,
         budget_code,
         total_amount,
+        paid_amount,
         status,
         clients (
           name
@@ -53,6 +54,15 @@ export async function POST(req: NextRequest) {
     if (!budget.total_amount || Number(budget.total_amount) <= 0) {
       return NextResponse.json(
         { error: 'El presupuesto no tiene importe válido' },
+        { status: 400 }
+      )
+    }
+
+    const balance = Number(budget.total_amount || 0) - Number(budget.paid_amount || 0)
+
+    if (balance <= 0) {
+      return NextResponse.json(
+        { error: 'El presupuesto ya se encuentra pagado' },
         { status: 400 }
       )
     }
@@ -93,7 +103,7 @@ export async function POST(req: NextRequest) {
               }`,
               quantity: 1,
               currency_id: 'ARS',
-              unit_price: Math.round(Number(budget.total_amount)),
+              unit_price: Math.round(Number(balance)),
             },
           ],
 
@@ -134,7 +144,7 @@ export async function POST(req: NextRequest) {
         company_id: budget.company_id,
         client_id: budget.client_id,
         budget_id: budget.id,
-        amount: Number(budget.total_amount),
+        amount: Number(balance),
         status: 'pending',
         mp_preference_id: preferenceData.id,
         mp_external_reference: externalReference,

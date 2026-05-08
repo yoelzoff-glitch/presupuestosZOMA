@@ -259,20 +259,19 @@ async function handleWebhook(req: NextRequest) {
       }
 
       if (localPayment.budget_id) {
-        const { data: approvedPayments, error: approvedPaymentsError } =
+        const { data: movements, error: movementsError } =
           await supabaseAdmin
-            .from('payments')
-            .select('amount')
+            .from('account_movements')
+            .select('credit')
             .eq('budget_id', localPayment.budget_id)
-            .eq('status', 'approved')
 
-        if (approvedPaymentsError) {
-          console.log('APPROVED PAYMENTS ERROR:', approvedPaymentsError)
+        if (movementsError) {
+          console.log('MOVEMENTS READ ERROR:', movementsError)
         }
 
         const totalPaid =
-          approvedPayments?.reduce(
-            (sum, item) => sum + Number(item.amount || 0),
+          movements?.reduce(
+            (sum, item) => sum + Number(item.credit || 0),
             0
           ) || 0
 
