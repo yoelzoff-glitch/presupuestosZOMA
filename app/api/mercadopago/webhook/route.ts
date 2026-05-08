@@ -449,6 +449,19 @@ async function handleWebhook(req: NextRequest) {
         .maybeSingle()
 
       if (!existingMovement) {
+        let movementDescription = `Pago Mercado Pago - ${mpPayment.id}`
+        if (localPayment.mp_external_reference?.startsWith('order:')) {
+          const orderId = localPayment.mp_external_reference.replace('order:', '')
+          const { data: order } = await supabaseAdmin
+            .from('orders')
+            .select('order_code')
+            .eq('id', orderId)
+            .maybeSingle()
+          if (order) {
+            movementDescription = `Pago Pedido ${order.order_code} - MP: ${mpPayment.id}`
+          }
+        }
+
         const { error: movementError } = await supabaseAdmin
           .from('account_movements')
           .insert({
@@ -458,7 +471,7 @@ async function handleWebhook(req: NextRequest) {
             payment_id: localPayment.id,
             movement_type: 'Pago',
             payment_type: 'Pago total',
-            description: `Pago Mercado Pago - ${mpPayment.id}`,
+            description: movementDescription,
             debit: 0,
             credit: Number(localPayment.amount),
           })

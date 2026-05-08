@@ -191,9 +191,12 @@ export async function POST(req: NextRequest) {
             title: paymentData.title,
             quantity: 1,
             currency_id: 'ARS',
-            unit_price: Math.round(Number(paymentData.balance)),
+            unit_price: Number(paymentData.balance.toFixed(2)),
           },
         ],
+        payer: {
+          email: user.email,
+        },
         external_reference: externalReference,
         notification_url: `${appUrl}/api/mercadopago/webhook`,
         back_urls: {
