@@ -123,8 +123,8 @@ export default function EmpresaPage() {
         .eq('id', company.id)
 
       toast.success('Logo subido correctamente')
-    } catch (error) {
-      toast.error('Error al subir el logo')
+    } catch (error: any) {
+      toast.error('Error al subir el logo: ' + (error.message || 'Error desconocido'))
       console.error(error)
     } finally {
       setUploading(false)
