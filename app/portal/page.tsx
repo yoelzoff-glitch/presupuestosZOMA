@@ -357,9 +357,9 @@ export default function PortalPage() {
       setSuccessMsg(`¡Pedido ${orderCode} enviado correctamente! Ya puedes verlo en tu historial.`)
       setCart([])
       setNotes('')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error enviando pedido:', error)
-      setErrorMsg('No se pudo enviar el pedido.')
+      setErrorMsg(`Error: ${error?.message || 'No se pudo enviar el pedido.'}`)
     } finally {
       setSending(false)
     }
