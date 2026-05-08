@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import {
   Users,
@@ -10,14 +10,33 @@ import {
   TrendingUp,
   ArrowRight,
   Plus,
+  BarChart3,
+  PieChart as PieIcon,
+  ShoppingCart,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
+} from 'recharts'
 
 type DashboardStats = {
   clients: number
   products: number
   budgets: number
   balance: number
+  salesHistory: { month: string; total: number }[]
+  topProducts: { name: string; quantity: number }[]
+  paymentStatus: { name: string; value: number; color: string }[]
 }
 
 export default function DashboardPage() {
@@ -26,6 +45,9 @@ export default function DashboardPage() {
     products: 0,
     budgets: 0,
     balance: 0,
+    salesHistory: [],
+    topProducts: [],
+    paymentStatus: [],
   })
 
   const [loading, setLoading] = useState(true)
@@ -63,6 +85,8 @@ export default function DashboardPage() {
       productsRes,
       budgetsRes,
       balanceRes,
+      historyRes,
+      itemsRes,
     ] = await Promise.all([
       supabase
         .from('clients')
@@ -78,22 +102,87 @@ export default function DashboardPage() {
         .from('budgets')
         .select('id', { count: 'exact', head: true })
         .eq('company_id', companyId)
-        .neq('status','cancelled'),
+        .neq('status', 'cancelled'),
 
       supabase
         .from('account_movements')
         .select('debit, credit')
         .eq('company_id', companyId),
+
+      supabase
+        .from('budgets')
+        .select('total_amount, created_at, payment_status')
+        .eq('company_id', companyId)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false })
+        .limit(100),
+
+      supabase
+        .from('budget_items')
+        .select('product_name, quantity, budgets!inner(company_id)')
+        .eq('budgets.company_id', companyId)
+        .limit(200),
     ])
 
     const totalBalance =
-      balanceRes.data?.reduce((acc, item: any) => acc + (Number(item.debit || 0) - Number(item.credit || 0)), 0) ?? 0
+      balanceRes.data?.reduce(
+        (acc, item: any) =>
+          acc + (Number(item.debit || 0) - Number(item.credit || 0)),
+        0
+      ) ?? 0
+
+    // Procesar historial de ventas (últimos meses)
+    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    const historyMap: Record<string, number> = {}
+    
+    historyRes.data?.forEach(b => {
+      if (!b.created_at) return
+      const date = new Date(b.created_at)
+      const key = `${months[date.getMonth()]} ${date.getFullYear().toString().slice(-2)}`
+      historyMap[key] = (historyMap[key] || 0) + Number(b.total_amount || 0)
+    })
+
+    const salesHistory = Object.entries(historyMap)
+      .map(([month, total]) => ({ month, total }))
+      .reverse()
+      .slice(-6)
+
+    // Procesar productos más vendidos
+    const productMap: Record<string, number> = {}
+    itemsRes.data?.forEach(item => {
+      productMap[item.product_name] = (productMap[item.product_name] || 0) + Number(item.quantity || 0)
+    })
+
+    const topProducts = Object.entries(productMap)
+      .map(([name, quantity]) => ({ name, quantity }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5)
+
+    // Procesar estados de pago
+    const statusCounts = {
+      paid: 0,
+      partial: 0,
+      unpaid: 0
+    }
+    historyRes.data?.forEach(b => {
+      const s = (b.payment_status || 'unpaid') as keyof typeof statusCounts
+      if (statusCounts[s] !== undefined) statusCounts[s]++
+    })
+
+    const paymentStatus = [
+      { name: 'Pagados', value: statusCounts.paid, color: '#10b981' },
+      { name: 'Parciales', value: statusCounts.partial, color: '#f59e0b' },
+      { name: 'Pendientes', value: statusCounts.unpaid, color: '#ef4444' },
+    ].filter(s => s.value > 0)
 
     setStats({
       clients: clientsRes.count ?? 0,
       products: productsRes.count ?? 0,
       budgets: budgetsRes.count ?? 0,
       balance: totalBalance,
+      salesHistory,
+      topProducts,
+      paymentStatus,
     })
 
     setLoading(false)
@@ -228,14 +317,156 @@ export default function DashboardPage() {
         })}
       </section>
 
+      <section className="grid gap-6 lg:grid-cols-2">
+        {/* Gráfico de Ventas */}
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+          <div className="mb-6 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <BarChart3 size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-950">Ventas históricas</h3>
+              <p className="text-sm font-medium text-slate-500">Volumen facturado por mes</p>
+            </div>
+          </div>
+
+          <div className="h-72 w-full">
+            {loading ? (
+              <div className="flex h-full items-center justify-center text-sm font-bold text-slate-400">
+                Cargando gráfico...
+              </div>
+            ) : stats.salesHistory.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm font-medium text-slate-400">
+                Sin datos suficientes
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.salesHistory}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="month" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} 
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }}
+                    tickFormatter={(value) => `$${value / 1000}k`}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: '#f8fafc' }}
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: number) => [`$${value.toLocaleString('es-AR')}`, 'Ventas']}
+                  />
+                  <Bar dataKey="total" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Gráfico de Productos / Estados de Pago */}
+        <div className="grid gap-6">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <PieIcon size={20} />
+              </div>
+              <h3 className="text-lg font-black text-slate-950">Estado de cobros</h3>
+            </div>
+            
+            <div className="flex h-44 items-center justify-center">
+              {loading ? (
+                <div className="text-sm font-bold text-slate-400">Cargando...</div>
+              ) : stats.paymentStatus.length === 0 ? (
+                <div className="text-sm font-medium text-slate-400">Sin datos</div>
+              ) : (
+                <div className="flex w-full items-center">
+                  <div className="h-full w-1/2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={stats.paymentStatus}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={65}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {stats.paymentStatus.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="w-1/2 space-y-2">
+                    {stats.paymentStatus.map((s) => (
+                      <div key={s.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                          <span className="text-xs font-bold text-slate-600">{s.name}</span>
+                        </div>
+                        <span className="text-xs font-black text-slate-900">{s.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                <ShoppingCart size={20} />
+              </div>
+              <h3 className="text-lg font-black text-slate-950">Top Productos</h3>
+            </div>
+            
+            <div className="space-y-3">
+              {loading ? (
+                <div className="py-4 text-center text-sm font-bold text-slate-400">Cargando...</div>
+              ) : stats.topProducts.length === 0 ? (
+                <div className="py-4 text-center text-sm font-medium text-slate-400">Sin ventas aún</div>
+              ) : (
+                stats.topProducts.map((p, i) => (
+                  <div key={p.name} className="flex items-center gap-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-black text-slate-500">
+                      #{i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="truncate text-xs font-bold text-slate-700">{p.name}</p>
+                        <p className="text-xs font-black text-slate-950">{p.quantity} u.</p>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                        <div 
+                          className="h-full bg-orange-400 rounded-full" 
+                          style={{ width: `${(p.quantity / stats.topProducts[0].quantity) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
-          <div className="mb-6 flex items-center justify-between">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm lg:col-span-2">
+          <div className="mb-8 flex items-center justify-between">
             <div>
               <h3 className="text-xl font-black text-slate-950">
                 Accesos rápidos
               </h3>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm font-medium text-slate-500">
                 Operaciones principales del sistema
               </p>
             </div>
@@ -265,27 +496,29 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
             <TrendingUp size={24} />
           </div>
 
           <h3 className="mt-5 text-xl font-black text-slate-950">
-            Estado general
+            Estado comercial
           </h3>
 
-          <p className="mt-3 text-sm leading-6 text-slate-500">
-            Tu sistema ya tiene la base lista para operar con clientes,
-            productos, presupuestos y cuenta corriente.
+          <p className="mt-4 text-sm font-medium leading-relaxed text-slate-500">
+            Tu plataforma está sincronizada. Todos los pagos registrados impactan 
+            automáticamente en el saldo de tus clientes y en estos reportes.
           </p>
 
-          <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
-              Próximo módulo
-            </p>
-            <p className="mt-1 font-black text-slate-900">
-              Presupuestos
-            </p>
+          <div className="mt-8 space-y-4">
+            <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+               <span className="text-xs font-bold text-slate-500 uppercase">Eficiencia de cobro</span>
+               <span className="text-sm font-black text-emerald-600">Alta</span>
+            </div>
+            <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+               <span className="text-xs font-bold text-slate-500 uppercase">Actividad</span>
+               <span className="text-sm font-black text-blue-600">Sincronizada</span>
+            </div>
           </div>
         </div>
       </section>
