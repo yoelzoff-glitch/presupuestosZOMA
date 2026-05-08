@@ -50,68 +50,123 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { budget_id } = body
+    const { budget_id, order_code } = body
 
-    if (!budget_id) {
-      return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
+    if (!budget_id && !order_code) {
+      return NextResponse.json({ error: 'Falta budget_id u order_code' }, { status: 400 })
     }
 
-    // 3. Fetch budget and verify ownership
-    const { data: budget, error: budgetError } = await supabaseAdmin
-      .from('budgets')
-      .select(`
-        id,
-        company_id,
-        client_id,
-        budget_number,
-        budget_code,
-        total_amount,
-        paid_amount,
-        status
-      `)
-      .eq('id', budget_id)
-      .single()
+    let paymentData: {
+      id: string
+      company_id: string
+      client_id: string
+      title: string
+      balance: number
+      external_reference: string
+    } | null = null
 
-    if (budgetError || !budget) {
-      return NextResponse.json({ error: 'Presupuesto no encontrado' }, { status: 404 })
+    if (budget_id) {
+      // 3. Fetch budget and verify ownership
+      const { data: budget, error: budgetError } = await supabaseAdmin
+        .from('budgets')
+        .select(`
+          id,
+          company_id,
+          client_id,
+          budget_number,
+          budget_code,
+          total_amount,
+          paid_amount,
+          status
+        `)
+        .eq('id', budget_id)
+        .single()
+
+      if (budgetError || !budget) {
+        return NextResponse.json({ error: 'Presupuesto no encontrado' }, { status: 404 })
+      }
+
+      if (budget.status === 'cancelled') {
+        return NextResponse.json({ error: 'No se puede pagar un presupuesto anulado' }, { status: 400 })
+      }
+
+      const balance = Number(budget.total_amount || 0) - Number(budget.paid_amount || 0)
+
+      paymentData = {
+        id: budget.id,
+        company_id: budget.company_id,
+        client_id: budget.client_id,
+        title: `Presupuesto ${budget.budget_code || budget.budget_number}`,
+        balance: balance,
+        external_reference: `budget:${budget.id}`,
+      }
+    } else {
+      // 3b. Fetch order and verify ownership
+      const { data: order, error: orderError } = await supabaseAdmin
+        .from('orders')
+        .select(`
+          id,
+          company_id,
+          client_id,
+          order_code,
+          total_amount,
+          status
+        `)
+        .eq('order_code', order_code)
+        .single()
+
+      if (orderError || !order) {
+        return NextResponse.json({ error: 'Pedido no encontrado' }, { status: 404 })
+      }
+
+      if (order.status === 'cancelled') {
+        return NextResponse.json({ error: 'No se puede pagar un pedido anulado' }, { status: 400 })
+      }
+
+      // Por ahora tomamos el total_amount como balance. 
+      // (En una versión más avanzada podríamos restar pagos parciales si existieran en orders)
+      const balance = Number(order.total_amount || 0)
+
+      paymentData = {
+        id: order.id,
+        company_id: order.company_id,
+        client_id: order.client_id,
+        title: `Pedido ${order.order_code}`,
+        balance: balance,
+        external_reference: `order:${order.id}`,
+      }
+    }
+
+    if (!paymentData) {
+      return NextResponse.json({ error: 'No se pudieron obtener los datos de pago' }, { status: 400 })
     }
 
     // Authorization logic
     if (profile.role === 'customer') {
-      // Check if this customer user belongs to the client in the budget
+      // Check if this customer user belongs to the client in the document
       const { data: customerData } = await supabaseAdmin
         .from('customer_users')
         .select('client_id')
         .eq('auth_user_id', user.id)
         .single()
 
-      if (!customerData || customerData.client_id !== budget.client_id) {
-        return NextResponse.json({ error: 'No tenés permiso para pagar este presupuesto' }, { status: 403 })
+      if (!customerData || customerData.client_id !== paymentData.client_id) {
+        return NextResponse.json({ error: 'No tenés permiso para pagar este documento' }, { status: 403 })
       }
     } else {
       // Admin/User: Must belong to the same company
-      if (profile.company_id !== budget.company_id) {
+      if (profile.company_id !== paymentData.company_id) {
         return NextResponse.json({ error: 'No tenés permiso para esta empresa' }, { status: 403 })
       }
     }
 
     // 4. Validations
-    if (budget.status === 'cancelled') {
-      return NextResponse.json({ error: 'No se puede pagar un presupuesto anulado' }, { status: 400 })
-    }
-
-    if (!budget.total_amount || Number(budget.total_amount) <= 0) {
-      return NextResponse.json({ error: 'El presupuesto no tiene importe válido' }, { status: 400 })
-    }
-
-    const balance = Number(budget.total_amount || 0) - Number(budget.paid_amount || 0)
-
-    if (balance <= 0) {
-      return NextResponse.json({ error: 'El presupuesto ya se encuentra pagado' }, { status: 400 })
+    if (paymentData.balance <= 0) {
+      return NextResponse.json({ error: 'El documento ya se encuentra pagado' }, { status: 400 })
     }
 
     // 5. Get MP Access Token
-    const accessToken = await getValidMercadoPagoAccessToken(budget.company_id)
+    const accessToken = await getValidMercadoPagoAccessToken(paymentData.company_id)
 
     if (!accessToken) {
       return NextResponse.json(
@@ -121,7 +176,7 @@ export async function POST(req: NextRequest) {
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://presupuestos-zoma.vercel.app'
-    const externalReference = `budget:${budget.id}`
+    const externalReference = paymentData.external_reference
 
     // 6. Create Preference
     const preferenceResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -133,10 +188,10 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         items: [
           {
-            title: `Presupuesto ${budget.budget_code || budget.budget_number}`,
+            title: paymentData.title,
             quantity: 1,
             currency_id: 'ARS',
-            unit_price: Math.round(Number(balance)),
+            unit_price: Math.round(Number(paymentData.balance)),
           },
         ],
         external_reference: externalReference,
@@ -165,10 +220,10 @@ export async function POST(req: NextRequest) {
     const { error: paymentError } = await supabaseAdmin
       .from('payments')
       .insert({
-        company_id: budget.company_id,
-        client_id: budget.client_id,
-        budget_id: budget.id,
-        amount: Number(balance),
+        company_id: paymentData.company_id,
+        client_id: paymentData.client_id,
+        budget_id: budget_id || null,
+        amount: Number(paymentData.balance),
         status: 'pending',
         mp_preference_id: preferenceData.id,
         mp_external_reference: externalReference,
