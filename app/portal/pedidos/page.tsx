@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import {
   Loader2,
@@ -13,6 +14,7 @@ import {
   CheckCircle2,
   Clock3,
   FileText,
+  Printer,
 } from 'lucide-react'
 
 type CustomerUser = {
@@ -428,6 +430,16 @@ export default function MisPedidosPage() {
 
                       {cancellingId === order.id ? 'Cancelando...' : 'Cancelar'}
                     </button>
+                  )}
+
+                  {order.budget_id && (
+                    <Link
+                      href={`/portal/pedidos/${order.id}`}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
+                    >
+                      <Printer size={17} />
+                      Ver Presupuesto (PDF)
+                    </Link>
                   )}
                 </div>
               </div>
