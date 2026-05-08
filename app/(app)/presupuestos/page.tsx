@@ -133,6 +133,11 @@ export default function PresupuestosPage() {
   }
 
   async function handleCancelBudget(budget: Budget) {
+    if (budget.payment_status === 'paid' || budget.payment_status === 'partial') {
+      toast.error('No se puede anular un presupuesto que ya tiene pagos registrados.')
+      return
+    }
+
     const confirmCancel = window.confirm(
       `¿Querés anular el presupuesto ${budget.budget_code || budget.budget_number}?`
     )
@@ -179,6 +184,11 @@ export default function PresupuestosPage() {
   }
 
   async function handleDeleteBudget(budget: Budget) {
+    if (budget.payment_status === 'paid' || budget.payment_status === 'partial') {
+      toast.error('No se puede eliminar un presupuesto que ya tiene pagos registrados.')
+      return
+    }
+
     const confirmDelete = window.confirm(
       `¿Seguro querés eliminar el presupuesto ${
         budget.budget_code || budget.budget_number
@@ -655,6 +665,7 @@ function BudgetActions({
   mobile?: boolean
 }) {
   const isCancelled = budget.status === 'cancelled'
+  const hasPayments = budget.payment_status === 'paid' || budget.payment_status === 'partial'
 
   return (
     <div className={`flex gap-2 ${mobile ? 'flex-col' : 'justify-end'}`}>
@@ -666,7 +677,7 @@ function BudgetActions({
         Ver
       </Link>
 
-      {!isCancelled && (
+      {!isCancelled && !hasPayments && (
         <button
           type="button"
           disabled={isActionLoading}
@@ -682,19 +693,21 @@ function BudgetActions({
         </button>
       )}
 
-      <button
-        type="button"
-        disabled={isActionLoading}
-        onClick={() => onDelete(budget)}
-        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isActionLoading ? (
-          <Loader2 size={15} className="animate-spin" />
-        ) : (
-          <Trash2 size={15} />
-        )}
-        Eliminar
-      </button>
+      {!hasPayments && (
+        <button
+          type="button"
+          disabled={isActionLoading}
+          onClick={() => onDelete(budget)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isActionLoading ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <Trash2 size={15} />
+          )}
+          Eliminar
+        </button>
+      )}
     </div>
   )
 }

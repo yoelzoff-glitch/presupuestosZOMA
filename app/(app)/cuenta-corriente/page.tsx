@@ -277,6 +277,44 @@ export default function CuentaCorrientePage() {
     }
   }, [paymentType, paymentFullAmount, selectedPaymentBudget, pendingBudgets.length])
 
+  async function updateBudgetPaymentStatus(budgetId: string) {
+    if (!companyId || !budgetId) return
+
+    const { data: movementsData } = await supabase
+      .from('account_movements')
+      .select('credit')
+      .eq('company_id', companyId)
+      .eq('budget_id', budgetId)
+
+    const totalPaid =
+      movementsData?.reduce((acc, curr) => acc + Number(curr.credit || 0), 0) ||
+      0
+
+    const { data: budgetData } = await supabase
+      .from('budgets')
+      .select('total_amount')
+      .eq('id', budgetId)
+      .single()
+
+    if (budgetData) {
+      const totalAmount = Number(budgetData.total_amount || 0)
+      const paymentStatus =
+        totalPaid <= 0
+          ? 'unpaid'
+          : totalPaid >= totalAmount
+            ? 'paid'
+            : 'partial'
+
+      await supabase
+        .from('budgets')
+        .update({
+          payment_status: paymentStatus,
+          paid_amount: totalPaid,
+        })
+        .eq('id', budgetId)
+    }
+  }
+
   async function handleSavePayment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
@@ -347,6 +385,10 @@ export default function CuentaCorrientePage() {
         return
       }
 
+      for (const budget of pendingBudgets) {
+        await updateBudgetPaymentStatus(budget.id)
+      }
+
       setSuccessMsg('Pago total registrado. Todos los presupuestos pendientes quedaron saldados.')
       setPaymentAmount('')
       setSelectedPaymentBudgetId('')
@@ -379,6 +421,10 @@ export default function CuentaCorrientePage() {
       setErrorMsg('Error al registrar el pago.')
       console.error(error)
       return
+    }
+
+    if (selectedPaymentBudgetId) {
+      await updateBudgetPaymentStatus(selectedPaymentBudgetId)
     }
 
     setSuccessMsg('Pago registrado correctamente.')
