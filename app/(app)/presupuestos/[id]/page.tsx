@@ -215,7 +215,7 @@ export default function PresupuestoDetallePage() {
           order_number: nextOrderNumber,
           order_date: new Date().toISOString(),
           status: 'confirmed',
-          source: 'manual',
+          source: 'Manual',
         })
         .select('id')
         .single()

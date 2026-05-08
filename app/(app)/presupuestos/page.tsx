@@ -44,7 +44,7 @@ const statusFilters: { label: string; value: BudgetStatus }[] = [
   { label: 'Emitidos', value: 'issued' },
   { label: 'Aprobados', value: 'approved' },
   { label: 'Borradores', value: 'draft' },
-  { label: 'Anulados', value: 'cancelled' },
+  { label: 'Cancelados', value: 'cancelled' },
 ]
 
 export default function PresupuestosPage() {
@@ -130,6 +130,26 @@ export default function PresupuestosPage() {
       .eq('budget_id', budgetId)
 
     if (error) throw error
+  }
+
+  async function handleApproveBudget(budget: Budget) {
+    try {
+      setActionLoadingId(budget.id)
+
+      const { error } = await supabase
+        .from('budgets')
+        .update({ status: 'approved' })
+        .eq('id', budget.id)
+
+      if (error) throw error
+
+      toast.success('Presupuesto aprobado correctamente.')
+      loadBudgets()
+    } catch (err: any) {
+      toast.error(err.message || 'Error al aprobar presupuesto.')
+    } finally {
+      setActionLoadingId(null)
+    }
   }
 
   async function handleCancelBudget(budget: Budget) {
@@ -425,7 +445,6 @@ export default function PresupuestosPage() {
                     <TableHead>Cliente</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Pago</TableHead>
                     <TableHead align="right">Total</TableHead>
                     <TableHead align="right">Acciones</TableHead>
                   </tr>
@@ -437,8 +456,8 @@ export default function PresupuestosPage() {
                       key={budget.id}
                       budget={budget}
                       actionLoadingId={actionLoadingId}
+                      onApprove={handleApproveBudget}
                       onCancel={handleCancelBudget}
-                      onDelete={handleDeleteBudget}
                     />
                   ))}
                 </tbody>
@@ -451,8 +470,8 @@ export default function PresupuestosPage() {
                   key={budget.id}
                   budget={budget}
                   actionLoadingId={actionLoadingId}
+                  onApprove={handleApproveBudget}
                   onCancel={handleCancelBudget}
-                  onDelete={handleDeleteBudget}
                 />
               ))}
             </div>
@@ -462,40 +481,16 @@ export default function PresupuestosPage() {
     </div>
   )
 }
-function getPaymentBadge(paymentStatus?: string) {
-  switch (paymentStatus) {
-    case 'paid':
-      return (
-        <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-          Pagado
-        </span>
-      )
-
-    case 'partial':
-      return (
-        <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-          Pago parcial
-        </span>
-      )
-
-    default:
-      return (
-        <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-          Sin pagar
-        </span>
-      )
-  }
-}
 function BudgetRow({
   budget,
   actionLoadingId,
+  onApprove,
   onCancel,
-  onDelete,
 }: {
   budget: Budget
   actionLoadingId: string | null
+  onApprove: (budget: Budget) => void
   onCancel: (budget: Budget) => void
-  onDelete: (budget: Budget) => void
 }) {
   const isCancelled = budget.status === 'cancelled'
   const isActionLoading = actionLoadingId === budget.id
@@ -522,10 +517,6 @@ function BudgetRow({
         <StatusBadge status={budget.status} />
       </td>
 
-      <td className="px-5 py-4">
-        {getPaymentBadge(budget.payment_status)}
-      </td>
-
       <td
         className={`px-5 py-4 text-right text-lg font-black ${
           isCancelled ? 'text-red-600 line-through' : 'text-blue-700'
@@ -538,8 +529,8 @@ function BudgetRow({
         <BudgetActions
           budget={budget}
           isActionLoading={isActionLoading}
+          onApprove={onApprove}
           onCancel={onCancel}
-          onDelete={onDelete}
         />
       </td>
     </tr>
@@ -549,13 +540,13 @@ function BudgetRow({
 function BudgetMobileCard({
   budget,
   actionLoadingId,
+  onApprove,
   onCancel,
-  onDelete,
 }: {
   budget: Budget
   actionLoadingId: string | null
+  onApprove: (budget: Budget) => void
   onCancel: (budget: Budget) => void
-  onDelete: (budget: Budget) => void
 }) {
   const isCancelled = budget.status === 'cancelled'
   const isActionLoading = actionLoadingId === budget.id
@@ -595,8 +586,8 @@ function BudgetMobileCard({
         <BudgetActions
           budget={budget}
           isActionLoading={isActionLoading}
+          onApprove={onApprove}
           onCancel={onCancel}
-          onDelete={onDelete}
           mobile
         />
       </div>
@@ -657,18 +648,18 @@ function DateBadge({ date }: { date: string }) {
 function BudgetActions({
   budget,
   isActionLoading,
+  onApprove,
   onCancel,
-  onDelete,
   mobile = false,
 }: {
   budget: Budget
   isActionLoading: boolean
+  onApprove: (budget: Budget) => void
   onCancel: (budget: Budget) => void
-  onDelete: (budget: Budget) => void
   mobile?: boolean
 }) {
   const isCancelled = budget.status === 'cancelled'
-  const hasPayments = budget.payment_status === 'paid' || budget.payment_status === 'partial'
+  const isApproved = budget.status === 'approved'
 
   return (
     <div className={`flex gap-2 ${mobile ? 'flex-col' : 'justify-end'}`}>
@@ -680,7 +671,23 @@ function BudgetActions({
         Ver
       </Link>
 
-      {!isCancelled && !hasPayments && (
+      {!isCancelled && !isApproved && (
+        <button
+          type="button"
+          disabled={isActionLoading}
+          onClick={() => onApprove(budget)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isActionLoading ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <CheckCircle2 size={15} />
+          )}
+          Aprobar
+        </button>
+      )}
+
+      {!isCancelled && (
         <button
           type="button"
           disabled={isActionLoading}
@@ -693,22 +700,6 @@ function BudgetActions({
             <XCircle size={15} />
           )}
           Anular
-        </button>
-      )}
-
-      {!hasPayments && (
-        <button
-          type="button"
-          disabled={isActionLoading}
-          onClick={() => onDelete(budget)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isActionLoading ? (
-            <Loader2 size={15} className="animate-spin" />
-          ) : (
-            <Trash2 size={15} />
-          )}
-          Eliminar
         </button>
       )}
     </div>
@@ -752,7 +743,7 @@ function StatusBadge({ status }: { status: string }) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">
         <XCircle size={14} />
-        Anulado
+        Cancelado
       </span>
     )
   }
