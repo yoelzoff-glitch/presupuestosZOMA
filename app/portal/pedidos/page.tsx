@@ -226,9 +226,9 @@ export default function MisPedidosPage() {
   }
 
   function getStatusLabel(status: string) {
-    if (status === 'pending') return 'Pendiente de revisión'
-    if (status === 'confirmed') return 'Convertido en presupuesto'
-    if (status === 'cancelled') return 'Cancelado'
+    if (status === 'pending') return 'Pendiente de presupuesto'
+    if (status === 'confirmed') return 'Presupuestada'
+    if (status === 'cancelled') return 'Cancelada'
     return status
   }
 
@@ -270,11 +270,11 @@ export default function MisPedidosPage() {
             </div>
 
             <h1 className="text-3xl font-black tracking-tight">
-              Mis pedidos
+              Mis solicitudes
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Consultá los pedidos enviados y cancelá los que todavía estén pendientes.
+              Consultá las solicitudes de presupuesto enviadas y cancelá las que todavía estén pendientes.
             </p>
           </div>
 
@@ -292,9 +292,9 @@ export default function MisPedidosPage() {
 
       <section className="grid gap-4 md:grid-cols-4">
         <SummaryCard
-          title="Pedidos realizados"
+          title="Solicitudes realizadas"
           value={totalOrders}
-          icon={Package}
+          icon={ClipboardList}
           tone="blue"
         />
 
@@ -306,14 +306,14 @@ export default function MisPedidosPage() {
         />
 
         <SummaryCard
-          title="Presupuestados"
+          title="Presupuestadas"
           value={confirmedOrders}
           icon={CheckCircle2}
           tone="green"
         />
 
         <SummaryCard
-          title="Cancelados"
+          title="Canceladas"
           value={cancelledOrders}
           icon={XCircle}
           tone="slate"
@@ -339,11 +339,11 @@ export default function MisPedidosPage() {
           </div>
 
           <h3 className="text-lg font-black text-slate-950">
-            Cargando pedidos
+            Cargando solicitudes
           </h3>
 
           <p className="mt-1 text-sm text-slate-500">
-            Estamos buscando tus pedidos realizados.
+            Estamos buscando tus solicitudes realizadas.
           </p>
         </div>
       ) : orders.length === 0 ? (
@@ -356,11 +356,11 @@ export default function MisPedidosPage() {
             </div>
 
             <h3 className="text-xl font-black text-slate-950">
-              Todavía no hiciste pedidos
+              Todavía no hiciste solicitudes
             </h3>
 
             <p className="mt-2 text-sm text-slate-500">
-              Cuando envíes un pedido desde la lista de precios, lo vas a ver acá.
+              Cuando envíes una solicitud desde la lista de precios, la vas a ver acá.
             </p>
           </div>
         </div>
@@ -437,8 +437,8 @@ export default function MisPedidosPage() {
                       href={`/portal/pedidos/${order.id}`}
                       className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
                     >
-                      <Printer size={17} />
-                      Ver Presupuesto (PDF)
+                      <FileText size={17} />
+                      Ver presupuesto
                     </Link>
                   )}
                 </div>

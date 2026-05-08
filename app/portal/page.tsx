@@ -14,6 +14,7 @@ import {
   Package,
   FileSpreadsheet,
   AlertCircle,
+  ClipboardList,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -398,8 +399,8 @@ export default function PortalPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Buscá productos, armá tu pedido y envialo. El pedido ingresará
-              como pendiente hasta que sea convertido en presupuesto.
+              Buscá productos, armá tu solicitud y enviala. Recibirás un presupuesto
+              basado en tu selección.
             </p>
           </div>
 
@@ -513,12 +514,12 @@ export default function PortalPage() {
           <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 p-5">
               <h2 className="flex items-center gap-2 text-xl font-black text-slate-950">
-                <ShoppingCart size={22} className="text-blue-600" />
-                Pedido
+                <ClipboardList size={22} className="text-blue-600" />
+                Tu Solicitud
               </h2>
 
               <p className="mt-1 text-sm font-semibold text-slate-500">
-                {cart.length} producto{cart.length === 1 ? '' : 's'} agregado
+                {cart.length} producto{cart.length === 1 ? '' : 's'} seleccionado
                 {cart.length === 1 ? '' : 's'}.
               </p>
             </div>
@@ -529,10 +530,10 @@ export default function PortalPage() {
                   <ShoppingCart size={26} />
                 </div>
 
-                <h3 className="font-black text-slate-900">Pedido vacío</h3>
+                <h3 className="font-black text-slate-900">Solicitud vacía</h3>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Agregá productos para enviar tu pedido.
+                  Agregá productos para enviar tu solicitud.
                 </p>
               </div>
             ) : (
@@ -629,11 +630,11 @@ export default function PortalPage() {
                   <Send size={18} />
                 )}
 
-                {sending ? 'Enviando...' : 'Enviar pedido'}
+                {sending ? 'Enviando...' : 'Enviar solicitud de presupuesto'}
               </button>
 
               <p className="mt-3 text-center text-xs font-semibold text-slate-400">
-                El pedido ingresará como pendiente. El presupuesto lo genera la empresa.
+                La solicitud ingresará como pendiente. El presupuesto lo genera la empresa.
               </p>
             </div>
           </section>

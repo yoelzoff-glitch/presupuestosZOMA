@@ -26,26 +26,14 @@ type Budget = {
   budget_code: string | null
   budget_date: string | null
   total_amount: number | null
-  paid_amount: number | null
   status: string | null
-}
-
-type PaymentStatus = 'paid' | 'partial' | 'unpaid'
-
-function getPaymentStatus(budget: Budget): PaymentStatus {
-  const total = Number(budget.total_amount || 0)
-  const paid = Number(budget.paid_amount || 0)
-  if (paid >= total && total > 0) return 'paid'
-  if (paid > 0 && paid < total) return 'partial'
-  return 'unpaid'
 }
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Todos' },
-  { value: 'paid', label: 'Pagado' },
-  { value: 'partial', label: 'Pago parcial' },
-  { value: 'unpaid', label: 'Sin pagar' },
-  { value: 'cancelled', label: 'Anulados' },
+  { value: 'issued', label: 'Emitidos' },
+  { value: 'approved', label: 'Aprobados' },
+  { value: 'cancelled', label: 'Cancelados' },
 ]
 
 export default function PortalPresupuestosPage() {
@@ -54,18 +42,7 @@ export default function PortalPresupuestosPage() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   const [search, setSearch] = useState('')
-  const [payFilter, setPayFilter] = useState('all')
-
-  const totalPending = useMemo(
-    () =>
-      budgets
-        .filter((b) => b.status !== 'cancelled')
-        .reduce(
-          (acc, b) => acc + Math.max(0, Number(b.total_amount || 0) - Number(b.paid_amount || 0)),
-          0
-        ),
-    [budgets]
-  )
+  const [statusFilter, setStatusFilter] = useState('all')
 
   useEffect(() => {
     loadBudgets()
@@ -81,7 +58,6 @@ export default function PortalPresupuestosPage() {
       return
     }
 
-    // Get customer data (client_id and company_id)
     const { data: customerData, error: customerError } = await supabase
       .from('customer_users')
       .select('company_id, client_id, active')
@@ -108,7 +84,7 @@ export default function PortalPresupuestosPage() {
 
     const { data, error } = await supabase
       .from('budgets')
-      .select('id, budget_number, budget_code, budget_date, total_amount, paid_amount, status')
+      .select('id, budget_number, budget_code, budget_date, total_amount, status')
       .eq('company_id', customerData.company_id)
       .eq('client_id', customerData.client_id)
       .order('budget_number', { ascending: false })
@@ -128,11 +104,8 @@ export default function PortalPresupuestosPage() {
     const matchSearch = label.toLowerCase().includes(search.toLowerCase())
     if (!matchSearch) return false
 
-    if (payFilter === 'all') return true
-    if (payFilter === 'cancelled') return b.status === 'cancelled'
-
-    if (b.status === 'cancelled') return false
-    return getPaymentStatus(b) === payFilter
+    if (statusFilter === 'all') return true
+    return b.status === statusFilter
   })
 
   if (loading) {
@@ -173,7 +146,7 @@ export default function PortalPresupuestosPage() {
             </div>
             <h1 className="text-3xl font-black tracking-tight">Presupuestos</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Consultá el estado de todos tus presupuestos y seguí el estado de cada pago.
+              Consultá tus propuestas comerciales y el estado de aprobación de las mismas.
             </p>
           </div>
 
@@ -186,40 +159,25 @@ export default function PortalPresupuestosPage() {
               <RefreshCw size={16} />
               Actualizar
             </button>
-
-            {totalPending > 0 && (
-              <Link
-                href="/portal/presupuestos/pagar"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
-              >
-                <CreditCard size={16} />
-                Pagar saldo
-              </Link>
-            )}
           </div>
         </div>
       </section>
 
       {/* Stats */}
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <StatCard
-          label="Total"
-          value={budgets.filter((b) => b.status !== 'cancelled').length}
+          label="Emitidos"
+          value={budgets.filter((b) => b.status === 'issued').length}
           color="slate"
         />
         <StatCard
-          label="Pagados"
-          value={budgets.filter((b) => b.status !== 'cancelled' && getPaymentStatus(b) === 'paid').length}
+          label="Aprobados"
+          value={budgets.filter((b) => b.status === 'approved').length}
           color="green"
         />
         <StatCard
-          label="Pago parcial"
-          value={budgets.filter((b) => b.status !== 'cancelled' && getPaymentStatus(b) === 'partial').length}
-          color="yellow"
-        />
-        <StatCard
-          label="Sin pagar"
-          value={budgets.filter((b) => b.status !== 'cancelled' && getPaymentStatus(b) === 'unpaid').length}
+          label="Cancelados"
+          value={budgets.filter((b) => b.status === 'cancelled').length}
           color="red"
         />
       </section>
@@ -257,9 +215,9 @@ export default function PortalPresupuestosPage() {
             <button
               key={f.value}
               type="button"
-              onClick={() => setPayFilter(f.value)}
+              onClick={() => setStatusFilter(f.value)}
               className={`rounded-full px-4 py-1.5 text-xs font-black transition ${
-                payFilter === f.value
+                statusFilter === f.value
                   ? 'bg-slate-950 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
@@ -289,7 +247,6 @@ export default function PortalPresupuestosPage() {
                     <Th>Presupuesto</Th>
                     <Th>Fecha</Th>
                     <Th>Estado</Th>
-                    <Th>Pago</Th>
                     <Th align="right">Total</Th>
                     <Th align="right">Acciones</Th>
                   </tr>
@@ -297,7 +254,6 @@ export default function PortalPresupuestosPage() {
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map((budget) => {
                     const label = budget.budget_code || `000-${budget.budget_number}`
-                    const payStatus = getPaymentStatus(budget)
                     const isCancelled = budget.status === 'cancelled'
                     return (
                       <tr key={budget.id} className="transition hover:bg-blue-50/30">
@@ -320,9 +276,6 @@ export default function PortalPresupuestosPage() {
                         </td>
                         <td className="px-5 py-4">
                           <BudgetStatusBadge status={budget.status} />
-                        </td>
-                        <td className="px-5 py-4">
-                          {!isCancelled && <PaymentBadge status={payStatus} />}
                         </td>
                         <td className={`px-5 py-4 text-right text-lg font-black ${isCancelled ? 'text-red-500 line-through' : 'text-blue-700'}`}>
                           ${Number(budget.total_amount || 0).toLocaleString('es-AR')}
@@ -347,7 +300,6 @@ export default function PortalPresupuestosPage() {
             <div className="space-y-3 p-4 lg:hidden">
               {filtered.map((budget) => {
                 const label = budget.budget_code || `000-${budget.budget_number}`
-                const payStatus = getPaymentStatus(budget)
                 const isCancelled = budget.status === 'cancelled'
                 return (
                   <article
@@ -382,12 +334,6 @@ export default function PortalPresupuestosPage() {
                       </div>
                     </div>
 
-                    {!isCancelled && (
-                      <div className="mt-3">
-                        <PaymentBadge status={payStatus} />
-                      </div>
-                    )}
-
                     <Link
                       href={`/portal/presupuestos/${budget.id}`}
                       className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 py-2.5 text-sm font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
@@ -414,7 +360,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
     red: 'bg-red-50 text-red-700',
   }
   const icons = {
-    slate: <DollarSign size={20} />,
+    slate: <FileText size={20} />,
     green: <CheckCircle2 size={20} />,
     yellow: <Clock size={20} />,
     red: <XCircle size={20} />,
@@ -438,20 +384,9 @@ function BudgetStatusBadge({ status }: { status: string | null }) {
     case 'approved':
       return <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700"><CheckCircle2 size={13} />Aprobado</span>
     case 'cancelled':
-      return <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700"><XCircle size={13} />Anulado</span>
+      return <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700"><XCircle size={13} />Cancelado</span>
     default:
       return <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600"><Clock size={13} />Borrador</span>
-  }
-}
-
-function PaymentBadge({ status }: { status: PaymentStatus }) {
-  switch (status) {
-    case 'paid':
-      return <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700"><CheckCircle2 size={13} />Pagado</span>
-    case 'partial':
-      return <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 px-3 py-1 text-xs font-black text-yellow-700"><Clock size={13} />Pago parcial</span>
-    default:
-      return <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700"><XCircle size={13} />Sin pagar</span>
   }
 }
 

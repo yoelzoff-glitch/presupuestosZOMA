@@ -29,7 +29,6 @@ type Budget = {
   budget_code: string | null
   budget_date: string | null
   total_amount: number | null
-  paid_amount: number | null
   status: string | null
   clients: {
     name: string
@@ -59,16 +58,6 @@ type BudgetItem = {
   total: number | null
 }
 
-type PaymentStatus = 'paid' | 'partial' | 'unpaid'
-
-function getPaymentStatus(budget: Budget): PaymentStatus {
-  const total = Number(budget.total_amount || 0)
-  const paid = Number(budget.paid_amount || 0)
-  if (paid >= total && total > 0) return 'paid'
-  if (paid > 0 && paid < total) return 'partial'
-  return 'unpaid'
-}
-
 export default function PortalPresupuestoDetallePage() {
   const params = useParams()
   const router = useRouter()
@@ -87,27 +76,25 @@ export default function PortalPresupuestoDetallePage() {
   async function loadBudget() {
     setLoading(true)
 
-    // Verify user session
     const { data: userData } = await supabase.auth.getUser()
     if (!userData.user) {
       router.push('/auth/login')
       return
     }
 
-    // Verify customer belongs to this budget's client
     const { data: customerData } = await supabase
       .from('customer_users')
       .select('company_id, client_id')
       .eq('auth_user_id', userData.user.id)
       .single()
 
-    if (!customerData?.client_id) {
-      setErrorMsg('No tenés permiso para ver este presupuesto.')
+    if (!customerData || !customerData.client_id) {
+      setErrorMsg('Usuario no autorizado.')
       setLoading(false)
       return
     }
 
-    const { data, error } = await supabase
+    const { data: budgetData, error: budgetError } = await supabase
       .from('budgets')
       .select(`
         id,
@@ -117,7 +104,6 @@ export default function PortalPresupuestoDetallePage() {
         budget_code,
         budget_date,
         total_amount,
-        paid_amount,
         status,
         clients (
           name,
@@ -129,31 +115,17 @@ export default function PortalPresupuestoDetallePage() {
       .eq('client_id', customerData.client_id)
       .single()
 
-    if (error || !data) {
-      setErrorMsg('No se encontró el presupuesto o no tenés permiso para verlo.')
+    if (budgetError || !budgetData) {
+      setErrorMsg('Presupuesto no encontrado.')
       setLoading(false)
       return
     }
 
     const normalizedBudget = {
-      ...data,
-      clients: Array.isArray(data.clients) ? data.clients[0] : data.clients,
-    }
+      ...budgetData,
+      clients: Array.isArray(budgetData.clients) ? budgetData.clients[0] : budgetData.clients
+    } as Budget
 
-    setBudget(normalizedBudget as Budget)
-
-    // Fetch company data
-    const { data: companyData } = await supabase
-      .from('companies')
-      .select('name, cuit, address, phone, email, website, logo_url, default_notes')
-      .eq('id', data.company_id)
-      .single()
-
-    if (companyData) {
-      setCompany(companyData as Company)
-    }
-
-    // Fetch items
     const { data: itemsData, error: itemsError } = await supabase
       .from('budget_items')
       .select('id, product_code, product_name, category, quantity, unit_price, total')
@@ -176,7 +148,6 @@ export default function PortalPresupuestoDetallePage() {
   }, [items])
 
   const finalTotal = Number(budget?.total_amount || calculatedTotal || 0)
-  const paymentStatus = budget ? getPaymentStatus(budget) : null
 
   if (loading) {
     return (
@@ -258,7 +229,7 @@ export default function PortalPresupuestoDetallePage() {
 
               <h1 className="text-3xl font-black tracking-tight">Presupuesto {budgetLabel}</h1>
               <p className="mt-2 text-sm text-slate-300">
-                Revisá el detalle de este presupuesto y su estado de pago.
+                Revisá el detalle y los productos de este presupuesto.
               </p>
             </div>
 
@@ -282,19 +253,26 @@ export default function PortalPresupuestoDetallePage() {
           <InfoCard icon={DollarSign} title="Total" value={`$${finalTotal.toLocaleString('es-AR')}`} detail="Importe presupuestado" />
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3">
-              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${isCancelled ? 'bg-red-50 text-red-600' : paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700' : paymentStatus === 'partial' ? 'bg-yellow-50 text-yellow-700' : 'bg-red-50 text-red-600'}`}>
-                {isCancelled ? <XCircle size={22} /> : paymentStatus === 'paid' ? <CheckCircle2 size={22} /> : <Clock size={22} />}
+              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
+                budget.status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
+                budget.status === 'cancelled' ? 'bg-red-50 text-red-600' :
+                'bg-blue-50 text-blue-700'
+              }`}>
+                {budget.status === 'approved' ? <CheckCircle2 size={22} /> :
+                 budget.status === 'cancelled' ? <XCircle size={22} /> :
+                 <Clock size={22} />}
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-500">Estado de pago</p>
-                {isCancelled
-                  ? <p className="text-lg font-black text-red-600">Anulado</p>
-                  : paymentStatus === 'paid'
-                    ? <p className="text-lg font-black text-emerald-700">Pagado</p>
-                    : paymentStatus === 'partial'
-                      ? <p className="text-lg font-black text-yellow-700">Pago parcial</p>
-                      : <p className="text-lg font-black text-red-600">Sin pagar</p>
-                }
+                <p className="text-sm font-bold text-slate-500">Estado</p>
+                <p className={`text-lg font-black ${
+                  budget.status === 'approved' ? 'text-emerald-700' :
+                  budget.status === 'cancelled' ? 'text-red-600' :
+                  'text-blue-700'
+                }`}>
+                  {budget.status === 'approved' ? 'Aprobado' :
+                   budget.status === 'cancelled' ? 'Cancelado' :
+                   'Emitido'}
+                </p>
               </div>
             </div>
           </div>

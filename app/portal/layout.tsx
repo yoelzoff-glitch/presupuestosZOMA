@@ -52,7 +52,7 @@ export default function PortalLayout({
               Portal cliente
             </h1>
             <p className="truncate text-xs font-semibold text-slate-500">
-              Lista de precios, pedidos y cuenta corriente
+              Lista de precios, solicitudes y cuenta corriente
             </p>
           </div>
 
@@ -67,7 +67,7 @@ export default function PortalLayout({
               className={navClass('/portal/pedidos')}
             >
               <ClipboardList size={16} />
-              Mis pedidos
+              Mis solicitudes
             </Link>
 
             <Link
@@ -161,7 +161,7 @@ export default function PortalLayout({
             className={navClass('/portal/pedidos')}
           >
             <ClipboardList size={16} />
-            Mis pedidos
+            Mis solicitudes
           </Link>
 
           <Link
