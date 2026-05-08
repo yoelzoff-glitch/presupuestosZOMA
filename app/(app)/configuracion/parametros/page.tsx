@@ -93,7 +93,7 @@ export default function ParametrosPage() {
       .eq('id', params.id)
 
     if (error) {
-      toast.error('Error al guardar los parámetros')
+      toast.error('Error al guardar los parámetros: ' + error.message)
       console.error(error)
     } else {
       toast.success('Parámetros actualizados correctamente')

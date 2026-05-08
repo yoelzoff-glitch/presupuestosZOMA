@@ -86,7 +86,7 @@ export default function EmpresaPage() {
       .eq('id', company.id)
 
     if (error) {
-      toast.error('Error al guardar los cambios')
+      toast.error('Error al guardar los cambios: ' + error.message)
       console.error(error)
     } else {
       toast.success('Datos actualizados correctamente')

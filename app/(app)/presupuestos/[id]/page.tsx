@@ -39,6 +39,17 @@ type Budget = {
   } | null
 }
 
+type Company = {
+  name: string
+  cuit: string | null
+  address: string | null
+  phone: string | null
+  email: string | null
+  website: string | null
+  logo_url: string | null
+  default_notes: string | null
+}
+
 type BudgetItem = {
   id: string
   product_code: string | null
@@ -55,6 +66,7 @@ export default function PresupuestoDetallePage() {
 
   const [budget, setBudget] = useState<Budget | null>(null)
   const [items, setItems] = useState<BudgetItem[]>([])
+  const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
   const [sendingToAccount, setSendingToAccount] = useState(false)
   const [alreadyInAccount, setAlreadyInAccount] = useState(false)
@@ -98,6 +110,17 @@ export default function PresupuestoDetallePage() {
     }
 
     setBudget(normalizedBudget as Budget)
+
+    // Fetch company data
+    const { data: companyData } = await supabase
+      .from('companies')
+      .select('name, cuit, address, phone, email, website, logo_url, default_notes')
+      .eq('id', data.company_id)
+      .single()
+
+    if (companyData) {
+      setCompany(companyData as Company)
+    }
 
     const { data: movementData, error: movementError } = await supabase
       .from('account_movements')
@@ -302,13 +325,20 @@ export default function PresupuestoDetallePage() {
           }
 
           .print-header {
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: flex-start !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            align-items: start !important;
             gap: 24px !important;
             border-bottom: 2px solid #0f172a !important;
             padding: 0 0 18px 0 !important;
             margin-bottom: 18px !important;
+          }
+
+          .print-company-logo {
+            max-height: 80px !important;
+            max-width: 220px !important;
+            object-fit: contain !important;
+            margin-bottom: 8px !important;
           }
 
           .print-title {
@@ -505,30 +535,46 @@ export default function PresupuestoDetallePage() {
 
         <section className="print-area print-card rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
           <div className="print-header border-b border-slate-200 p-6">
-            <div>
-              <p className="print-subtitle text-xs font-black uppercase tracking-[0.25em] text-blue-700">
-                Presupuesto
-              </p>
-
-              <h2 className="print-title mt-2 text-3xl font-black text-slate-950">
-                {budgetLabel}
-              </h2>
-
-              <div className="mt-3 print-hidden print:hidden">
-                <StatusBadge status={budget.status || 'issued'} />
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                {company?.logo_url && (
+                  <img
+                    src={company.logo_url}
+                    alt={company.name}
+                    className="print-company-logo mb-4 h-16 object-contain"
+                  />
+                )}
+                <h2 className="print-title text-3xl font-black text-slate-950">
+                  {company?.name || 'Presupuesto'}
+                </h2>
+                <div className="mt-2 space-y-1 text-sm font-bold text-slate-500">
+                  {company?.cuit && <p>CUIT: {company.cuit}</p>}
+                  {company?.address && <p>{company.address}</p>}
+                  {(company?.phone || company?.email) && (
+                    <p>
+                      {company.phone} {company.phone && company.email ? '·' : ''} {company.email}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="rounded-3xl bg-slate-50 p-5 text-left md:text-right">
-              <p className="print-subtitle text-xs font-black uppercase tracking-widest text-slate-400">
-                Fecha de emisión
-              </p>
-
-              <p className="mt-1 text-lg font-black text-slate-950">
-                {budget.budget_date
-                  ? new Date(budget.budget_date).toLocaleDateString('es-AR')
-                  : '-'}
-              </p>
+              <div className="text-left md:text-right">
+                <p className="print-subtitle text-xs font-black uppercase tracking-[0.25em] text-blue-700">
+                  Presupuesto
+                </p>
+                <h3 className="mt-1 text-2xl font-black text-slate-900">
+                  #{budgetLabel}
+                </h3>
+                <div className="mt-3 flex flex-col gap-1 text-sm font-bold text-slate-500 md:items-end">
+                   <p className="flex items-center gap-2">
+                     <CalendarDays size={14} />
+                     Fecha: {budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'}
+                   </p>
+                   <div className="print-hidden print:hidden">
+                     <StatusBadge status={budget.status || 'issued'} />
+                   </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -695,8 +741,20 @@ export default function PresupuestoDetallePage() {
               </>
             )}
 
-            <div className="mt-6 flex justify-end">
-              <div className="print-total w-full rounded-3xl bg-slate-950 p-6 text-white md:w-96">
+            <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              {company?.default_notes && (
+                <div className="max-w-xl rounded-2xl bg-slate-50 p-5">
+                  <h4 className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
+                    <Clock3 size={14} />
+                    Notas y condiciones
+                  </h4>
+                  <p className="whitespace-pre-line text-sm font-medium text-slate-600">
+                    {company.default_notes}
+                  </p>
+                </div>
+              )}
+
+              <div className="print-total ml-auto w-full rounded-3xl bg-slate-950 p-6 text-white md:w-96">
                 <p className="print-total-label text-sm font-black uppercase tracking-widest text-blue-200">
                   Total presupuesto
                 </p>
