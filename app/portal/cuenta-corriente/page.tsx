@@ -184,7 +184,9 @@ export default function PortalCuentaCorrientePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          budget_id: budgetId,
+          // Si el ID parece un UUID es un presupuesto, si no es un código de pedido
+          budget_id: budgetId.includes('-') && budgetId.length > 20 ? budgetId : null,
+          order_code: !budgetId.includes('-') || budgetId.length < 20 ? budgetId : null,
         }),
       })
 
@@ -228,31 +230,45 @@ export default function PortalCuentaCorrientePage() {
     const grouped = new Map<string, PendingBudget>()
 
     movements.forEach((movement) => {
-      if (!movement.budget_id) return
+      let key = movement.budget_id
+      let label = ''
 
-      const budgetCode =
-        movement.budgets?.budget_code ||
-        (movement.budgets?.budget_number
-          ? `000-${movement.budgets.budget_number}`
-          : 'Presupuesto')
-
-      const current =
-        grouped.get(movement.budget_id) || {
-          id: movement.budget_id,
-          label: budgetCode,
-          total: 0,
-          paid: 0,
-          balance: 0,
+      if (key) {
+        label =
+          movement.budgets?.budget_code ||
+          (movement.budgets?.budget_number
+            ? `000-${movement.budgets.budget_number}`
+            : 'Presupuesto')
+      } else {
+        // Buscar código de pedido en la descripción (ej: "Venta - Pedido PED-000006")
+        const match = movement.description?.match(/Pedido (PED-[0-9]+)/i)
+        if (match) {
+          key = match[1] // Usamos el código del pedido como clave
+          label = match[1]
+        } else if (movement.movement_type === 'Venta') {
+          key = movement.id
+          label = movement.description || 'Venta directa'
+        } else {
+          return
         }
+      }
+
+      const current = grouped.get(key) || {
+        id: key,
+        label: label,
+        total: 0,
+        paid: 0,
+        balance: 0,
+      }
 
       current.total += Number(movement.debit || 0)
       current.paid += Number(movement.credit || 0)
       current.balance = current.total - current.paid
 
-      grouped.set(movement.budget_id, current)
+      grouped.set(key, current)
     })
 
-    return Array.from(grouped.values()).filter((budget) => budget.balance > 0)
+    return Array.from(grouped.values()).filter((doc) => doc.balance > 0)
   }, [movements])
 
   if (loading) {
@@ -356,74 +372,66 @@ export default function PortalCuentaCorrientePage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[380px_1fr]">
-        <aside className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-5">
-            <h2 className="text-xl font-black text-slate-950">
-              Presupuestos pendientes
-            </h2>
-            <p className="mt-1 text-sm font-semibold text-slate-500">
-              Saldos abiertos asociados a presupuestos.
-            </p>
-          </div>
-
-          {pendingBudgets.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-700">
-                <Wallet size={28} />
-              </div>
-
-              <h3 className="font-black text-slate-900">
-                Sin presupuestos pendientes
+        <aside>
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 p-6">
+              <h3 className="text-lg font-black text-slate-950">
+                Saldos pendientes
               </h3>
-
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                No hay saldos abiertos asociados a presupuestos.
+              <p className="text-sm font-semibold text-slate-500">
+                Saldos abiertos por presupuestos o pedidos.
               </p>
             </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {pendingBudgets.map((budget) => (
-                <div key={budget.id} className="p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                      <FileText size={20} />
-                    </div>
 
-                    <div className="min-w-0">
-                      <p className="truncate font-black text-slate-950">
-                        {budget.label}
-                      </p>
-                      <p className="text-xs font-semibold text-slate-400">
-                        Presupuesto pendiente
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <MiniData
-                      label="Saldo pendiente"
-                      value={formatCurrency(budget.balance)}
-                      strong
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={payingBudgetId === budget.id}
-                    onClick={() => payBudget(budget.id)}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {payingBudgetId === budget.id && (
-                      <Loader2 size={16} className="animate-spin" />
-                    )}
-                    {payingBudgetId === budget.id
-                      ? 'Redirigiendo...'
-                      : 'Pagar con Mercado Pago'}
-                  </button>
+            <div className="divide-y divide-slate-100 p-4">
+              {pendingBudgets.length === 0 ? (
+                <div className="p-6 text-center text-sm font-bold text-slate-400">
+                  No tenés saldos pendientes. ¡Todo al día!
                 </div>
-              ))}
+              ) : (
+                pendingBudgets.map((doc) => (
+                  <div key={doc.id} className="py-4 last:pb-0 first:pt-0">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                          <FileText size={20} />
+                        </div>
+                        <div>
+                          <p className="font-black text-slate-950">{doc.label}</p>
+                          <p className="text-xs font-bold text-slate-400">
+                            Pendiente de pago
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 rounded-2xl bg-slate-50 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Saldo pendiente
+                      </p>
+                      <p className="text-xl font-black text-blue-600">
+                        {formatCurrency(doc.balance)}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => payBudget(doc.id)}
+                      disabled={payingBudgetId === doc.id}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {payingBudgetId === doc.id ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <ArrowUpCircle size={18} />
+                      )}
+                      Pagar con Mercado Pago
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
-          )}
+          </div>
         </aside>
 
         <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
