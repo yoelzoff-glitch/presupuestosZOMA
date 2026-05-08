@@ -359,6 +359,9 @@ export default function CuentaCorrientePage() {
 
     setSavingPayment(true)
 
+    // -----------------------------------------------------------------------
+    // BRANCH 1: "Pago total" sin presupuesto → salda todos los pendientes
+    // -----------------------------------------------------------------------
     if (
       paymentType === 'Pago total' &&
       !selectedPaymentBudget &&
@@ -402,6 +405,103 @@ export default function CuentaCorrientePage() {
       return
     }
 
+    // -----------------------------------------------------------------------
+    // BRANCH 2: Sin presupuesto seleccionado → cascada automática
+    // -----------------------------------------------------------------------
+    if (!selectedPaymentBudgetId && pendingBudgets.length > 0) {
+      // Sort pending budgets by date ascending (oldest first)
+      // pendingBudgets already comes from movements ordered by date desc,
+      // so we need to re-sort: we'll use the order from the budgets query
+      // For now we sort by label (000-XXXX) ascending as a proxy for date
+      const sortedBudgets = [...pendingBudgets].sort((a, b) =>
+        a.label.localeCompare(b.label)
+      )
+
+      // Fetch real dates for proper ordering
+      const { data: budgetDates } = await supabase
+        .from('budgets')
+        .select('id, budget_date, budget_number')
+        .in('id', sortedBudgets.map((b) => b.id))
+
+      const dateMap = new Map(
+        (budgetDates || []).map((b) => [b.id, b.budget_date || '9999-12-31'])
+      )
+
+      const orderedBudgets = [...pendingBudgets].sort((a, b) => {
+        const da = dateMap.get(a.id) || '9999-12-31'
+        const db = dateMap.get(b.id) || '9999-12-31'
+        return da.localeCompare(db)
+      })
+
+      // Run cascade algorithm
+      const cascadeItems: Array<{
+        budget_id: string
+        label: string
+        allocated: number
+        paymentType: 'Pago total' | 'Pago parcial'
+      }> = []
+
+      let remaining = amount
+
+      for (const budget of orderedBudgets) {
+        if (remaining <= 0) break
+        const allocated = Math.min(remaining, budget.balance)
+        cascadeItems.push({
+          budget_id: budget.id,
+          label: budget.label,
+          allocated,
+          paymentType: allocated >= budget.balance ? 'Pago total' : 'Pago parcial',
+        })
+        remaining -= allocated
+      }
+
+      // Insert one movement per affected budget
+      const movementsToInsert = cascadeItems.map((item) => ({
+        company_id: companyId,
+        client_id: selectedClientId,
+        budget_id: item.budget_id,
+        movement_type: 'Pago',
+        payment_type: item.paymentType,
+        description:
+          paymentDescription.trim() ||
+          `Pago ${item.paymentType === 'Pago total' ? 'completo' : 'parcial'} ${item.label}`,
+        debit: 0,
+        credit: item.allocated,
+      }))
+
+      const { error } = await supabase
+        .from('account_movements')
+        .insert(movementsToInsert)
+
+      setSavingPayment(false)
+
+      if (error) {
+        setErrorMsg('Error al registrar el pago en cascada.')
+        console.error(error)
+        return
+      }
+
+      for (const item of cascadeItems) {
+        await updateBudgetPaymentStatus(item.budget_id)
+      }
+
+      const affected = cascadeItems.length
+      setSuccessMsg(
+        `Pago registrado. Se distribuyó en cascada entre ${affected} presupuesto${affected !== 1 ? 's' : ''} (del más antiguo al más reciente).`
+      )
+      setPaymentAmount('')
+      setSelectedPaymentBudgetId('')
+      setPaymentType('Pago parcial')
+      setPaymentDescription('Pago recibido')
+      setShowPaymentForm(false)
+
+      await loadMovements(selectedClientId)
+      return
+    }
+
+    // -----------------------------------------------------------------------
+    // BRANCH 3: Con presupuesto seleccionado → pago directo al presupuesto
+    // -----------------------------------------------------------------------
     const { error } = await supabase.from('account_movements').insert({
       company_id: companyId,
       client_id: selectedClientId,
@@ -438,6 +538,7 @@ export default function CuentaCorrientePage() {
 
     await loadMovements(selectedClientId)
   }
+
 
   async function handleDeleteMovement(movementId: string, budgetId: string | null) {
     if (!companyId) return
@@ -756,6 +857,14 @@ export default function CuentaCorrientePage() {
                           Este cliente no tiene presupuestos pendientes para asociar.
                         </p>
                       )}
+
+                      {paymentType !== 'Pago total' &&
+                        !selectedPaymentBudget &&
+                        pendingBudgets.length > 0 && (
+                          <p className="mt-2 text-xs font-bold text-blue-600">
+                            ⚡ Sin presupuesto asignado: el monto se distribuirá en cascada del más antiguo al más reciente.
+                          </p>
+                        )}
 
                       {paymentType === 'Pago total' &&
                         !selectedPaymentBudget &&
