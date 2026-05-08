@@ -81,14 +81,13 @@ export default function DashboardPage() {
         .neq('status','cancelled'),
 
       supabase
-        .from('client_account_balances')
-        .select('balance')
-        .eq('company_id', companyId)
-        .neq('status','cancelled'),
+        .from('account_movements')
+        .select('debit, credit')
+        .eq('company_id', companyId),
     ])
 
     const totalBalance =
-      balanceRes.data?.reduce((acc, item) => acc + Number(item.balance || 0), 0) ?? 0
+      balanceRes.data?.reduce((acc, item: any) => acc + (Number(item.debit || 0) - Number(item.credit || 0)), 0) ?? 0
 
     setStats({
       clients: clientsRes.count ?? 0,
