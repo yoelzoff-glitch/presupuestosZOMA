@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   LifeBuoy,
+  FileText,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -67,6 +68,14 @@ export default function PortalLayout({
             >
               <ClipboardList size={16} />
               Mis pedidos
+            </Link>
+
+            <Link
+              href="/portal/presupuestos"
+              className={navClass('/portal/presupuestos')}
+            >
+              <FileText size={16} />
+              Mis presupuestos
             </Link>
 
             <Link
@@ -153,6 +162,15 @@ export default function PortalLayout({
           >
             <ClipboardList size={16} />
             Mis pedidos
+          </Link>
+
+          <Link
+            href="/portal/presupuestos"
+            onClick={closeMobile}
+            className={navClass('/portal/presupuestos')}
+          >
+            <FileText size={16} />
+            Mis presupuestos
           </Link>
 
           <Link
