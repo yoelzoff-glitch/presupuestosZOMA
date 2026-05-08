@@ -14,6 +14,7 @@ import {
   ReceiptText,
   FileText,
   Trash2,
+  CreditCard,
 } from 'lucide-react'
 
 type Client = {
@@ -29,6 +30,7 @@ type Movement = {
   movement_date: string
   movement_type: 'Venta' | 'Pago'
   payment_type: 'Pago total' | 'Pago parcial' | 'A cuenta' | null
+  payment_method: string | null
   description: string | null
   debit: number
   credit: number
@@ -69,6 +71,9 @@ export default function CuentaCorrientePage() {
 
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([])
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('')
 
   useEffect(() => {
     initPage()
@@ -130,6 +135,20 @@ export default function CuentaCorrientePage() {
     }
 
     setClients(clientsData || [])
+
+    // Fetch company payment methods
+    const { data: companyData } = await supabase
+      .from('companies')
+      .select('payment_methods')
+      .eq('id', profile.company_id)
+      .single()
+
+    if (companyData?.payment_methods && Array.isArray(companyData.payment_methods)) {
+      const methods = companyData.payment_methods.map((m: any) => m.name)
+      setPaymentMethods(methods)
+      if (methods.length > 0) setSelectedPaymentMethod(methods[0])
+    }
+
     setLoading(false)
   }
 
@@ -148,6 +167,7 @@ export default function CuentaCorrientePage() {
         movement_date,
         movement_type,
         payment_type,
+        payment_method,
         description,
         debit,
         credit,
@@ -374,6 +394,7 @@ export default function CuentaCorrientePage() {
         movement_type: 'Pago',
         payment_type: 'Pago total',
         description: `Pago completo ${budget.label}`,
+        payment_method: selectedPaymentMethod || null,
         debit: 0,
         credit: Number(budget.balance || 0),
       }))
@@ -465,6 +486,7 @@ export default function CuentaCorrientePage() {
         description:
           paymentDescription.trim() ||
           `Pago ${item.paymentType === 'Pago total' ? 'completo' : 'parcial'} ${item.label}`,
+        payment_method: selectedPaymentMethod || null,
         debit: 0,
         credit: item.allocated,
       }))
@@ -513,6 +535,7 @@ export default function CuentaCorrientePage() {
         (selectedPaymentBudget
           ? `Pago ${selectedPaymentBudget.label}`
           : 'Pago recibido'),
+      payment_method: selectedPaymentMethod || null,
       debit: 0,
       credit: amount,
     })
@@ -941,6 +964,25 @@ export default function CuentaCorrientePage() {
                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                       />
                     </label>
+
+                    <label className="block xl:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-700">
+                        Método de pago
+                      </span>
+
+                      <select
+                        value={selectedPaymentMethod}
+                        onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      >
+                        <option value="">Sin especificar</option>
+                        {paymentMethods.map((method) => (
+                          <option key={method} value={method}>
+                            {method}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
 
                   <div className="mt-5 flex justify-end gap-3">
@@ -1070,6 +1112,13 @@ export default function CuentaCorrientePage() {
                                   Presupuesto:{' '}
                                   {movement.budgets.budget_code ||
                                     `000-${movement.budgets.budget_number}`}
+                                </p>
+                              )}
+
+                              {movement.payment_method && (
+                                <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-slate-400">
+                                  <CreditCard size={13} />
+                                  Método: {movement.payment_method}
                                 </p>
                               )}
                             </td>

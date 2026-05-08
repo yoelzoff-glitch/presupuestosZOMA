@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Building2,
 } from 'lucide-react'
 
 import { getUserCompanyId } from '@/lib/getUserCompany'
@@ -200,26 +201,50 @@ export default function ConfiguracionPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {/* Empresa */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">
-            Datos de la empresa
-          </h2>
+        <Link
+          href="/configuracion/empresa"
+          className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+              <Building2 size={22} />
+            </div>
+            <h2 className="text-lg font-black text-slate-900">
+              Datos de la empresa
+            </h2>
+          </div>
 
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-3 text-sm text-slate-500">
             Nombre comercial, CUIT, dirección y datos que aparecen en los presupuestos.
           </p>
-        </div>
+
+          <p className="mt-4 text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
+            Ir a configuración →
+          </p>
+        </Link>
 
         {/* Parámetros */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">
-            Parámetros comerciales
-          </h2>
+        <Link
+          href="/configuracion/parametros"
+          className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
+              <CreditCard size={22} />
+            </div>
+            <h2 className="text-lg font-black text-slate-900">
+              Parámetros comerciales
+            </h2>
+          </div>
 
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-3 text-sm text-slate-500">
             Impuestos, descuentos, formas de pago y condiciones generales.
           </p>
-        </div>
+
+          <p className="mt-4 text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
+            Configurar parámetros →
+          </p>
+        </Link>
 
         {/* Usuarios clientes */}
         <Link
