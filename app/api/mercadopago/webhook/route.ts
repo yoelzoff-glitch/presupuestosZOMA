@@ -15,6 +15,7 @@ type LocalPayment = {
   budget_id: string | null
   amount: number
   status: string
+  mp_external_reference?: string | null
 }
 
 async function createPaymentNotification(localPayment: LocalPayment) {
@@ -37,20 +38,35 @@ async function createPaymentNotification(localPayment: LocalPayment) {
     .eq('company_id', localPayment.company_id)
     .maybeSingle()
 
-  const { data: budget } = localPayment.budget_id
-    ? await supabaseAdmin
-        .from('budgets')
-        .select('budget_code, budget_number')
-        .eq('id', localPayment.budget_id)
-        .eq('company_id', localPayment.company_id)
-        .maybeSingle()
-    : { data: null }
+  let documentLabel = 'un documento'
+  let link = '/cuenta-corriente'
+
+  if (localPayment.budget_id) {
+    const { data: budget } = await supabaseAdmin
+      .from('budgets')
+      .select('budget_code, budget_number')
+      .eq('id', localPayment.budget_id)
+      .maybeSingle()
+    
+    if (budget) {
+      documentLabel = `Presupuesto ${budget.budget_code || `000-${budget.budget_number}`}`
+      link = `/presupuestos/${localPayment.budget_id}`
+    }
+  } else if (localPayment.mp_external_reference?.startsWith('order:')) {
+    const orderId = localPayment.mp_external_reference.replace('order:', '')
+    const { data: order } = await supabaseAdmin
+      .from('orders')
+      .select('order_code')
+      .eq('id', orderId)
+      .maybeSingle()
+    
+    if (order) {
+      documentLabel = `Pedido ${order.order_code}`
+      link = `/pedidos/${orderId}`
+    }
+  }
 
   const clientName = client?.name || 'Un cliente'
-  const budgetLabel =
-    budget?.budget_code ||
-    (budget?.budget_number ? `000-${budget.budget_number}` : 'un presupuesto')
-
   const amount = Number(localPayment.amount || 0).toLocaleString('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -58,14 +74,10 @@ async function createPaymentNotification(localPayment: LocalPayment) {
     maximumFractionDigits: 2,
   })
 
-  const link = localPayment.budget_id
-    ? `/presupuestos/${localPayment.budget_id}`
-    : '/cuenta-corriente'
-
   const { error } = await supabaseAdmin.from('notifications').insert({
     company_id: localPayment.company_id,
     title: 'Pago recibido',
-    message: `${clientName} pagó ${amount} por Mercado Pago para el presupuesto ${budgetLabel}. Ref. pago interno: ${localPayment.id}`,
+    message: `${clientName} pagó ${amount} por Mercado Pago para ${documentLabel}. Ref. pago interno: ${localPayment.id}`,
     type: 'payment',
     link,
     read: false,
@@ -420,14 +432,14 @@ async function handleWebhook(req: NextRequest) {
       .update(updatePayload)
       .eq('company_id', companyId)
       .eq('mp_external_reference', mpPayment.external_reference)
-      .select('id, company_id, client_id, budget_id, amount, status')
+      .select('id, company_id, client_id, budget_id, amount, status, mp_external_reference')
       .limit(1)
 
     if (updateError) {
       console.log('PAYMENT UPDATE ERROR:', updateError)
     }
 
-    const localPayment = updatedPayments?.[0]
+    const localPayment = updatedPayments?.[0] as LocalPayment | undefined
 
     if (mappedStatus === 'approved' && localPayment) {
       const { data: existingMovement } = await supabaseAdmin
