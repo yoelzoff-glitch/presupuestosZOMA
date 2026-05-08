@@ -20,6 +20,8 @@ import {
   Boxes,
   PackagePlus,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -39,10 +41,15 @@ export default function ProductosPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     loadProducts()
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search])
 
   async function getCompanyId() {
     const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -113,6 +120,17 @@ export default function ProductosPage() {
       )
     })
   }, [products, search])
+
+  const ITEMS_PER_PAGE = 50
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  }, [filteredProducts, currentPage])
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
+  }, [filteredProducts])
 
   const suppliers = useMemo(() => {
     return new Set(
@@ -311,7 +329,7 @@ export default function ProductosPage() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {filteredProducts.map((product) => (
+                  {paginatedProducts.map((product) => (
                     <tr
                       key={product.id}
                       className="h-[52px] transition hover:bg-blue-50/40"
@@ -345,6 +363,60 @@ export default function ProductosPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
+              <div className="flex flex-1 justify-between sm:hidden">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="relative ml-3 inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Siguiente
+                </button>
+              </div>
+              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs text-slate-700 font-semibold">
+                    Mostrando <span className="font-black">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> a{' '}
+                    <span className="font-black">
+                      {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)}
+                    </span>{' '}
+                    de <span className="font-black">{filteredProducts.length}</span> resultados
+                  </p>
+                </div>
+                <div>
+                  <nav className="isolate inline-flex -space-x-px rounded-xl shadow-sm gap-1" aria-label="Pagination">
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white p-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <span className="sr-only">Anterior</span>
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="relative inline-flex items-center bg-white px-4 py-2 text-xs font-black text-slate-700 rounded-xl border border-slate-300">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white p-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <span className="sr-only">Siguiente</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  </nav>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -461,9 +533,8 @@ function TableHead({
 }) {
   return (
     <th
-      className={`min-w-0 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-500 ${
-        align === 'right' ? 'text-right' : 'text-left'
-      }`}
+      className={`min-w-0 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-500 ${align === 'right' ? 'text-right' : 'text-left'
+        }`}
     >
       <span className="block truncate">{children}</span>
     </th>

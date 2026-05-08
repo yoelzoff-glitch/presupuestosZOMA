@@ -15,6 +15,8 @@ import {
   FileSpreadsheet,
   AlertCircle,
   ClipboardList,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -53,10 +55,15 @@ export default function PortalPage() {
   const [sending, setSending] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     loadPortal()
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search])
 
   async function loadPortal() {
     setLoading(true)
@@ -154,6 +161,17 @@ export default function PortalPage() {
       )
     })
   }, [products, search])
+
+  const ITEMS_PER_PAGE = 24
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  }, [filteredProducts, currentPage])
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
+  }, [filteredProducts])
 
   const cartTotal = useMemo(() => {
     return cart.reduce((acc, item) => {
@@ -445,7 +463,7 @@ export default function PortalPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filteredProducts.map((product) => (
+            {paginatedProducts.map((product) => (
               <article
                 key={product.id}
                 className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
@@ -491,6 +509,32 @@ export default function PortalPage() {
               </article>
             ))}
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <ChevronLeft size={16} />
+                Anterior
+              </button>
+              <span className="text-xs font-black text-slate-700">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Siguiente
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
 
           {filteredProducts.length === 0 && (
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-10 text-center shadow-sm">
