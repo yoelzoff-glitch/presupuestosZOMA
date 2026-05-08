@@ -71,24 +71,24 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-20 items-center border-b border-white/10 px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500 text-white shadow-lg shadow-blue-500/30">
-            <Sparkles size={20} />
+      <div className="flex h-24 items-center px-6">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-xl shadow-blue-500/20">
+            <Sparkles size={22} />
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">
-              ZOMA
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400/80">
+              SISTEMA
             </p>
-            <h1 className="mt-1 text-xl font-black text-white">
-              Clientes
+            <h1 className="text-xl font-black tracking-tight text-white">
+              ZOMA<span className="text-blue-500">.</span>
             </h1>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-2 p-4">
+      <nav className="flex-1 space-y-1.5 px-3 py-4">
         {navItems.map((item) => {
           const Icon = item.icon
           const active = isActiveRoute(pathname, item.href)
@@ -98,51 +98,56 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               key={item.href}
               href={item.href}
               onClick={onNavigate}
-              className={`group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+              className={`group relative flex items-center gap-3.5 rounded-2xl px-4 py-3 text-sm font-bold transition-all duration-300 ${
                 active
-                  ? 'bg-white text-slate-950 shadow-lg shadow-black/20'
-                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                  ? 'bg-blue-600/10 text-white'
+                  : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
               }`}
             >
+              {active && (
+                <div className="absolute left-0 h-5 w-1 rounded-r-full bg-blue-500" />
+              )}
+
               <span
-                className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 ${
                   active
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white/5 text-slate-300 group-hover:bg-white/10 group-hover:text-white'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                    : 'bg-white/[0.03] text-slate-500 group-hover:bg-white/[0.08] group-hover:text-slate-300'
                 }`}
               >
-                <Icon size={18} />
+                <Icon size={18} strokeWidth={2.5} />
               </span>
 
-              <span>{item.label}</span>
+              <span className="tracking-tight">{item.label}</span>
             </Link>
           )
         })}
       </nav>
 
-      <div className="border-t border-white/10 p-4 space-y-4">
+      <div className="p-4 space-y-4">
         <a
           href="https://wa.me/5491100000000?text=Hola,%20necesito%20ayuda%20o%20soporte%20técnico%20con%20el%20sistema"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full rounded-2xl bg-blue-600/20 text-blue-400 px-4 py-3 text-sm font-bold transition hover:bg-blue-600 hover:text-white"
+          className="flex items-center justify-center gap-2 w-full rounded-2xl bg-white/[0.03] border border-white/5 text-slate-300 px-4 py-3.5 text-sm font-bold transition hover:bg-blue-600 hover:text-white hover:border-blue-600"
         >
           <LifeBuoy size={18} />
           Soporte Técnico
         </a>
 
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Estado
-          </p>
-
-          <div className="mt-3 flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-400/50" />
-            <span className="text-sm font-bold text-white">Online</span>
+        <div className="rounded-[2rem] border border-white/5 bg-gradient-to-b from-white/[0.03] to-transparent p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+              Estado
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Online</span>
+            </div>
           </div>
 
-          <p className="mt-2 text-xs leading-5 text-slate-400">
-            Sistema listo para gestionar pedidos, presupuestos, productos y clientes.
+          <p className="mt-3 text-[11px] leading-relaxed font-medium text-slate-500">
+            Sistema activo y sincronizado con la nube.
           </p>
         </div>
       </div>
@@ -159,7 +164,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-white/10 bg-slate-950 text-white lg:block">
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-white/5 bg-slate-950 text-white lg:block">
         <SidebarContent />
       </aside>
 
