@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
 import { getValidMercadoPagoAccessToken } from '@/lib/mercadopago/refreshAccessToken'
 
 const supabaseAdmin = createClient(
@@ -7,18 +8,55 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+/**
+ * POST /api/mercadopago/create-preference
+ * ------------------------------------------------------------
+ * Creates a Mercado Pago payment preference for a budget.
+ *
+ * Security fix:
+ *   - Authenticates the user.
+ *   - If Admin: Verifies they belong to the company that owns the budget.
+ *   - If Customer: Verifies the budget belongs to their client_id.
+ */
 export async function POST(req: NextRequest) {
   try {
+    // 1. Authenticate user
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return req.cookies.getAll()
+          },
+        },
+      }
+    )
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    // 2. Get user profile and role
+    const { data: profile } = await supabase
+      .from('users_profiles')
+      .select('role, company_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile) {
+      return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 403 })
+    }
+
     const body = await req.json()
     const { budget_id } = body
 
     if (!budget_id) {
-      return NextResponse.json(
-        { error: 'Falta budget_id' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
     }
 
+    // 3. Fetch budget and verify ownership
     const { data: budget, error: budgetError } = await supabaseAdmin
       .from('budgets')
       .select(`
@@ -29,115 +67,101 @@ export async function POST(req: NextRequest) {
         budget_code,
         total_amount,
         paid_amount,
-        status,
-        clients (
-          name
-        )
+        status
       `)
       .eq('id', budget_id)
       .single()
 
     if (budgetError || !budget) {
-      return NextResponse.json(
-        { error: 'Presupuesto no encontrado' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Presupuesto no encontrado' }, { status: 404 })
     }
 
+    // Authorization logic
+    if (profile.role === 'customer') {
+      // Check if this customer user belongs to the client in the budget
+      const { data: customerData } = await supabaseAdmin
+        .from('customer_users')
+        .select('client_id')
+        .eq('auth_user_id', user.id)
+        .single()
+
+      if (!customerData || customerData.client_id !== budget.client_id) {
+        return NextResponse.json({ error: 'No tenés permiso para pagar este presupuesto' }, { status: 403 })
+      }
+    } else {
+      // Admin/User: Must belong to the same company
+      if (profile.company_id !== budget.company_id) {
+        return NextResponse.json({ error: 'No tenés permiso para esta empresa' }, { status: 403 })
+      }
+    }
+
+    // 4. Validations
     if (budget.status === 'cancelled') {
-      return NextResponse.json(
-        { error: 'No se puede pagar un presupuesto anulado' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'No se puede pagar un presupuesto anulado' }, { status: 400 })
     }
 
     if (!budget.total_amount || Number(budget.total_amount) <= 0) {
-      return NextResponse.json(
-        { error: 'El presupuesto no tiene importe válido' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'El presupuesto no tiene importe válido' }, { status: 400 })
     }
 
     const balance = Number(budget.total_amount || 0) - Number(budget.paid_amount || 0)
 
     if (balance <= 0) {
+      return NextResponse.json({ error: 'El presupuesto ya se encuentra pagado' }, { status: 400 })
+    }
+
+    // 5. Get MP Access Token
+    const accessToken = await getValidMercadoPagoAccessToken(budget.company_id)
+
+    if (!accessToken) {
       return NextResponse.json(
-        { error: 'El presupuesto ya se encuentra pagado' },
+        { error: 'No se pudo obtener un token válido de Mercado Pago' },
         { status: 400 }
       )
     }
 
-    const accessToken = await getValidMercadoPagoAccessToken(
-            budget.company_id
-            )
-
-            if (!accessToken) {
-            return NextResponse.json(
-                {
-                error:
-                    'No se pudo obtener un token válido de Mercado Pago',
-                },
-                { status: 400 }
-            )
-    }
-
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      'https://presupuestos-zoma.vercel.app'
-
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://presupuestos-zoma.vercel.app'
     const externalReference = `budget:${budget.id}`
 
-    const preferenceResponse = await fetch(
-      'https://api.mercadopago.com/checkout/preferences',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          items: [
-            {
-              title: `Presupuesto ${
-                budget.budget_code || budget.budget_number
-              }`,
-              quantity: 1,
-              currency_id: 'ARS',
-              unit_price: Math.round(Number(balance)),
-            },
-          ],
-
-          external_reference: externalReference,
-
-          notification_url:
-            `${appUrl}/api/mercadopago/webhook`,
-
-          back_urls: {
-            success: `${appUrl}/portal/pagos/success`,
-            failure: `${appUrl}/portal/pagos/failure`,
-            pending: `${appUrl}/portal/pagos/pending`,
+    // 6. Create Preference
+    const preferenceResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            title: `Presupuesto ${budget.budget_code || budget.budget_number}`,
+            quantity: 1,
+            currency_id: 'ARS',
+            unit_price: Math.round(Number(balance)),
           },
-
-          auto_return: 'approved',
-          binary_mode: true,
-        }),
-      }
-    )
+        ],
+        external_reference: externalReference,
+        notification_url: `${appUrl}/api/mercadopago/webhook`,
+        back_urls: {
+          success: `${appUrl}/portal/pagos/success`,
+          failure: `${appUrl}/portal/pagos/failure`,
+          pending: `${appUrl}/portal/pagos/pending`,
+        },
+        auto_return: 'approved',
+        binary_mode: true,
+      }),
+    })
 
     const preferenceData = await preferenceResponse.json()
 
     if (!preferenceResponse.ok) {
       console.error('MP preference error:', preferenceData)
-
       return NextResponse.json(
-        {
-          error: 'No se pudo crear la preferencia de pago',
-          detail: preferenceData,
-        },
+        { error: 'No se pudo crear la preferencia de pago', detail: preferenceData },
         { status: 400 }
       )
     }
 
+    // 7. Store pending payment
     const { error: paymentError } = await supabaseAdmin
       .from('payments')
       .insert({
@@ -152,13 +176,8 @@ export async function POST(req: NextRequest) {
 
     if (paymentError) {
       console.error('Payment insert error:', paymentError)
-
       return NextResponse.json(
-        {
-          error:
-            'Se creó la preferencia, pero no se pudo guardar el pago',
-          detail: paymentError.message,
-        },
+        { error: 'Se creó la preferencia, pero no se pudo guardar el pago', detail: paymentError.message },
         { status: 500 }
       )
     }
@@ -170,10 +189,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error(error)
-
-    return NextResponse.json(
-      { error: 'Error interno creando preferencia' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Error interno creando preferencia' }, { status: 500 })
   }
 }
