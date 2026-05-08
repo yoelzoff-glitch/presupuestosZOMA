@@ -184,7 +184,8 @@ export default function CuentaCorrientePage() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      setErrorMsg('Error al cargar movimientos.')
+      console.error('Error loading movements:', error)
+      setErrorMsg(`Error al cargar movimientos: ${error.message}`)
       setMovementsLoading(false)
       return
     }
