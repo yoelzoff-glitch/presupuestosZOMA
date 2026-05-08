@@ -576,7 +576,7 @@ export default function CuentaCorrientePage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-5">
             <h2 className="flex items-center gap-2 text-xl font-black text-slate-950">
@@ -646,7 +646,7 @@ export default function CuentaCorrientePage() {
               </p>
             </div>
           ) : (
-            <>
+            <div className="flex flex-col min-w-0 gap-6">
               <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div>
@@ -676,7 +676,7 @@ export default function CuentaCorrientePage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <StatCard
                   title="Total vendido"
                   value={formatCurrency(totals.debit)}
@@ -894,7 +894,7 @@ export default function CuentaCorrientePage() {
                       </p>
                     </div>
                   ) : (
-                    <table className="w-full min-w-[850px]">
+                    <table className="w-full min-w-[750px]">
                       <thead className="bg-slate-50">
                         <tr>
                           <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">
@@ -1004,7 +1004,7 @@ export default function CuentaCorrientePage() {
                   )}
                 </div>
               </div>
-            </>
+            </div>
           )}
         </section>
       </div>
