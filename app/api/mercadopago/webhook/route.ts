@@ -76,6 +76,182 @@ async function createPaymentNotification(localPayment: LocalPayment) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Cascade payment handler
+// ---------------------------------------------------------------------------
+async function handleCascadePayment(
+  planId: string,
+  mpPayment: any,
+  companyId: string,
+  mappedStatus: string,
+  mpPaymentId: string
+) {
+  // Update payments record
+  await supabaseAdmin
+    .from('payments')
+    .update({
+      status: mappedStatus,
+      mp_payment_id: mpPaymentId,
+      payment_method: mpPayment.payment_method_id || mpPayment.payment_type_id || null,
+      paid_at: mappedStatus === 'approved' ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('mp_external_reference', `cascade:${planId}`)
+
+  if (mappedStatus !== 'approved') {
+    return // Nothing more to do for non-approved states
+  }
+
+  // Load the cascade plan
+  const { data: plan, error: planError } = await supabaseAdmin
+    .from('cascade_payment_plans')
+    .select('*')
+    .eq('id', planId)
+    .single()
+
+  if (planError || !plan) {
+    console.error('CASCADE PLAN NOT FOUND:', planId, planError)
+    return
+  }
+
+  // Idempotency — if already completed, skip
+  if (plan.status === 'completed') {
+    console.log('CASCADE PLAN ALREADY COMPLETED:', planId)
+    return
+  }
+
+  const items: Array<{
+    budget_id: string
+    budget_label: string
+    balance_before: number
+    allocated_amount: number
+    balance_after: number
+    order: number
+  }> = plan.items
+
+  // Find the local payment id for linking movements
+  const { data: localPayment } = await supabaseAdmin
+    .from('payments')
+    .select('id')
+    .eq('mp_external_reference', `cascade:${planId}`)
+    .maybeSingle()
+
+  const localPaymentId = localPayment?.id || null
+
+  // Process each item in order
+  for (const item of items.sort((a, b) => a.order - b.order)) {
+    if (!item.allocated_amount || item.allocated_amount <= 0) continue
+
+    // Fetch current paid state of budget to determine payment_type
+    const { data: budget } = await supabaseAdmin
+      .from('budgets')
+      .select('total_amount, paid_amount')
+      .eq('id', item.budget_id)
+      .single()
+
+    if (!budget) continue
+
+    const currentPaid = Number(budget.paid_amount || 0)
+    const newPaidAmount = currentPaid + Number(item.allocated_amount)
+    const totalAmount = Number(budget.total_amount || 0)
+
+    const willBeFullyPaid = newPaidAmount >= totalAmount
+    const paymentType = willBeFullyPaid ? 'Pago total' : 'Pago parcial'
+    const newPaymentStatus = willBeFullyPaid ? 'paid' : 'partial'
+
+    // Check for duplicate movement
+    const { data: existingMovement } = await supabaseAdmin
+      .from('account_movements')
+      .select('id')
+      .eq('budget_id', item.budget_id)
+      .eq('description', `Pago en cascada MP - ${mpPaymentId}`)
+      .maybeSingle()
+
+    if (!existingMovement) {
+      const { error: movementError } = await supabaseAdmin
+        .from('account_movements')
+        .insert({
+          company_id: plan.company_id,
+          client_id: plan.client_id,
+          budget_id: item.budget_id,
+          payment_id: localPaymentId,
+          movement_type: 'Pago',
+          payment_type: paymentType,
+          description: `Pago en cascada MP - ${mpPaymentId}`,
+          debit: 0,
+          credit: Number(item.allocated_amount),
+        })
+
+      if (movementError) {
+        console.error('CASCADE MOVEMENT ERROR for budget', item.budget_id, movementError)
+      }
+    }
+
+    // Update budget paid_amount and payment_status
+    const { error: budgetUpdateError } = await supabaseAdmin
+      .from('budgets')
+      .update({
+        payment_status: newPaymentStatus,
+        paid_amount: newPaidAmount,
+        paid_at: willBeFullyPaid ? new Date().toISOString() : null,
+      })
+      .eq('id', item.budget_id)
+
+    if (budgetUpdateError) {
+      console.error('CASCADE BUDGET UPDATE ERROR:', item.budget_id, budgetUpdateError)
+    }
+  }
+
+  // Mark plan as completed
+  await supabaseAdmin
+    .from('cascade_payment_plans')
+    .update({
+      status: 'completed',
+      mp_payment_id: mpPaymentId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', planId)
+
+  // Notification
+  const { data: client } = await supabaseAdmin
+    .from('clients')
+    .select('name')
+    .eq('id', plan.client_id)
+    .maybeSingle()
+
+  const clientName = client?.name || 'Un cliente'
+  const amountFormatted = Number(plan.total_amount || 0).toLocaleString('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+  const affectedBudgets = items.map((i) => i.budget_label).join(', ')
+
+  const { data: existingNotif } = await supabaseAdmin
+    .from('notifications')
+    .select('id')
+    .eq('company_id', companyId)
+    .eq('type', 'payment')
+    .ilike('message', `%${mpPaymentId}%`)
+    .maybeSingle()
+
+  if (!existingNotif) {
+    await supabaseAdmin.from('notifications').insert({
+      company_id: companyId,
+      title: 'Pago en cascada recibido',
+      message: `${clientName} realizó un pago de ${amountFormatted} distribuido en: ${affectedBudgets}. MP ID: ${mpPaymentId}`,
+      type: 'payment',
+      link: '/cuenta-corriente',
+      read: false,
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main webhook handler
+// ---------------------------------------------------------------------------
 async function handleWebhook(req: NextRequest) {
   const isValidSignature = verifyMercadoPagoWebhookSignature(req)
 
@@ -190,6 +366,32 @@ async function handleWebhook(req: NextRequest) {
               ? 'refunded'
               : 'pending'
 
+    // -----------------------------------------------------------------------
+    // BRANCH: Cascade payment
+    // -----------------------------------------------------------------------
+    if (mpPayment.external_reference?.startsWith('cascade:')) {
+      const planId = mpPayment.external_reference.replace('cascade:', '')
+      console.log('CASCADE PAYMENT DETECTED. Plan ID:', planId)
+
+      await handleCascadePayment(
+        planId,
+        mpPayment,
+        companyId,
+        mappedStatus,
+        String(mpPayment.id)
+      )
+
+      return NextResponse.json({
+        received: true,
+        type: 'cascade',
+        status: mappedStatus,
+        plan_id: planId,
+      })
+    }
+
+    // -----------------------------------------------------------------------
+    // BRANCH: Standard single-budget payment (existing logic unchanged)
+    // -----------------------------------------------------------------------
     const { data: previousPayment, error: previousPaymentError } =
       await supabaseAdmin
         .from('payments')

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
+  CreditCard,
 } from 'lucide-react'
 
 type Budget = {
@@ -54,6 +55,17 @@ export default function PortalPresupuestosPage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [search, setSearch] = useState('')
   const [payFilter, setPayFilter] = useState('all')
+
+  const totalPending = useMemo(
+    () =>
+      budgets
+        .filter((b) => b.status !== 'cancelled')
+        .reduce(
+          (acc, b) => acc + Math.max(0, Number(b.total_amount || 0) - Number(b.paid_amount || 0)),
+          0
+        ),
+    [budgets]
+  )
 
   useEffect(() => {
     loadBudgets()
@@ -165,14 +177,26 @@ export default function PortalPresupuestosPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={loadBudgets}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15"
-          >
-            <RefreshCw size={16} />
-            Actualizar
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={loadBudgets}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15"
+            >
+              <RefreshCw size={16} />
+              Actualizar
+            </button>
+
+            {totalPending > 0 && (
+              <Link
+                href="/portal/presupuestos/pagar"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"
+              >
+                <CreditCard size={16} />
+                Pagar saldo
+              </Link>
+            )}
+          </div>
         </div>
       </section>
 
