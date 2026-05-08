@@ -425,6 +425,7 @@ export default function PresupuestosPage() {
                     <TableHead>Cliente</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Pago</TableHead>
                     <TableHead align="right">Total</TableHead>
                     <TableHead align="right">Acciones</TableHead>
                   </tr>
@@ -520,8 +521,10 @@ function BudgetRow({
       <td className="px-5 py-4">
         <StatusBadge status={budget.status} />
       </td>
-      
-      {getPaymentBadge(budget.payment_status)}
+
+      <td className="px-5 py-4">
+        {getPaymentBadge(budget.payment_status)}
+      </td>
 
       <td
         className={`px-5 py-4 text-right text-lg font-black ${
