@@ -122,13 +122,6 @@ export default function DashboardPage() {
       href: '/presupuestos',
       detail: 'Presupuestos registrados',
     },
-    {
-      title: 'Cuenta corriente',
-      value: `$${stats.balance.toLocaleString('es-AR')}`,
-      icon: Wallet,
-      href: '/cuenta-corriente',
-      detail: stats.balance > 0 ? 'Saldo pendiente total' : 'Sin deuda pendiente',
-    },
   ]
 
   return (
@@ -173,7 +166,37 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <section className="relative overflow-hidden rounded-[2rem] bg-emerald-950 p-8 text-white shadow-2xl">
+        <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
+        <div className="absolute bottom-0 left-20 h-56 w-56 rounded-full bg-teal-400/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/20 px-3 py-1 text-xs font-bold uppercase tracking-widest text-emerald-200">
+              <Wallet size={14} />
+              Cuentas por Cobrar
+            </div>
+
+            <h2 className="text-sm font-bold text-emerald-300">Total pendiente de cobro</h2>
+            
+            <p className="mt-1 text-5xl font-black tracking-tight lg:text-6xl">
+              {loading ? '...' : `$${stats.balance.toLocaleString('es-AR')}`}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/cuenta-corriente"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-400"
+            >
+              Ver detalle de cobros
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 md:grid-cols-3 xl:grid-cols-3">
         {cards.map((card) => {
           const Icon = card.icon
 
