@@ -451,6 +451,51 @@ export default function PedidoDetallePage() {
     }
   }
 
+  async function confirmPortalOrder() {
+    if (!companyId || !order) return
+
+    setConverting(true)
+
+    try {
+      const orderCode = getOrderLabel(order)
+      
+      // 1. Create Account Movement (Venta)
+      const { error: movementError } = await supabase
+        .from('account_movements')
+        .insert({
+          company_id: companyId,
+          client_id: order.client_id,
+          movement_date: new Date().toISOString().split('T')[0],
+          movement_type: 'Venta',
+          description: `Venta - Pedido ${orderCode}`,
+          debit: order.total_amount || totalAmount,
+          credit: 0,
+        })
+
+      if (movementError) throw movementError
+
+      // 2. Update Order status
+      const { error: orderError } = await supabase
+        .from('orders')
+        .update({
+          status: 'confirmed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('company_id', companyId)
+        .eq('id', order.id)
+
+      if (orderError) throw orderError
+
+      toast.success('Pedido confirmado correctamente.')
+      await loadOrder()
+    } catch (err: any) {
+      console.error('Error confirmando pedido:', err)
+      toast.error('No se pudo confirmar el pedido.')
+    } finally {
+      setConverting(false)
+    }
+  }
+
   function handleCancelClick() {
     if (!companyId || !order) return
 
@@ -641,7 +686,7 @@ export default function PedidoDetallePage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <StatusBadge status={order.status} budgetId={order.budget_id} />
 
-            {canConvert && (
+            {canConvert && !isPortalOrder && (
               <>
                 <button
                   type="button"
@@ -669,6 +714,38 @@ export default function PedidoDetallePage() {
                     <FileText size={18} />
                   )}
                   {converting ? 'Convirtiendo...' : 'Convertir a presupuesto'}
+                </button>
+              </>
+            )}
+
+            {isPortalOrder && order.status === 'pending' && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelClick}
+                  disabled={cancelling || converting}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-400/30 bg-red-500/15 px-5 py-3 text-sm font-black text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {cancelling ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <XCircle size={18} />
+                  )}
+                  {cancelling ? 'Anulando...' : 'Anular'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={confirmPortalOrder}
+                  disabled={converting || cancelling}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {converting ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 size={18} />
+                  )}
+                  {converting ? 'Confirmando...' : 'Confirmar Pedido'}
                 </button>
               </>
             )}
@@ -758,7 +835,19 @@ export default function PedidoDetallePage() {
         </div>
       )}
 
-      {isConverted && (
+      {isPortalOrder && order.status === 'pending' && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
+          Este es un pedido enviado desde el portal de clientes. Revisá el stock y confirmalo para que impacte en la cuenta corriente.
+        </div>
+      )}
+
+      {isPortalOrder && order.status === 'confirmed' && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-bold text-blue-700">
+          Este pedido fue enviado desde el portal de clientes y ya se encuentra confirmado.
+        </div>
+      )}
+
+      {!isPortalOrder && isConverted && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-700">
           Este pedido ya fue convertido en presupuesto. No se puede convertir nuevamente.
         </div>

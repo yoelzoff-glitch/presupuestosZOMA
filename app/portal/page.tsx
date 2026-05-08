@@ -290,7 +290,7 @@ export default function PortalPage() {
         return acc + Number(item.product.cost_price || 0) * item.quantity
       }, 0)
 
-      // 1. Insert Order as confirmed
+      // 1. Insert Order as pending (awaiting admin approval)
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -298,7 +298,7 @@ export default function PortalPage() {
           client_id: customer.client_id,
           order_number: nextNumber,
           order_code: orderCode,
-          status: 'confirmed',
+          status: 'pending',
           source: 'portal',
           total_amount: totalAmount,
           notes: notes.trim() || 'Pedido enviado desde portal cliente',
@@ -328,23 +328,6 @@ export default function PortalPage() {
         .insert(itemsToInsert)
 
       if (itemsError) throw itemsError
-
-      // 3. Create Account Movement (Venta)
-      const { error: movementError } = await supabase
-        .from('account_movements')
-        .insert({
-          company_id: customer.company_id,
-          client_id: customer.client_id,
-          movement_date: new Date().toISOString().split('T')[0],
-          movement_type: 'Venta',
-          description: `Venta - Pedido ${orderCode}`,
-          debit: totalAmount,
-          credit: 0,
-        })
-
-      if (movementError) {
-        console.error('Error creando movimiento:', movementError)
-      }
 
       // 4. Notification
       const notificationCreated = await createOrderNotification({
