@@ -39,6 +39,7 @@ type Order = {
   total_amount: number | null
   notes: string | null
   created_at: string | null
+  seller_id: string | null
   clients?: {
     name: string
     cuit: string
@@ -138,6 +139,7 @@ export default function PedidoDetallePage() {
         total_amount,
         notes,
         created_at,
+        seller_id,
         clients (
           name,
           cuit,
@@ -349,114 +351,6 @@ export default function PedidoDetallePage() {
     setShowConfirmModal(true)
   }
 
-  async function convertToBudget() {
-    if (!companyId || !order) return
-
-    setShowConfirmModal(false)
-    setConverting(true)
-
-    try {
-      const { data: freshOrder, error: freshOrderError } = await supabase
-        .from('orders')
-        .select('id, status, budget_id')
-        .eq('company_id', companyId)
-        .eq('id', order.id)
-        .single()
-
-      if (freshOrderError) throw freshOrderError
-
-      if (!freshOrder || freshOrder.status !== 'pending' || freshOrder.budget_id) {
-        toast.error('Este pedido ya fue procesado por otro usuario.')
-        await loadOrder()
-        setConverting(false)
-        return
-      }
-
-      const budgetItems = buildBudgetItems()
-
-      const total = budgetItems.reduce((acc, item) => {
-        return acc + Number(item.quantity || 0) * Number(item.unit_price || 0)
-      }, 0)
-
-      const nextBudgetNumber = await getNextBudgetNumber(companyId)
-
-      const { data: budgetData, error: budgetError } = await supabase
-        .from('budgets')
-        .insert({
-          company_id: companyId,
-          client_id: order.client_id,
-          budget_number: nextBudgetNumber,
-          total_amount: total,
-          status: 'issued',
-        })
-        .select('id')
-        .single()
-
-      if (budgetError) throw budgetError
-      if (!budgetData?.id) throw new Error('No se pudo crear el presupuesto.')
-
-      const budgetId = budgetData.id
-
-      const itemsToInsert = budgetItems.map((item) => ({
-        company_id: item.company_id,
-        budget_id: budgetId,
-        product_id: item.product_id,
-        product_code: item.product_code,
-        product_name: item.product_name,
-        category: item.category,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-      }))
-
-      const { error: budgetItemsError } = await supabase
-        .from('budget_items')
-        .insert(itemsToInsert)
-
-      if (budgetItemsError) throw budgetItemsError
-
-      const { error: movementError } = await supabase
-        .from('account_movements')
-        .insert({
-          company_id: companyId,
-          client_id: order.client_id,
-          budget_id: budgetId,
-          movement_type: 'Venta',
-          debit: total,
-          credit: 0,
-          description: `Presupuesto 000-${nextBudgetNumber} generado desde pedido ${
-            order.order_code || `PED-${order.order_number}`
-          }`,
-        })
-
-      if (movementError) throw movementError
-
-      const { error: orderUpdateError } = await supabase
-        .from('orders')
-        .update({
-          status: 'confirmed',
-          budget_id: budgetId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('company_id', companyId)
-        .eq('id', order.id)
-        .eq('status', 'pending')
-
-      if (orderUpdateError) throw orderUpdateError
-
-      toast.success('Pedido convertido a presupuesto correctamente.')
-      router.push(`/presupuestos/${budgetId}`)
-    } catch (error: unknown) {
-      console.error('Error convirtiendo pedido a presupuesto:', error)
-
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo convertir el pedido en presupuesto.'
-      )
-    } finally {
-      setConverting(false)
-    }
-  }
 
   async function confirmPortalOrder() {
     if (!companyId || !order) return
@@ -464,28 +358,78 @@ export default function PedidoDetallePage() {
     setConverting(true)
 
     try {
-      const orderCode = getOrderLabel(order)
-      
-      // 1. Create Account Movement (Venta)
+      const orderLabel = getOrderLabel(order)
+      let budgetId = order.budget_id
+
+      // 1. Si no tiene presupuesto (ej: pedido directo), lo creamos
+      if (!budgetId) {
+        const budgetItems = buildBudgetItems()
+        const total = budgetItems.reduce((acc, item) => {
+          return acc + Number(item.quantity || 0) * Number(item.unit_price || 0)
+        }, 0)
+
+        const nextBudgetNumber = await getNextBudgetNumber(companyId)
+
+        const { data: budgetData, error: budgetError } = await supabase
+          .from('budgets')
+          .insert({
+            company_id: companyId,
+            client_id: order.client_id,
+            budget_number: nextBudgetNumber,
+            total_amount: total,
+            status: 'converted', // Nace convertido
+            seller_id: order.seller_id,
+          })
+          .select('id')
+          .single()
+
+        if (budgetError) throw budgetError
+        if (!budgetData?.id) throw new Error('No se pudo crear el presupuesto espejo.')
+
+        budgetId = budgetData.id
+
+        // Insertar ítems del presupuesto
+        const itemsToInsert = budgetItems.map((item) => ({
+          company_id: item.company_id,
+          budget_id: budgetId,
+          product_id: item.product_id,
+          product_code: item.product_code,
+          product_name: item.product_name,
+          category: item.category,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        }))
+
+        const { error: budgetItemsError } = await supabase
+          .from('budget_items')
+          .insert(itemsToInsert)
+
+        if (budgetItemsError) throw budgetItemsError
+      }
+
+      // 2. Crear Movimiento en Cuenta Corriente
+      const finalTotal = order.total_amount || totalAmount
       const { error: movementError } = await supabase
         .from('account_movements')
         .insert({
           company_id: companyId,
           client_id: order.client_id,
+          budget_id: budgetId,
           movement_date: new Date().toISOString().split('T')[0],
           movement_type: 'Venta',
-          description: `Venta - Pedido ${orderCode}`,
-          debit: order.total_amount || totalAmount,
+          description: `Venta - Pedido ${orderLabel}`,
+          debit: finalTotal,
           credit: 0,
         })
 
       if (movementError) throw movementError
 
-      // 2. Update Order status
+      // 3. Actualizar estado del Pedido
       const { error: orderError } = await supabase
         .from('orders')
         .update({
           status: 'confirmed',
+          budget_id: budgetId,
           updated_at: new Date().toISOString(),
         })
         .eq('company_id', companyId)
@@ -493,13 +437,14 @@ export default function PedidoDetallePage() {
 
       if (orderError) throw orderError
 
-      toast.success('Pedido confirmado correctamente.')
+      toast.success('Pedido confirmado y presupuesto generado correctamente.')
       await loadOrder()
     } catch (err: any) {
       console.error('Error confirmando pedido:', err)
-      toast.error('No se pudo confirmar el pedido.')
+      toast.error(err.message || 'No se pudo confirmar el pedido.')
     } finally {
       setConverting(false)
+      setShowConfirmModal(false)
     }
   }
 
@@ -917,13 +862,12 @@ export default function PedidoDetallePage() {
             </div>
 
             <h2 className="text-2xl font-black text-slate-900">
-              Convertir a presupuesto
+              Confirmar pedido
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-slate-500">
-              ¿Querés convertir este pedido en presupuesto? Se usarán los precios
-              cargados en esta pantalla y se generará la deuda en cuenta
-              corriente.
+              ¿Querés confirmar este pedido? Se generará un presupuesto espejo
+              automáticamente y se cargará la deuda en la cuenta corriente del cliente.
             </p>
 
             {productsWithoutPrice > 0 && (
@@ -944,10 +888,10 @@ export default function PedidoDetallePage() {
 
               <button
                 type="button"
-                onClick={convertToBudget}
+                onClick={confirmPortalOrder}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
               >
-                Convertir a presupuesto
+                Confirmar pedido
               </button>
             </div>
           </div>

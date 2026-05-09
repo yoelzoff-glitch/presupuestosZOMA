@@ -314,6 +314,20 @@ export default function NuevoPedidoPage() {
     return lastNumber + 1
   }
 
+  async function getNextBudgetNumber(currentCompanyId: string) {
+    const { data, error } = await supabase
+      .from('budgets')
+      .select('budget_number')
+      .eq('company_id', currentCompanyId)
+      .order('budget_number', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) throw error
+
+    return (data?.budget_number ?? 1949) + 1
+  }
+
   async function saveOrder() {
     if (!companyId) {
       toast.error('No se encontró la empresa.')
@@ -350,6 +364,43 @@ export default function NuevoPedidoPage() {
         .eq('id', userData.user?.id)
         .single()
 
+      // 1. Crear Presupuesto Espejo (Auditoría)
+      const nextBudgetNumber = await getNextBudgetNumber(companyId)
+      const { data: budgetData, error: budgetError } = await supabase
+        .from('budgets')
+        .insert({
+          company_id: companyId,
+          client_id: clientId,
+          budget_number: nextBudgetNumber,
+          total_amount: totalAmount,
+          status: 'converted', // Ya nace convertido
+          seller_id: profile?.role === 'vendedor' ? userData.user?.id : null,
+        })
+        .select('id')
+        .single()
+
+      if (budgetError) throw budgetError
+      if (!budgetData?.id) throw new Error('No se pudo crear el presupuesto de respaldo.')
+
+      // 2. Insertar ítems del presupuesto
+      const budgetItemsToInsert = items.map((item) => ({
+        company_id: companyId,
+        budget_id: budgetData.id,
+        product_id: item.product_id,
+        product_code: item.product_code,
+        product_name: item.product_name,
+        category: item.category,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+      }))
+
+      const { error: budgetItemsError } = await supabase
+        .from('budget_items')
+        .insert(budgetItemsToInsert)
+
+      if (budgetItemsError) throw budgetItemsError
+
+      // 3. Crear el Pedido vinculado al presupuesto
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -360,6 +411,7 @@ export default function NuevoPedidoPage() {
           status: 'pending',
           source: 'manual',
           total_amount: totalAmount,
+          budget_id: budgetData.id, // Vínculo obligatorio
           seller_id: profile?.role === 'vendedor' ? userData.user?.id : null,
           notes: notes.trim() || 'Pedido cargado manualmente',
         })
