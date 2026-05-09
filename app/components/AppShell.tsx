@@ -108,10 +108,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-24 items-center px-6">
+      <div className="flex h-20 items-center px-6">
         <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-xl shadow-blue-500/20">
-            <Sparkles size={22} />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-xl shadow-blue-500/20">
+            <Sparkles size={20} />
           </div>
 
           <div>
@@ -125,7 +125,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1.5 px-3 py-4 overflow-y-auto">
+      <nav className="flex-1 space-y-1 px-3 py-2 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20">
         {loading ? (
           <div className="flex justify-center p-8">
             <Loader2 className="animate-spin text-slate-700" size={20} />
@@ -140,7 +140,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
-                className={`group relative flex items-center gap-3.5 rounded-2xl px-4 py-3 text-sm font-bold transition-all duration-300 ${
+                className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2 text-sm font-bold transition-all duration-300 ${
                   active
                     ? 'bg-blue-600/10 text-white'
                     : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
@@ -167,18 +167,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </nav>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-3">
         <a
           href="https://wa.me/5491100000000?text=Hola,%20necesito%20ayuda%20o%20soporte%20técnico%20con%20el%20sistema"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full rounded-2xl bg-white/[0.03] border border-white/5 text-slate-300 px-4 py-3.5 text-sm font-bold transition hover:bg-blue-600 hover:text-white hover:border-blue-600"
+          className="flex items-center justify-center gap-2 w-full rounded-xl bg-white/[0.03] border border-white/5 text-slate-300 px-4 py-2.5 text-xs font-bold transition hover:bg-blue-600 hover:text-white hover:border-blue-600"
         >
-          <LifeBuoy size={18} />
+          <LifeBuoy size={16} />
           Soporte Técnico
         </a>
 
-        <div className="rounded-[2rem] border border-white/5 bg-gradient-to-b from-white/[0.03] to-transparent p-5">
+        <div className="rounded-2xl border border-white/5 bg-gradient-to-b from-white/[0.03] to-transparent p-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
               Estado

@@ -77,7 +77,7 @@ export default function VendedoresPage() {
       })
 
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Error desconocido')
+      if (!response.ok) throw new Error(data.detail || data.error || 'Error desconocido')
 
       toast.success('Vendedor creado correctamente')
       setShowModal(false)
@@ -86,7 +86,7 @@ export default function VendedoresPage() {
       setPassword('')
       fetchVendedores()
     } catch (error: any) {
-      toast.error(error.message)
+      toast.error(error.message || 'Error al crear vendedor')
     } finally {
       setCreating(false)
     }

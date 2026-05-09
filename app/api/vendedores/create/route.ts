@@ -69,7 +69,11 @@ export async function POST(req: NextRequest) {
     if (profileError) {
       // Cleanup auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-      return NextResponse.json({ error: 'Error creando perfil de vendedor', detail: profileError.message }, { status: 500 })
+      return NextResponse.json({ 
+        error: 'Error creando perfil en DB', 
+        detail: profileError.message,
+        code: profileError.code
+      }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true, user_id: authData.user.id })
