@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 type NotificationItem = {
   id: string
@@ -33,6 +34,7 @@ export default function NotificacionesPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
   const [errorMsg, setErrorMsg] = useState('')
+  const router = useRouter()
 
   useEffect(() => {
     loadPage()
@@ -42,9 +44,24 @@ export default function NotificacionesPage() {
     setLoading(true)
     setErrorMsg('')
 
-    const currentCompanyId = await getCompanyId()
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) {
+      router.push('/auth/login')
+      return
+    }
 
-    if (!currentCompanyId) {
+    const { data: profile } = await supabase
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userData.user.id)
+      .single()
+
+    if (profile?.role !== 'admin') {
+      router.push('/')
+      return
+    }
+
+    if (!profile?.company_id) {
       setCompanyId(null)
       setNotifications([])
       setErrorMsg('No se encontró la empresa del usuario.')
@@ -52,12 +69,13 @@ export default function NotificacionesPage() {
       return
     }
 
-    setCompanyId(currentCompanyId)
+    setCompanyId(profile.company_id)
 
     const { data, error } = await supabase
       .from('notifications')
-      .select('id, company_id, title, message, type, link, read, created_at')
-      .eq('company_id', currentCompanyId)
+      .select('*')
+      .eq('company_id', profile.company_id)
+      .or(`user_id.is.null,user_id.eq.${userData.user.id}`)
       .order('created_at', { ascending: false })
       .limit(200)
 

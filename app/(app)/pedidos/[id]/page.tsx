@@ -579,6 +579,19 @@ export default function PedidoDetallePage(): any {
       }
 
       toast.success('Pedido confirmado correctamente. Ahora podés pasarlo a cuenta corriente cuando desees.')
+
+      // NOTIFICACIÓN PARA EL VENDEDOR
+      if (order.seller_id) {
+        await supabase.from('notifications').insert({
+          company_id: companyId,
+          user_id: order.seller_id,
+          title: '¡Pedido Aceptado!',
+          message: `El Admin aceptó el pedido ${orderLabel}. Ya podés gestionarlo.`,
+          type: 'order_accepted',
+          link: `/pedidos/${order.id}`
+        })
+      }
+
       await loadOrder()
     } catch (err: any) {
       console.error('Error confirmando pedido:', err)
@@ -631,6 +644,19 @@ export default function PedidoDetallePage(): any {
     }
 
     toast.success('Pedido anulado correctamente.')
+
+    // NOTIFICACIÓN PARA EL VENDEDOR
+    if (order.seller_id) {
+      await supabase.from('notifications').insert({
+        company_id: companyId,
+        user_id: order.seller_id,
+        title: 'Pedido Anulado',
+        message: `El pedido ${orderLabel} fue anulado por el administrador.`,
+        type: 'order_cancelled',
+        link: `/pedidos/${order.id}`
+      })
+    }
+
     await loadOrder()
   }
 
