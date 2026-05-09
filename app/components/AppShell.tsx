@@ -94,7 +94,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     if (loading) return false
     // Vendedores cannot see Account Current, Settings or Sellers management
     if (profile?.role === 'vendedor') {
-      const hiddenForVendedores = ['/cuenta-corriente', '/configuracion', '/vendedores']
+      const hiddenForVendedores = ['/productos', '/cuenta-corriente', '/configuracion', '/vendedores']
       return !hiddenForVendedores.includes(item.href)
     }
     return true

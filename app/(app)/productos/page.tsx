@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import {
   Package,
@@ -36,6 +37,7 @@ type Product = {
 }
 
 export default function ProductosPage() {
+  const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -69,16 +71,32 @@ export default function ProductosPage() {
 
   async function loadProducts() {
     setErrorMsg('')
-    setLoading(true)
-
-    const companyId = await getCompanyId()
-
-    if (!companyId) {
-      setProducts([])
-      setErrorMsg('No se encontró la empresa del usuario.')
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError || !userData.user) {
+      setErrorMsg('No se pudo autenticar al usuario.')
       setLoading(false)
       return
     }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userData.user.id)
+      .single()
+
+    if (profileError || !profile?.company_id) {
+      setErrorMsg('No se encontró el perfil del usuario.')
+      setLoading(false)
+      return
+    }
+
+    // BLOQUEO DE SEGURIDAD: Solo admins
+    if (profile.role !== 'admin') {
+      router.replace('/')
+      return
+    }
+
+    const companyId = profile.company_id
 
     const { data, error } = await supabase
       .from('products')
