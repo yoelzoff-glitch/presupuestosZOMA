@@ -15,6 +15,9 @@ import {
   Percent,
   MessageSquare,
   Wallet,
+  Zap,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -29,6 +32,7 @@ type CompanyParams = {
   payment_methods: PaymentMethod[]
   tax_rate: number | null
   default_notes: string | null
+  enable_cascading_discounts: boolean
 }
 
 export default function ParametrosPage() {
@@ -54,7 +58,7 @@ export default function ParametrosPage() {
 
     const { data, error } = await supabase
       .from('companies')
-      .select('id, payment_methods, tax_rate, default_notes')
+      .select('id, payment_methods, tax_rate, default_notes, enable_cascading_discounts')
       .eq('id', companyId)
       .single()
 
@@ -73,7 +77,8 @@ export default function ParametrosPage() {
       
       setParams({
         ...data,
-        payment_methods: methods
+        payment_methods: methods,
+        enable_cascading_discounts: data.enable_cascading_discounts ?? false
       })
     }
     setLoading(false)
@@ -89,6 +94,7 @@ export default function ParametrosPage() {
         payment_methods: params.payment_methods,
         tax_rate: params.tax_rate,
         default_notes: params.default_notes,
+        enable_cascading_discounts: params.enable_cascading_discounts,
       })
       .eq('id', params.id)
 
@@ -136,7 +142,7 @@ export default function ParametrosPage() {
   if (!params) return null
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6 pb-20">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
@@ -208,6 +214,44 @@ export default function ParametrosPage() {
         </section>
 
         <div className="space-y-6">
+          {/* Descuentos en Cascada */}
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
+                  <Zap size={20} />
+                </div>
+                <h3 className="text-lg font-black text-slate-900">Descuentos</h3>
+              </div>
+
+              <button
+                onClick={() => setParams({ ...params, enable_cascading_discounts: !params.enable_cascading_discounts })}
+                className={`flex h-10 items-center gap-2 rounded-xl px-3 transition-all ${
+                  params.enable_cascading_discounts
+                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                    : 'bg-slate-50 text-slate-500 ring-1 ring-slate-200'
+                }`}
+              >
+                {params.enable_cascading_discounts ? (
+                  <>
+                    <ToggleRight size={24} className="text-emerald-600" />
+                    <span className="text-xs font-black uppercase tracking-wider">Activo</span>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft size={24} />
+                    <span className="text-xs font-black uppercase tracking-wider">Inactivo</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <p className="text-sm font-semibold text-slate-500 leading-relaxed">
+              Habilita la posibilidad de aplicar múltiples descuentos sucesivos a un producto 
+              (ejemplo: <span className="text-blue-600 font-bold">10+10+5</span>).
+            </p>
+          </section>
+
           {/* Impuestos */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-6 flex items-center gap-3">

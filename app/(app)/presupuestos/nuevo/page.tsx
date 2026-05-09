@@ -18,6 +18,7 @@ import {
   Tag,
   DollarSign,
   Calculator,
+  Zap,
 } from 'lucide-react'
 
 type Client = {
@@ -41,12 +42,14 @@ type BudgetItem = {
   category: string
   price: number
   quantity: number
+  discount_str?: string // Para guardar el registro del descuento aplicado
 }
 
 export default function NuevoPresupuestoPage() {
   const router = useRouter()
 
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [cascadingEnabled, setCascadingEnabled] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [items, setItems] = useState<BudgetItem[]>([])
@@ -57,6 +60,7 @@ export default function NuevoPresupuestoPage() {
 
   const [productQty, setProductQty] = useState('1')
   const [productPrice, setProductPrice] = useState('')
+  const [productDiscount, setProductDiscount] = useState('')
 
   const [manual, setManual] = useState({
     code: '',
@@ -64,6 +68,7 @@ export default function NuevoPresupuestoPage() {
     category: '',
     price: '',
     quantity: '1',
+    discount: '',
   })
 
   const [loading, setLoading] = useState(true)
@@ -104,7 +109,15 @@ export default function NuevoPresupuestoPage() {
       return
     }
 
-    // Permitimos ver todos los clientes activos para facilitar relevos/vacaciones
+    // Cargar config de empresa para descuentos en cascada
+    const { data: companyData } = await supabase
+      .from('companies')
+      .select('enable_cascading_discounts')
+      .eq('id', currentCompanyId)
+      .single()
+    
+    setCascadingEnabled(companyData?.enable_cascading_discounts ?? false)
+
     const clientsQuery = supabase
       .from('clients')
       .select('id, name, cuit')
@@ -129,6 +142,32 @@ export default function NuevoPresupuestoPage() {
 
     setLoading(false)
   }
+
+  // Función mágica para calcular descuentos en cascada
+  function calculateCascadingPrice(basePrice: number, discountStr: string): number {
+    if (!discountStr.trim()) return basePrice
+    
+    // Divide por +, - o espacios
+    const discounts = discountStr
+      .split(/[+\-\s]+/)
+      .map(d => parseFloat(d.replace(',', '.')))
+      .filter(d => !isNaN(d) && d !== 0)
+
+    let finalPrice = basePrice
+    for (const d of discounts) {
+      // Aplicamos descuento sucesivo
+      finalPrice = finalPrice * (1 - d / 100)
+    }
+    return finalPrice
+  }
+
+  // Efecto para actualizar el precio del producto seleccionado cuando cambia el descuento
+  useEffect(() => {
+    if (selectedProduct && cascadingEnabled) {
+      const discounted = calculateCascadingPrice(selectedProduct.cost_price, productDiscount)
+      setProductPrice(discounted.toFixed(2))
+    }
+  }, [productDiscount, selectedProduct, cascadingEnabled])
 
   const filteredProducts = useMemo(() => {
     const q = search.toLowerCase().trim()
@@ -167,6 +206,7 @@ export default function NuevoPresupuestoPage() {
     setSelectedProduct(product)
     setProductQty('1')
     setProductPrice(String(product.cost_price || 0))
+    setProductDiscount('')
   }
 
   function addProductItem() {
@@ -197,6 +237,7 @@ export default function NuevoPresupuestoPage() {
         category: selectedProduct.category || '',
         price,
         quantity,
+        discount_str: cascadingEnabled ? productDiscount : undefined
       },
     ])
 
@@ -204,11 +245,12 @@ export default function NuevoPresupuestoPage() {
     setSearch('')
     setProductQty('1')
     setProductPrice('')
+    setProductDiscount('')
   }
 
   function addManualItem() {
     const quantity = Number(manual.quantity)
-    const price = Number(manual.price)
+    let price = Number(manual.price)
 
     if (!manual.name.trim()) {
       toast.error('Ingresá el nombre del producto.')
@@ -218,6 +260,11 @@ export default function NuevoPresupuestoPage() {
     if (!quantity || quantity <= 0) {
       toast.error('Ingresá una cantidad válida.')
       return
+    }
+
+    // Si hay descuento manual en cascada, lo aplicamos al precio manual antes de guardar
+    if (cascadingEnabled && manual.discount.trim()) {
+      price = calculateCascadingPrice(price, manual.discount)
     }
 
     if (Number.isNaN(price) || price < 0) {
@@ -234,6 +281,7 @@ export default function NuevoPresupuestoPage() {
         category: manual.category.trim(),
         price,
         quantity,
+        discount_str: cascadingEnabled ? manual.discount : undefined
       },
     ])
 
@@ -243,6 +291,7 @@ export default function NuevoPresupuestoPage() {
       category: '',
       price: '',
       quantity: '1',
+      discount: '',
     })
   }
 
@@ -329,6 +378,7 @@ export default function NuevoPresupuestoPage() {
         category: item.category,
         quantity: item.quantity,
         unit_price: item.price,
+        discount_str: item.discount_str || null
       }))
 
       const { error: itemsError } = await supabase
@@ -512,9 +562,17 @@ export default function NuevoPresupuestoPage() {
 
             {selectedProduct && (
               <div className="mt-5 rounded-3xl border border-blue-100 bg-blue-50/50 p-5">
-                <p className="text-xs font-black uppercase tracking-widest text-blue-500">
-                  Producto seleccionado
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-black uppercase tracking-widest text-blue-500">
+                    Producto seleccionado
+                  </p>
+                  {cascadingEnabled && (
+                    <div className="flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-[10px] font-black uppercase text-white shadow-lg shadow-blue-600/20">
+                      <Zap size={10} />
+                      Cascada ON
+                    </div>
+                  )}
+                </div>
 
                 <h3 className="mt-2 text-xl font-black text-slate-950">
                   {selectedProduct.name}
@@ -540,7 +598,7 @@ export default function NuevoPresupuestoPage() {
                   />
                 </div>
 
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <Field
                     label="Cantidad"
                     value={productQty}
@@ -548,18 +606,34 @@ export default function NuevoPresupuestoPage() {
                     type="number"
                   />
 
+                  {cascadingEnabled && (
+                    <div className="relative group">
+                      <label className="mb-2 block text-sm font-black text-slate-700">
+                        Descuento (%)
+                      </label>
+                      <input
+                        value={productDiscount}
+                        onChange={(e) => setProductDiscount(e.target.value)}
+                        placeholder="10+10+5"
+                        className="w-full rounded-2xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                      <Zap size={14} className="absolute right-4 top-[2.6rem] text-blue-400 group-focus-within:text-blue-600" />
+                    </div>
+                  )}
+
                   <Field
-                    label="Precio unitario"
+                    label="Precio unitario final"
                     value={productPrice}
                     onChange={setProductPrice}
                     type="number"
+                    disabled={cascadingEnabled && !!productDiscount}
                   />
 
                   <div>
                     <label className="mb-2 block text-sm font-black text-slate-700">
-                      Total
+                      Subtotal
                     </label>
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-blue-700">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-100/50 px-4 py-3 text-sm font-black text-slate-900">
                       $
                       {(
                         Number(productQty || 0) * Number(productPrice || 0)
@@ -612,11 +686,20 @@ export default function NuevoPresupuestoPage() {
               </div>
 
               <Field
-                label="Precio unitario"
+                label="Precio lista / base"
                 value={manual.price}
                 onChange={(v) => setManual({ ...manual, price: v })}
                 type="number"
               />
+
+              {cascadingEnabled && (
+                <Field
+                  label="Descuento (%)"
+                  value={manual.discount}
+                  onChange={(v) => setManual({ ...manual, discount: v })}
+                  placeholder="Ej: 10+5"
+                />
+              )}
 
               <Field
                 label="Cantidad"
@@ -638,110 +721,92 @@ export default function NuevoPresupuestoPage() {
         </div>
 
         <aside className="space-y-6 lg:col-span-2">
-          <section className="sticky top-24 rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 p-6">
+          <section className="sticky top-24 rounded-[1.5rem] border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-50/50 p-6">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
                   <Calculator size={22} />
                 </div>
 
                 <div>
                   <h2 className="text-xl font-black text-slate-950">
-                    Carrito
+                    Resumen
                   </h2>
-                  <p className="text-sm text-slate-500">
-                    {items.length} productos agregados
+                  <p className="text-sm font-bold text-slate-500">
+                    {items.length} {items.length === 1 ? 'ítem' : 'ítems'} agregados
                   </p>
                 </div>
               </div>
             </div>
 
             {items.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
-                  <FileText size={26} />
+              <div className="p-10 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[2rem] bg-slate-100 text-slate-300">
+                  <FileText size={32} />
                 </div>
-                <h3 className="font-black text-slate-900">
-                  Presupuesto vacío
+                <h3 className="font-black text-slate-400">
+                  No hay productos
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Agregá productos para calcular el total.
-                </p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="max-h-[50vh] overflow-y-auto divide-y divide-slate-100 custom-scrollbar">
                 {items.map((item, index) => (
-                  <div key={index} className="p-5">
+                  <div key={index} className="group p-5 transition hover:bg-slate-50/50">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-black text-slate-950">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-black text-slate-950">
                           {item.name}
                         </p>
-                        <p className="mt-1 text-xs font-semibold text-slate-400">
-                          Código: {item.code || '-'} ·{' '}
-                          {item.category || 'Sin categoría'}
-                        </p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            {item.code || 'S/C'}
+                          </span>
+                          {item.discount_str && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-black text-blue-600">
+                              <Zap size={10} />
+                              -{item.discount_str}%
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <button
                         type="button"
                         onClick={() => removeItem(index)}
-                        className="rounded-xl border border-red-100 bg-red-50 p-2 text-red-600 transition hover:bg-red-100"
-                        aria-label="Eliminar producto"
+                        className="rounded-xl p-2 text-slate-300 transition hover:bg-red-50 hover:text-red-600"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={18} />
                       </button>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-black text-slate-500">
-                          Cant.
-                        </label>
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            updateItem(index, 'quantity', e.target.value)
-                          }
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white"
-                        />
+                    <div className="mt-4 flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+                      <div className="text-center">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cant</p>
+                        <p className="text-sm font-black text-slate-900">{item.quantity}</p>
                       </div>
-
-                      <div>
-                        <label className="mb-1 block text-xs font-black text-slate-500">
-                          Precio
-                        </label>
-                        <input
-                          type="number"
-                          value={item.price}
-                          onChange={(e) =>
-                            updateItem(index, 'price', e.target.value)
-                          }
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white"
-                        />
+                      <div className="h-4 w-px bg-slate-100" />
+                      <div className="text-center">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">P. Unit</p>
+                        <p className="text-sm font-black text-slate-900">${item.price.toLocaleString('es-AR')}</p>
                       </div>
-                    </div>
-
-                    <div className="mt-3 rounded-2xl bg-slate-50 p-3 text-right">
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                        Total ítem
-                      </p>
-                      <p className="text-lg font-black text-blue-700">
-                        ${(item.price * item.quantity).toLocaleString('es-AR')}
-                      </p>
+                      <div className="h-4 w-px bg-slate-100" />
+                      <div className="text-right">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Subtotal</p>
+                        <p className="text-sm font-black text-blue-600">${(item.price * item.quantity).toLocaleString('es-AR')}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="border-t border-slate-200 p-6">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-black uppercase tracking-widest text-slate-400">
-                  Total
-                </p>
-                <p className="text-3xl font-black text-slate-950">
+            <div className="border-t-2 border-slate-100 bg-slate-50 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">Total presupuesto</p>
+                  <p className="text-sm font-bold text-slate-500">Impuestos incluidos</p>
+                </div>
+                <p className="text-4xl font-black tracking-tight text-slate-950">
                   ${total.toLocaleString('es-AR')}
                 </p>
               </div>
@@ -750,9 +815,9 @@ export default function NuevoPresupuestoPage() {
                 type="button"
                 onClick={saveBudget}
                 disabled={!canSave}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-xl shadow-blue-900/20 transition hover:bg-blue-700 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Save size={18} />
+                <Save size={20} />
                 {saveButtonText}
               </button>
             </div>
@@ -768,11 +833,15 @@ function Field({
   value,
   onChange,
   type = 'text',
+  placeholder = '',
+  disabled = false,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   type?: string
+  placeholder?: string
+  disabled?: boolean
 }) {
   return (
     <div>
@@ -783,8 +852,10 @@ function Field({
       <input
         type={type}
         value={value}
+        disabled={disabled}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
       />
     </div>
   )
@@ -800,12 +871,18 @@ function Info({
   value: string
 }) {
   return (
-    <div className="rounded-2xl bg-white p-3">
-      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
-        <Icon size={14} />
-        {label}
+    <div className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm border border-slate-100">
+      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+        <Icon size={16} />
       </div>
-      <p className="mt-1 font-black text-slate-800">{value}</p>
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">
+          {label}
+        </p>
+        <p className="text-xs font-black text-slate-900 truncate">
+          {value}
+        </p>
+      </div>
     </div>
   )
 }

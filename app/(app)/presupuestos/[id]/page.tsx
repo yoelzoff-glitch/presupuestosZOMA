@@ -22,6 +22,7 @@ import {
   MapPin,
   Wallet,
   ClipboardList,
+  Zap,
 } from 'lucide-react'
 
 type Budget = {
@@ -60,6 +61,7 @@ type BudgetItem = {
   quantity: number
   unit_price: number
   total: number | null
+  discount_str: string | null
 }
 
 export default function PresupuestoDetallePage() {
@@ -146,21 +148,6 @@ export default function PresupuestoDetallePage() {
       setCompany(companyData as Company)
     }
 
-    const { data: movementData, error: movementError } = await supabase
-      .from('account_movements')
-      .select('id')
-      .eq('budget_id', data.id)
-      .eq('movement_type', 'Venta')
-      .maybeSingle()
-
-    if (movementError) {
-      toast.error(movementError.message)
-      setLoading(false)
-      return
-    }
-
-    setAlreadyInAccount(!!movementData)
-
     const { data: itemsData, error: itemsError } = await supabase
       .from('budget_items')
       .select(`
@@ -170,7 +157,8 @@ export default function PresupuestoDetallePage() {
         category,
         quantity,
         unit_price,
-        total
+        total,
+        discount_str
       `)
       .eq('budget_id', id)
       .order('created_at', { ascending: true })
@@ -249,11 +237,13 @@ export default function PresupuestoDetallePage() {
       const orderItems = items.map((item) => ({
         company_id: budget.company_id,
         order_id: orderData.id,
-        product_id: item.product_code ? null : null, // This is simplified
+        product_id: null, 
         product_code: item.product_code,
         product_name: item.product_name,
         category: item.category,
         quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_str: item.discount_str,
       }))
 
       const { error: itemsError } = await supabase
@@ -270,7 +260,6 @@ export default function PresupuestoDetallePage() {
       
       toast.success(successMsg)
 
-      // Notificación para el Admin si lo pide un vendedor
       if (role === 'vendedor') {
         await supabase.from('notifications').insert({
           company_id: budget.company_id,
@@ -280,9 +269,6 @@ export default function PresupuestoDetallePage() {
           link: `/pedidos/${orderData.id}`
         })
       }
-
-      // Optional: Redirect to order? 
-      // router.push(`/pedidos/${orderData.id}`)
     } catch (err: any) {
       toast.error(err?.message || 'Error al convertir a pedido.')
     } finally {
@@ -646,9 +632,6 @@ export default function PresupuestoDetallePage() {
                     <CalendarDays size={14} />
                     Fecha: {budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'}
                   </p>
-                  <div className="print-hidden print:hidden">
-                    <StatusBadge status={budget.status || 'issued'} />
-                  </div>
                 </div>
               </div>
             </div>
@@ -691,7 +674,7 @@ export default function PresupuestoDetallePage() {
               </div>
             ) : (
               <>
-                <div className="print-table-wrap hidden overflow-x-auto rounded-2xl border border-slate-200 lg:block">
+                <div className="print-table-wrap overflow-x-auto rounded-2xl border border-slate-200">
                   <table className="print-table w-full min-w-[850px]">
                     <thead className="bg-slate-50">
                       <tr>
@@ -718,13 +701,21 @@ export default function PresupuestoDetallePage() {
                           >
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-3">
-                                <div className="print-hidden flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 print:hidden">
+                                <div className="print-hidden flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 print:hidden">
                                   <Package size={19} />
                                 </div>
 
-                                <p className="font-black text-slate-950">
-                                  {item.product_name}
-                                </p>
+                                <div>
+                                  <p className="font-black text-slate-950">
+                                    {item.product_name}
+                                  </p>
+                                  {item.discount_str && (
+                                    <div className="mt-1 flex items-center gap-1 text-[10px] font-black text-blue-600">
+                                      <Zap size={10} />
+                                      Desc. aplicado: -{item.discount_str}%
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </td>
 
@@ -760,90 +751,84 @@ export default function PresupuestoDetallePage() {
                   </table>
                 </div>
 
-                <div className="space-y-3 lg:hidden print-hidden print:hidden">
-                  {items.map((item) => {
-                    const itemTotal =
-                      item.total ??
-                      Number(item.quantity || 0) * Number(item.unit_price || 0)
+                <div className="mt-8 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+                  <div className="max-w-md">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+                      Notas adicionales
+                    </h3>
+                    <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+                      {company?.default_notes || 'Sin notas adicionales.'}
+                    </p>
+                  </div>
 
-                    return (
-                      <article
-                        key={item.id}
-                        className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                            <Package size={20} />
-                          </div>
-
-                          <div>
-                            <h3 className="font-black text-slate-950">
-                              {item.product_name}
-                            </h3>
-
-                            <p className="mt-1 text-xs font-semibold text-slate-400">
-                              Código: {item.product_code || '-'} ·{' '}
-                              {item.category || 'Sin categoría'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 grid grid-cols-3 gap-3">
-                          <MiniData
-                            label="Cant."
-                            value={Number(item.quantity || 0).toLocaleString(
-                              'es-AR'
-                            )}
-                          />
-
-                          <MiniData
-                            label="Precio"
-                            value={`$${Number(
-                              item.unit_price || 0
-                            ).toLocaleString('es-AR')}`}
-                          />
-
-                          <MiniData
-                            label="Total"
-                            value={`$${Number(itemTotal || 0).toLocaleString(
-                              'es-AR'
-                            )}`}
-                          />
-                        </div>
-                      </article>
-                    )
-                  })}
+                  <div className="print-total shrink-0 rounded-3xl bg-slate-950 p-8 text-white shadow-2xl">
+                    <p className="print-total-label text-xs font-black uppercase tracking-widest text-blue-400">
+                      Total a pagar
+                    </p>
+                    <p className="print-total-number mt-2 text-4xl font-black">
+                      ${finalTotal.toLocaleString('es-AR')}
+                    </p>
+                  </div>
                 </div>
               </>
             )}
-
-            <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              {company?.default_notes && (
-                <div className="max-w-xl rounded-2xl bg-slate-50 p-5">
-                  <h4 className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
-                    <Clock3 size={14} />
-                    Notas y condiciones
-                  </h4>
-                  <p className="whitespace-pre-line text-sm font-medium text-slate-600">
-                    {company.default_notes}
-                  </p>
-                </div>
-              )}
-
-              <div className="print-total ml-auto w-full rounded-3xl bg-slate-950 p-6 text-white md:w-96">
-                <p className="print-total-label text-sm font-black uppercase tracking-widest text-blue-200">
-                  Total presupuesto
-                </p>
-
-                <p className="print-total-number mt-2 text-4xl font-black">
-                  ${finalTotal.toLocaleString('es-AR')}
-                </p>
-              </div>
-            </div>
           </div>
         </section>
+
+        <div className="flex flex-col gap-4 py-8 print-hidden md:flex-row md:justify-end">
+          <Link
+            href="/presupuestos"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+          >
+            <ArrowLeft size={18} />
+            Volver
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-8 py-4 text-sm font-black text-white shadow-xl shadow-blue-900/20 transition hover:bg-blue-500"
+          >
+            <Printer size={18} />
+            Imprimir Presupuesto
+          </button>
+        </div>
       </div>
     </>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const configs: Record<
+    string,
+    { label: string; icon: any; className: string }
+  > = {
+    issued: {
+      label: 'Emitido',
+      icon: Clock3,
+      className: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    },
+    approved: {
+      label: 'Aprobado',
+      icon: CheckCircle2,
+      className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    },
+    cancelled: {
+      label: 'Anulado',
+      icon: XCircle,
+      className: 'bg-red-500/10 text-red-400 border-red-500/20',
+    },
+  }
+
+  const config = configs[status] || configs.issued
+
+  return (
+    <div
+      className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-widest ${config.className}`}
+    >
+      <config.icon size={16} />
+      {config.label}
+    </div>
   )
 }
 
@@ -859,20 +844,21 @@ function InfoCard({
   detail: string
 }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-          <Icon size={22} />
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex items-center gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+          <Icon size={24} />
         </div>
-
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-500">{title}</p>
-
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+            {title}
+          </p>
           <h2 className="truncate text-xl font-black text-slate-950">
             {value}
           </h2>
-
-          <p className="text-xs font-semibold text-slate-400">{detail}</p>
+          <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
+            {detail}
+          </p>
         </div>
       </div>
     </div>
@@ -889,25 +875,16 @@ function ClientData({
   value: string
 }) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
-        <Icon size={14} className="print-hidden print:hidden" />
-        {label}
-      </p>
-
-      <p className="mt-1 font-black text-slate-900">{value}</p>
-    </div>
-  )
-}
-
-function MiniData({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-3">
-      <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-        {label}
-      </p>
-
-      <p className="mt-1 font-black text-slate-900">{value}</p>
+    <div className="flex items-start gap-3">
+      <div className="mt-1 text-blue-600 print-hidden print:hidden">
+        <Icon size={18} />
+      </div>
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          {label}
+        </p>
+        <p className="text-sm font-bold text-slate-800">{value}</p>
+      </div>
     </div>
   )
 }
@@ -921,46 +898,22 @@ function TableHead({
 }) {
   return (
     <th
-      className={`px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500 ${align === 'right' ? 'text-right' : 'text-left'
-        }`}
+      className={`px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ${
+        align === 'right' ? 'text-right' : 'text-left'
+      }`}
     >
       {children}
     </th>
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'cancelled') {
-    return (
-      <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-700">
-        <XCircle size={17} />
-        Anulado
-      </span>
-    )
-  }
-
-  if (status === 'draft') {
-    return (
-      <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700">
-        <Clock3 size={17} />
-        Borrador
-      </span>
-    )
-  }
-
-  if (status === 'approved') {
-    return (
-      <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-black text-blue-700">
-        <CheckCircle2 size={17} />
-        Aprobado
-      </span>
-    )
-  }
-
+function MiniData({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
-      <CheckCircle2 size={17} />
-      Emitido
-    </span>
+    <div className="rounded-2xl bg-slate-50 p-3">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+        {label}
+      </p>
+      <p className="text-sm font-black text-slate-900">{value}</p>
+    </div>
   )
 }
