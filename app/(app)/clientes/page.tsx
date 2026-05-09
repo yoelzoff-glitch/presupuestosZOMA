@@ -15,6 +15,8 @@ import {
   Loader2,
   UserPlus,
   CalendarDays,
+  Filter,
+  UserCheck,
 } from 'lucide-react'
 
 type Client = {
@@ -30,57 +32,88 @@ type Client = {
   } | null
 }
 
+type SellerProfile = {
+  id: string
+  full_name: string
+}
+
 export default function ClientesPage() {
   const [clients, setClients] = useState<Client[]>([])
+  const [sellers, setSellers] = useState<SellerProfile[]>([])
   const [search, setSearch] = useState('')
+  const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [myId, setMyId] = useState<string | null>(null)
+  const [role, setRole] = useState<string | null>(null)
 
   useEffect(() => {
-    loadClients()
+    loadInitialData()
   }, [])
 
-  async function getCompanyId() {
-    const { data: userData, error: userError } = await supabase.auth.getUser()
-
-    if (userError || !userData.user) return null
-
-    const { data: profile, error: profileError } = await supabase
-      .from('users_profiles')
-      .select('company_id')
-      .eq('id', userData.user.id)
-      .single()
-
-    if (profileError || !profile?.company_id) return null
-
-    return profile.company_id as string
-  }
-
-  async function loadClients() {
-    setErrorMsg('')
+  async function loadInitialData() {
     setLoading(true)
-
-    const { data: userData, error: userError } = await supabase.auth.getUser()
-    if (userError || !userData.user) {
+    
+    // 1. Obtener usuario actual y su perfil
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) {
       setErrorMsg('No se pudo autenticar al usuario.')
       setLoading(false)
       return
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('users_profiles')
-      .select('company_id, role')
+      .select('company_id, role, id')
       .eq('id', userData.user.id)
       .single()
 
-    if (profileError || !profile?.company_id) {
+    if (!profile?.company_id) {
       setErrorMsg('No se encontró el perfil del usuario.')
       setLoading(false)
       return
     }
 
-    let query = supabase
+    setMyId(profile.id)
+    setRole(profile.role)
+
+    // 2. Cargar todos los vendedores de la empresa para el filtro
+    const { data: sellersData } = await supabase
+      .from('users_profiles')
+      .select('id, full_name')
+      .eq('company_id', profile.company_id)
+      .order('full_name')
+
+    setSellers(sellersData || [])
+
+    // 3. Establecer filtro inicial: si es vendedor, se pone a sí mismo
+    if (profile.role === 'vendedor') {
+      setSellerFilter(profile.id)
+    } else {
+      setSellerFilter('all')
+    }
+
+    // 4. Cargar clientes
+    await loadClients(profile.company_id)
+  }
+
+  async function loadClients(companyId?: string) {
+    let cid = companyId
+    
+    if (!cid) {
+      const { data: userData } = await supabase.auth.getUser()
+      const { data: profile } = await supabase
+        .from('users_profiles')
+        .select('company_id')
+        .eq('id', userData.user?.id)
+        .single()
+      cid = profile?.company_id
+    }
+
+    if (!cid) return
+
+    const { data, error } = await supabase
       .from('clients')
       .select(`
         id, 
@@ -92,23 +125,15 @@ export default function ClientesPage() {
         seller_id,
         seller:users_profiles!seller_id(full_name)
       `)
-      .eq('company_id', profile.company_id)
-
-    // If vendor, only show their own clients
-    if (profile.role === 'vendedor') {
-      query = query.eq('seller_id', userData.user.id)
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false })
+      .eq('company_id', cid)
+      .order('created_at', { ascending: false })
 
     if (error) {
       setErrorMsg('Error al cargar clientes.')
-      setClients([])
-      setLoading(false)
-      return
+    } else {
+      setClients((data as any) || [])
     }
-
-    setClients((data as any) || [])
+    
     setLoading(false)
   }
 
@@ -121,16 +146,17 @@ export default function ClientesPage() {
   const filteredClients = useMemo(() => {
     const q = search.toLowerCase().trim()
 
-    if (!q) return clients
-
     return clients.filter((client) => {
-      return (
+      const matchesSearch = !q || 
         client.name?.toLowerCase().includes(q) ||
         client.cuit?.toLowerCase().includes(q) ||
         client.address?.toLowerCase().includes(q)
-      )
+
+      const matchesSeller = sellerFilter === 'all' || client.seller_id === sellerFilter
+
+      return matchesSearch && matchesSeller
     })
-  }, [clients, search])
+  }, [clients, search, sellerFilter])
 
   const activeClients = clients.filter((client) => client.active !== false)
   const inactiveClients = clients.filter((client) => client.active === false)
@@ -158,8 +184,7 @@ export default function ClientesPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Alta, consulta y edición de clientes para presupuestos y cuenta
-              corriente.
+              Alta, consulta y edición de clientes. Ahora podés ver los clientes de tus compañeros en caso de ser necesario.
             </p>
           </div>
 
@@ -222,7 +247,7 @@ export default function ClientesPage() {
               </h2>
 
               <p className="text-sm text-slate-500">
-                Buscá por nombre, CUIT o dirección.
+                Buscá por nombre, CUIT o filtrá por vendedor.
               </p>
             </div>
 
@@ -256,6 +281,29 @@ export default function ClientesPage() {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
+              <Filter size={14} />
+              Filtrar por Vendedor:
+            </div>
+
+            <div className="relative">
+              <UserCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" />
+              <select
+                value={sellerFilter}
+                onChange={(e) => setSellerFilter(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              >
+                <option value="all">Todos los vendedores</option>
+                {sellers.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name} {s.id === myId ? '(Yo)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {search && (
             <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
               Resultado: {filteredClients.length} cliente
@@ -278,7 +326,7 @@ export default function ClientesPage() {
                     <TableHead>Cliente</TableHead>
                     <TableHead>CUIT</TableHead>
                     <TableHead>Dirección</TableHead>
-                    <TableHead>Vendedor</TableHead>
+                    <TableHead>Vendedor Asignado</TableHead>
                     <TableHead>Alta</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead align="right">Acción</TableHead>
@@ -305,10 +353,10 @@ export default function ClientesPage() {
 
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                          <div className="h-6 w-6 flex items-center justify-center rounded-lg bg-blue-50 text-[10px] text-blue-600 border border-blue-100">
+                          <div className="h-7 w-7 flex items-center justify-center rounded-lg bg-blue-50 text-[10px] font-black text-blue-600 border border-blue-200">
                             {client.seller?.full_name?.charAt(0) || 'A'}
                           </div>
-                          {client.seller?.full_name || 'Admin'}
+                          {client.seller?.full_name || 'Sin asignar'}
                         </div>
                       </td>
 
@@ -352,9 +400,9 @@ function ClientMobileCard({ client }: { client: Client }) {
       <div className="mt-4 space-y-3">
         <CuitBadge cuit={client.cuit} />
         <AddressText address={client.address} />
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-          <span className="text-slate-400">Vendedor:</span>
-          {client.seller?.full_name || 'Admin'}
+        <div className="flex items-center gap-2 rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-600">
+          <span className="text-slate-400 uppercase tracking-widest text-[9px]">Vendedor:</span>
+          {client.seller?.full_name || 'Sin asignar'}
         </div>
         <DateText date={client.created_at} />
       </div>
@@ -376,7 +424,7 @@ function ClientIdentity({ client }: { client: Client }) {
       <div className="min-w-0">
         <p className="truncate font-black text-slate-950">{client.name}</p>
         <p className="text-xs font-semibold text-slate-400">
-          ID cliente
+          Ficha de cliente
         </p>
       </div>
     </div>
@@ -537,7 +585,7 @@ function EmptyState({ hasSearch }: { hasSearch: boolean }) {
 
       <p className="mt-1 text-sm text-slate-500">
         {hasSearch
-          ? 'Probá cambiar la búsqueda o limpiarla.'
+          ? 'Probá cambiar la búsqueda o el filtro de vendedor.'
           : 'Creá un cliente nuevo para empezar a trabajar.'}
       </p>
 

@@ -104,14 +104,11 @@ export default function NuevoPresupuestoPage() {
       return
     }
 
-    let clientsQuery = supabase
+    // Permitimos ver todos los clientes activos para facilitar relevos/vacaciones
+    const clientsQuery = supabase
       .from('clients')
       .select('id, name, cuit')
       .eq('company_id', currentCompanyId)
-
-    if (context?.role === 'vendedor') {
-      clientsQuery = clientsQuery.eq('seller_id', context.userId)
-    }
 
     const [clientsRes, productsRes] = await Promise.all([
       clientsQuery.order('name', { ascending: true }),

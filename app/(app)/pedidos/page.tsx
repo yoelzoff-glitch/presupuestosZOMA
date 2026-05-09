@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
-import { getUserCompanyId } from '@/lib/getUserCompany'
 import {
   ClipboardList,
   Plus,
@@ -19,6 +18,8 @@ import {
   Package,
   Globe2,
   UserRoundCog,
+  Filter,
+  UserCheck,
 } from 'lucide-react'
 
 type Order = {
@@ -40,13 +41,20 @@ type Order = {
   } | null
 }
 
+type SellerProfile = {
+  id: string
+  full_name: string
+}
+
 export default function PedidosPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
+  const [sellers, setSellers] = useState<SellerProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'pending' | 'confirmed' | 'cancelled'
   >('all')
@@ -54,37 +62,57 @@ export default function PedidosPage() {
     'all'
   )
   const [errorMsg, setErrorMsg] = useState('')
+  const [myId, setMyId] = useState<string | null>(null)
 
   useEffect(() => {
-    loadData()
+    loadInitialData()
   }, [])
 
-  async function loadData() {
+  async function loadInitialData() {
     setLoading(true)
     setErrorMsg('')
 
-    const { data: userData, error: userError } = await supabase.auth.getUser()
-    if (userError || !userData.user) {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) {
       setErrorMsg('No se pudo autenticar al usuario.')
       setLoading(false)
       return
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('users_profiles')
-      .select('company_id, role')
+      .select('company_id, role, id')
       .eq('id', userData.user.id)
       .single()
 
-    if (profileError || !profile?.company_id) {
+    if (!profile?.company_id) {
       setErrorMsg('No se encontró el perfil del usuario.')
       setLoading(false)
       return
     }
 
     setCompanyId(profile.company_id)
+    setMyId(profile.id)
 
-    let query = supabase
+    // Cargar vendedores para el filtro
+    const { data: sellersData } = await supabase
+      .from('users_profiles')
+      .select('id, full_name')
+      .eq('company_id', profile.company_id)
+      .order('full_name')
+
+    setSellers(sellersData || [])
+
+    // Filtro inicial
+    if (profile.role === 'vendedor') {
+      setSellerFilter(profile.id)
+    }
+
+    await fetchOrders(profile.company_id)
+  }
+
+  async function fetchOrders(cid: string) {
+    const { data, error } = await supabase
       .from('orders')
       .select(`
         id,
@@ -99,42 +127,33 @@ export default function PedidosPage() {
         notes,
         created_at,
         total_amount,
+        seller_id,
         clients (
           name,
           cuit
         )
       `)
-      .eq('company_id', profile.company_id)
-
-    // If vendor, only show their own orders
-    if (profile.role === 'vendedor') {
-      query = query.eq('seller_id', userData.user.id)
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false })
+      .eq('company_id', cid)
+      .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error cargando pedidos:', error)
       setErrorMsg('Error cargando pedidos.')
-      setOrders([])
-      setLoading(false)
-      return
+    } else {
+      const normalized = (data || []).map((item: any) => ({
+        ...item,
+        clients: Array.isArray(item.clients)
+          ? item.clients[0] || null
+          : item.clients || null,
+      }))
+      setOrders(normalized)
     }
-
-    const normalized = (data || []).map((item: any) => ({
-      ...item,
-      clients: Array.isArray(item.clients)
-        ? item.clients[0] || null
-        : item.clients || null,
-    }))
-
-    setOrders(normalized)
     setLoading(false)
   }
 
   async function refreshOrders() {
+    if (!companyId) return
     setRefreshing(true)
-    await loadData()
+    await fetchOrders(companyId)
     setRefreshing(false)
   }
 
@@ -167,20 +186,17 @@ export default function PedidosPage() {
       .eq('status', 'pending')
 
     if (error) {
-      console.error('Error anulando pedido:', error)
       alert('No se pudo anular el pedido.')
-      setCancellingId(null)
-      return
+    } else {
+      await fetchOrders(companyId)
     }
-
-    await loadData()
     setCancellingId(null)
   }
 
   const filteredOrders = useMemo(() => {
     const q = search.toLowerCase().trim()
 
-    return orders.filter((order) => {
+    return orders.filter((order: any) => {
       const code = order.order_code || `PED-${order.order_number}`
 
       const matchesSearch =
@@ -198,9 +214,11 @@ export default function PedidosPage() {
       const matchesSource =
         sourceFilter === 'all' || orderSource === sourceFilter
 
-      return matchesSearch && matchesStatus && matchesSource
+      const matchesSeller = sellerFilter === 'all' || order.seller_id === sellerFilter
+
+      return matchesSearch && matchesStatus && matchesSource && matchesSeller
     })
-  }, [orders, search, statusFilter, sourceFilter])
+  }, [orders, search, statusFilter, sourceFilter, sellerFilter])
 
   const pendingCount = orders.filter((order) => order.status === 'pending').length
   const confirmedCount = orders.filter(
@@ -229,8 +247,7 @@ export default function PedidosPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Los pedidos ingresan como pendientes. Podés distinguir si llegaron
-              desde el portal o si fueron cargados manualmente.
+              Gestión centralizada de pedidos. Ahora podés alternar entre tus pedidos y los de tus compañeros para mayor colaboración.
             </p>
           </div>
 
@@ -301,7 +318,7 @@ export default function PedidosPage() {
               </h2>
 
               <p className="text-sm text-slate-500">
-                Buscá por número, cliente, CUIT, nota u origen.
+                Filtrá por estado, origen o vendedor asignado.
               </p>
             </div>
 
@@ -316,39 +333,32 @@ export default function PedidosPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar pedido..."
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:w-72"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:w-64"
                 />
               </div>
 
               <select
+                value={sellerFilter}
+                onChange={(e) => setSellerFilter(e.target.value)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              >
+                <option value="all">Todos los vendedores</option>
+                {sellers.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name} {s.id === myId ? '(Yo)' : ''}
+                  </option>
+                ))}
+              </select>
+
+              <select
                 value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(
-                    e.target.value as
-                      | 'all'
-                      | 'pending'
-                      | 'confirmed'
-                      | 'cancelled'
-                  )
-                }
+                onChange={(e) => setStatusFilter(e.target.value as any)}
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
               >
                 <option value="all">Todos los estados</option>
                 <option value="pending">Pendientes</option>
                 <option value="confirmed">Convertidos</option>
                 <option value="cancelled">Anulados</option>
-              </select>
-
-              <select
-                value={sourceFilter}
-                onChange={(e) =>
-                  setSourceFilter(e.target.value as 'all' | 'portal' | 'manual')
-                }
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-              >
-                <option value="all">Todos los orígenes</option>
-                <option value="portal">Portal</option>
-                <option value="manual">Manual</option>
               </select>
 
               <button
@@ -730,7 +740,7 @@ function EmptyState() {
       </h3>
 
       <p className="mt-1 text-sm text-slate-500">
-        Cuando ingrese un pedido manual o desde el portal, aparecerá acá como pendiente.
+        Probá cambiando el filtro o los términos de búsqueda.
       </p>
 
       <Link

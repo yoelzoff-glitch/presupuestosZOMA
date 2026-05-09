@@ -112,15 +112,12 @@ export default function NuevoPedidoPage() {
     const currentCompanyId = profile.company_id
     setCompanyId(currentCompanyId)
 
-    let clientsQuery = supabase
+    // Quitamos el filtro restrictivo de seller_id para permitir colaboración
+    const clientsQuery = supabase
       .from('clients')
       .select('id, name, cuit, address')
       .eq('company_id', currentCompanyId)
       .eq('active', true)
-
-    if (profile.role === 'vendedor') {
-      clientsQuery = clientsQuery.eq('seller_id', userData.user.id)
-    }
 
     const [clientsRes, productsRes] = await Promise.all([
       clientsQuery.order('name', { ascending: true }),
