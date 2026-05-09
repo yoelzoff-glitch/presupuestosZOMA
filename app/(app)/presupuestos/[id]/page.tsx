@@ -241,7 +241,7 @@ export default function PresupuestoDetallePage() {
 
       setAssociatedOrderId(orderData.id)
       toast.success('¡Presupuesto convertido a pedido correctamente!')
-      
+
       // Optional: Redirect to order? 
       // router.push(`/pedidos/${orderData.id}`)
     } catch (err: any) {
@@ -512,11 +512,10 @@ export default function PresupuestoDetallePage() {
                   Boolean(associatedOrderId) ||
                   budget.status === 'cancelled'
                 }
-                className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg transition ${
-                  associatedOrderId || budget.status === 'cancelled'
+                className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg transition ${associatedOrderId || budget.status === 'cancelled'
                     ? 'cursor-not-allowed bg-slate-500 shadow-slate-900/20'
                     : 'bg-blue-600 shadow-blue-900/30 hover:bg-blue-500'
-                }`}
+                  }`}
               >
                 {convertingToOrder ? (
                   <Loader2 size={18} className="animate-spin" />
@@ -526,8 +525,8 @@ export default function PresupuestoDetallePage() {
                 {associatedOrderId
                   ? 'Ya es un pedido'
                   : convertingToOrder
-                  ? 'Convirtiendo...'
-                  : 'Convertir a pedido'}
+                    ? 'Convirtiendo...'
+                    : 'Convertir a pedido'}
               </button>
 
               <button
@@ -602,13 +601,13 @@ export default function PresupuestoDetallePage() {
                   #{budgetLabel}
                 </h3>
                 <div className="mt-3 flex flex-col gap-1 text-sm font-bold text-slate-500 md:items-end">
-                   <p className="flex items-center gap-2">
-                     <CalendarDays size={14} />
-                     Fecha: {budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'}
-                   </p>
-                   <div className="print-hidden print:hidden">
-                     <StatusBadge status={budget.status || 'issued'} />
-                   </div>
+                  <p className="flex items-center gap-2">
+                    <CalendarDays size={14} />
+                    Fecha: {budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'}
+                  </p>
+                  <div className="print-hidden print:hidden">
+                    <StatusBadge status={budget.status || 'issued'} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -669,7 +668,7 @@ export default function PresupuestoDetallePage() {
                         const itemTotal =
                           item.total ??
                           Number(item.quantity || 0) *
-                            Number(item.unit_price || 0)
+                          Number(item.unit_price || 0)
 
                         return (
                           <tr
@@ -881,9 +880,8 @@ function TableHead({
 }) {
   return (
     <th
-      className={`px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500 ${
-        align === 'right' ? 'text-right' : 'text-left'
-      }`}
+      className={`px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500 ${align === 'right' ? 'text-right' : 'text-left'
+        }`}
     >
       {children}
     </th>
