@@ -35,7 +35,10 @@ export default function GlobalChatBubble() {
   const [sending, setSending] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [unreadCount, setUnreadCount] = useState(0)
+  
+  // Estado para rastrear qué canales tienen mensajes no leídos
+  // null = Muro General, string = ID del usuario
+  const [unreadChannels, setUnreadChannels] = useState<Set<string | null>>(new Set())
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const selectedUserRef = useRef<ChatUser | null>(null)
@@ -65,10 +68,12 @@ export default function GlobalChatBubble() {
         },
         async (payload) => {
           const newMsg = payload.new as Message
-          console.log('Nuevo mensaje recibido en tiempo real:', newMsg)
           
           const isForMe = !newMsg.receiver_id || newMsg.receiver_id === currentUserId || newMsg.sender_id === currentUserId
           if (!isForMe) return
+
+          // No marcar como no leído si YO soy el que envía
+          const isFromMe = newMsg.sender_id === currentUserId
 
           const { data: profile } = await supabase
             .from('users_profiles')
@@ -87,10 +92,12 @@ export default function GlobalChatBubble() {
             (newMsg.sender_id === currentUserId && newMsg.receiver_id === currentSelUser.id)
           )
 
+          // Si estamos viendo ese chat, añadir el mensaje. Si no, marcar canal como no leído.
           if (currentView === 'messages' && (isGlobalChat || isPrivateChat)) {
             setMessages((prev) => [...prev, msgWithProfile])
-          } else {
-            setUnreadCount((prev) => prev + 1)
+          } else if (!isFromMe) {
+            const channelKey = newMsg.receiver_id ? newMsg.sender_id : null
+            setUnreadChannels((prev) => new Set(prev).add(channelKey))
           }
         }
       )
@@ -146,8 +153,6 @@ export default function GlobalChatBubble() {
     setMessages([])
 
     try {
-      // Cargamos todos los mensajes de la empresa y filtramos en el cliente
-      // Esto es mucho más robusto que los filtros complejos de Postgrest
       const { data, error } = await supabase
         .from('company_messages')
         .select(`
@@ -219,11 +224,20 @@ export default function GlobalChatBubble() {
   function openConversation(user: ChatUser | null) {
     setSelectedUser(user)
     setView('messages')
-    setUnreadCount(0)
+    
+    // Limpiar indicador de no leído para este canal
+    setUnreadChannels((prev) => {
+      const next = new Set(prev)
+      next.delete(user?.id || null)
+      return next
+    })
+    
     loadMessages(user?.id || null)
   }
 
   if (!companyId) return null
+
+  const totalUnread = unreadChannels.size
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">
@@ -269,7 +283,7 @@ export default function GlobalChatBubble() {
               
               <button 
                 onClick={() => openConversation(null)}
-                className="flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white p-4 text-left shadow-sm transition hover:border-blue-500/30 hover:bg-blue-50/30 group"
+                className="relative flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white p-4 text-left shadow-sm transition hover:border-blue-500/30 hover:bg-blue-50/30 group"
               >
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white transition group-hover:scale-110">
                   <Users size={22} />
@@ -278,6 +292,9 @@ export default function GlobalChatBubble() {
                   <h4 className="text-sm font-black text-slate-900">Muro General</h4>
                   <p className="text-xs font-semibold text-slate-500 truncate">Chat abierto para toda la empresa</p>
                 </div>
+                {unreadChannels.has(null) && (
+                  <div className="h-3 w-3 rounded-full bg-red-600 shadow-sm animate-pulse" />
+                )}
               </button>
 
               <p className="px-2 mt-6 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Mensajes Directos</p>
@@ -289,7 +306,7 @@ export default function GlobalChatBubble() {
                   <button 
                     key={user.id}
                     onClick={() => openConversation(user)}
-                    className="flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white p-4 text-left shadow-sm transition hover:border-blue-500/30 hover:bg-blue-50/30 group"
+                    className="relative flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white p-4 text-left shadow-sm transition hover:border-blue-500/30 hover:bg-blue-50/30 group"
                   >
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 transition group-hover:scale-110">
                       <UserIcon size={22} />
@@ -298,6 +315,9 @@ export default function GlobalChatBubble() {
                       <h4 className="text-sm font-black text-slate-900">{user.full_name}</h4>
                       <p className="text-xs font-semibold text-slate-500 truncate capitalize">{user.role}</p>
                     </div>
+                    {unreadChannels.has(user.id) && (
+                      <div className="h-3 w-3 rounded-full bg-red-600 shadow-sm animate-pulse" />
+                    )}
                   </button>
                 ))
               )}
@@ -374,14 +394,14 @@ export default function GlobalChatBubble() {
           if (!isOpen) setView('contacts')
         }}
         className={`relative flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl transition hover:scale-110 active:scale-95 ${
-          unreadCount > 0 ? 'ring-4 ring-blue-100' : ''
+          totalUnread > 0 ? 'ring-4 ring-blue-100' : ''
         }`}
       >
         {isOpen ? <Minus size={28} /> : <MessageSquare size={28} />}
         
-        {unreadCount > 0 && (
+        {totalUnread > 0 && (
           <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-lg animate-bounce">
-            {unreadCount}
+            {totalUnread}
           </span>
         )}
       </button>
