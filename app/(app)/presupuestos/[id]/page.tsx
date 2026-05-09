@@ -195,8 +195,18 @@ export default function PresupuestoDetallePage() {
         discount_str: item.discount_str,
       }))
       await supabase.from('order_items').insert(orderItems)
+
+      // ACTUALIZAR ESTADO DEL PRESUPUESTO
+      const { error: budgetUpdateError } = await supabase
+        .from('budgets')
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
+        .eq('id', budget.id)
+
+      if (budgetUpdateError) throw budgetUpdateError
+
       setAssociatedOrderId(orderData.id)
-      toast.success('Pedido generado.')
+      setBudget(prev => prev ? { ...prev, status: 'approved' } : null)
+      toast.success('¡Convertido a pedido y aprobado!')
     } catch (err: any) {
       toast.error('Error.')
     } finally {
