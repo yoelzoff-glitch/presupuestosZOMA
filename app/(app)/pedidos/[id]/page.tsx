@@ -81,8 +81,8 @@ function getOrderLabel(orderValue: Order) {
 }
 
 function getStatusLabel(status: OrderStatus, budgetId?: string | null) {
-  if (status === 'pending' && !budgetId) return 'Pendiente'
-  if (status === 'confirmed' || budgetId) return 'Convertido'
+  if (status === 'pending') return 'Pendiente'
+  if (status === 'confirmed') return 'Convertido'
   if (status === 'cancelled') return 'Anulado'
   return String(status)
 }
@@ -109,7 +109,7 @@ function StatusBadge({
   status: OrderStatus
   budgetId: string | null
 }) {
-  if (status === 'pending' && !budgetId) {
+  if (status === 'pending') {
     return (
       <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-black text-amber-700">
         <Clock3 size={17} />
@@ -118,7 +118,7 @@ function StatusBadge({
     )
   }
 
-  if (status === 'confirmed' || budgetId) {
+  if (status === 'confirmed') {
     return (
       <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
         <CheckCircle2 size={17} />

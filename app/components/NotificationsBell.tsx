@@ -30,6 +30,7 @@ export default function NotificationsBell() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [marking, setMarking] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   const dropdownRef = useRef<HTMLDivElement | null>(null)
 
@@ -41,7 +42,7 @@ export default function NotificationsBell() {
     if (!companyId) return
 
     const interval = window.setInterval(() => {
-      loadNotifications(companyId, false)
+      loadNotifications(companyId, null, false)
     }, 10000)
 
     const channel = supabase
@@ -55,7 +56,7 @@ export default function NotificationsBell() {
           filter: `company_id=eq.${companyId}`,
         },
         () => {
-          loadNotifications(companyId, false)
+          loadNotifications(companyId, null, false)
         }
       )
       .subscribe()
@@ -97,8 +98,23 @@ export default function NotificationsBell() {
     }
 
     setCompanyId(currentCompanyId)
-    await loadNotifications(currentCompanyId)
+    const role = await getUserRole()
+    setUserRole(role)
+    await loadNotifications(currentCompanyId, role)
     setLoading(false)
+  }
+
+  async function getUserRole() {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) return null
+
+    const { data: profile } = await supabase
+      .from('users_profiles')
+      .select('role')
+      .eq('id', userData.user.id)
+      .single()
+
+    return profile?.role || 'vendedor'
   }
 
   async function getCompanyId() {
@@ -119,6 +135,7 @@ export default function NotificationsBell() {
 
   async function loadNotifications(
     currentCompanyId: string,
+    role?: string | null,
     showLoading = true
   ) {
     if (showLoading) setLoading(true)
@@ -128,7 +145,7 @@ export default function NotificationsBell() {
       .select('id, company_id, title, message, type, link, read, created_at')
       .eq('company_id', currentCompanyId)
       .order('created_at', { ascending: false })
-      .limit(8)
+      .limit(20)
 
     if (error) {
       console.error('Error cargando notificaciones:', error)
@@ -136,7 +153,16 @@ export default function NotificationsBell() {
       return
     }
 
-    const loadedNotifications = data || []
+    let loadedNotifications = data || []
+
+    const currentRole = role || userRole
+    if (currentRole === 'vendedor') {
+      loadedNotifications = loadedNotifications.filter(
+        (n) => n.type !== 'new_order'
+      )
+    }
+
+    loadedNotifications = loadedNotifications.slice(0, 8)
 
     setNotifications(loadedNotifications)
     setUnreadCount(loadedNotifications.filter((item) => !item.read).length)
@@ -218,7 +244,7 @@ export default function NotificationsBell() {
           setOpen((prev) => !prev)
 
           if (companyId) {
-            loadNotifications(companyId, false)
+            loadNotifications(companyId, null, false)
           }
         }}
         className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
