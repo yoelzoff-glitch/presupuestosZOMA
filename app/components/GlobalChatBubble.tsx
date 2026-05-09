@@ -240,10 +240,10 @@ export default function GlobalChatBubble() {
   const totalUnread = unreadChannels.size
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] flex flex-col items-end gap-4 max-w-[calc(100vw-32px)] sm:max-w-none">
       {/* Ventana de Chat */}
       {isOpen && (
-        <div className="flex h-[550px] w-[380px] flex-col overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="flex h-[500px] sm:h-[550px] w-[calc(100vw-32px)] sm:w-[380px] flex-col overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] border border-slate-200 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
           
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-950 p-5 text-white">
