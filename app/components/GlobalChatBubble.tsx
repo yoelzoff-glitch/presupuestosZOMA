@@ -167,7 +167,6 @@ export default function GlobalChatBubble() {
 
       if (error) throw error
 
-      console.log('Mensajes crudos de la DB:', data)
       const rawMessages = (data || []).map(m => ({
         ...m,
         profiles: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
@@ -176,17 +175,14 @@ export default function GlobalChatBubble() {
       let filtered: Message[] = []
 
       if (targetUserId) {
-        console.log('Filtrando para chat privado con:', targetUserId)
         filtered = rawMessages.filter(m => 
           (m.sender_id === currentUserId && m.receiver_id === targetUserId) ||
           (m.sender_id === targetUserId && m.receiver_id === currentUserId)
         )
       } else {
-        console.log('Filtrando para muro global')
         filtered = rawMessages.filter(m => !m.receiver_id)
       }
 
-      console.log('Mensajes filtrados finales:', filtered)
       setMessages(filtered)
     } catch (error) {
       console.error('Error cargando mensajes:', error)

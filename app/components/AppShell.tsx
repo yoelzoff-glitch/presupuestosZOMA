@@ -216,12 +216,13 @@ export default function AppShell({ children }: AppShellProps) {
       if (user) {
         const { data } = await supabase
           .from('users_profiles')
-          .select('company:companies(plan_type)')
+          .select('company_id, company:companies(plan_type)')
           .eq('id', user.id)
           .single()
-        if (data?.company) {
-          setPlanType((data.company as any).plan_type)
-        }
+        
+        // Ahora que la columna existe, volvemos a la lógica real de planes
+        const rawPlan = (data?.company as any)?.plan_type
+        setPlanType(rawPlan || 'base')
       }
     }
     getPlan()
