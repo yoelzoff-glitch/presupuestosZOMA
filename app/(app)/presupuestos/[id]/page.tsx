@@ -71,6 +71,7 @@ export default function PresupuestoDetallePage() {
   const [items, setItems] = useState<BudgetItem[]>([])
   const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
+  const [role, setRole] = useState<string | null>(null)
   const [convertingToOrder, setConvertingToOrder] = useState(false)
   const [alreadyInAccount, setAlreadyInAccount] = useState(false)
   const [associatedOrderId, setAssociatedOrderId] = useState<string | null>(null)
@@ -88,6 +89,10 @@ export default function PresupuestoDetallePage() {
       .select('role')
       .eq('id', userData.user?.id)
       .single()
+
+    if (userProfile) {
+      setRole(userProfile.role || 'vendedor')
+    }
 
     const { data, error } = await supabase
       .from('budgets')
@@ -205,7 +210,7 @@ export default function PresupuestoDetallePage() {
   }
 
   async function convertToOrder() {
-    if (!budget) return
+    if (!budget || !role) return
 
     if (budget.status === 'cancelled') {
       toast.error('No se puede convertir un presupuesto anulado.')
@@ -231,7 +236,7 @@ export default function PresupuestoDetallePage() {
           budget_id: budget.id,
           order_number: nextOrderNumber,
           order_date: new Date().toISOString(),
-          status: 'confirmed',
+          status: role === 'admin' ? 'confirmed' : 'pending',
           source: 'Manual',
           seller_id: budget.seller_id
         })
@@ -258,7 +263,23 @@ export default function PresupuestoDetallePage() {
       if (itemsError) throw itemsError
 
       setAssociatedOrderId(orderData.id)
-      toast.success('¡Presupuesto convertido a pedido correctamente!')
+      
+      const successMsg = role === 'admin' 
+        ? '¡Presupuesto convertido a pedido correctamente!' 
+        : '¡Pedido solicitado correctamente! El Admin debe aprobarlo.'
+      
+      toast.success(successMsg)
+
+      // Notificación para el Admin si lo pide un vendedor
+      if (role === 'vendedor') {
+        await supabase.from('notifications').insert({
+          company_id: budget.company_id,
+          title: 'Nueva solicitud de pedido',
+          message: `El vendedor solicitó convertir el presupuesto ${budgetLabel} en pedido.`,
+          type: 'new_order',
+          link: `/pedidos/${orderData.id}`
+        })
+      }
 
       // Optional: Redirect to order? 
       // router.push(`/pedidos/${orderData.id}`)
@@ -543,8 +564,10 @@ export default function PresupuestoDetallePage() {
                 {associatedOrderId
                   ? 'Ya es un pedido'
                   : convertingToOrder
-                    ? 'Convirtiendo...'
-                    : 'Convertir a pedido'}
+                    ? 'Procesando...'
+                    : role === 'admin'
+                      ? 'Convertir a pedido'
+                      : 'Solicitar Pedido'}
               </button>
 
               <button
