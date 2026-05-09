@@ -65,6 +65,7 @@ export default function GlobalChatBubble() {
         },
         async (payload) => {
           const newMsg = payload.new as Message
+          console.log('Nuevo mensaje recibido en tiempo real:', newMsg)
           
           const isForMe = !newMsg.receiver_id || newMsg.receiver_id === currentUserId || newMsg.sender_id === currentUserId
           if (!isForMe) return
@@ -145,7 +146,9 @@ export default function GlobalChatBubble() {
     setMessages([])
 
     try {
-      let query = supabase
+      // Cargamos todos los mensajes de la empresa y filtramos en el cliente
+      // Esto es mucho más robusto que los filtros complejos de Postgrest
+      const { data, error } = await supabase
         .from('company_messages')
         .select(`
           id,
@@ -154,29 +157,37 @@ export default function GlobalChatBubble() {
           receiver_id,
           message,
           created_at,
-          profiles:users_profiles (
+          profiles:users_profiles!sender_id (
             full_name,
             role
           )
         `)
         .eq('company_id', companyId)
-
-      if (targetUserId) {
-        // Chat Privado: Simplificamos la lógica de consulta para evitar errores de OR
-        query = query
-          .in('sender_id', [currentUserId, targetUserId])
-          .in('receiver_id', [currentUserId, targetUserId])
-      } else {
-        // Chat Global
-        query = query.is('receiver_id', null)
-      }
-
-      const { data, error } = await query
         .order('created_at', { ascending: true })
-        .limit(50)
 
       if (error) throw error
-      setMessages(data as any || [])
+
+      console.log('Mensajes crudos de la DB:', data)
+      const rawMessages = (data || []).map(m => ({
+        ...m,
+        profiles: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
+      })) as Message[]
+      
+      let filtered: Message[] = []
+
+      if (targetUserId) {
+        console.log('Filtrando para chat privado con:', targetUserId)
+        filtered = rawMessages.filter(m => 
+          (m.sender_id === currentUserId && m.receiver_id === targetUserId) ||
+          (m.sender_id === targetUserId && m.receiver_id === currentUserId)
+        )
+      } else {
+        console.log('Filtrando para muro global')
+        filtered = rawMessages.filter(m => !m.receiver_id)
+      }
+
+      console.log('Mensajes filtrados finales:', filtered)
+      setMessages(filtered)
     } catch (error) {
       console.error('Error cargando mensajes:', error)
     } finally {
@@ -212,7 +223,7 @@ export default function GlobalChatBubble() {
   function openConversation(user: ChatUser | null) {
     setSelectedUser(user)
     setView('messages')
-    setUnreadCount(0) // Resetear notificaciones al abrir cualquier chat
+    setUnreadCount(0)
     loadMessages(user?.id || null)
   }
 

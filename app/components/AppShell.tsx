@@ -79,7 +79,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       if (user) {
         const { data } = await supabase
           .from('users_profiles')
-          .select('role')
+          .select('role, company:companies(plan_type)')
           .eq('id', user.id)
           .single()
         setProfile(data)
@@ -91,8 +91,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   const isAdmin = profile?.role === 'admin'
 
+  const planType = profile?.company?.plan_type || 'base'
+  const isPro = planType === 'pro' || planType === 'pro_plus'
+
   const filteredNavItems = navItems.filter((item) => {
     if (loading) return false
+    
+    // Si no es PRO, ocultar Vendedores del menú
+    if (item.href === '/vendedores' && !isPro) return false
+
     // Vendedores cannot see Account Current, Settings or Sellers management
     if (profile?.role === 'vendedor') {
       const hiddenForVendedores = ['/productos', '/cuenta-corriente', '/configuracion', '/vendedores']
@@ -201,6 +208,24 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [planType, setPlanType] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function getPlan() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('users_profiles')
+          .select('company:companies(plan_type)')
+          .eq('id', user.id)
+          .single()
+        if (data?.company) {
+          setPlanType((data.company as any).plan_type)
+        }
+      }
+    }
+    getPlan()
+  }, [])
 
   const title = getPageTitle(pathname)
   const description = getPageDescription(pathname)
@@ -281,8 +306,8 @@ export default function AppShell({ children }: AppShellProps) {
         </section>
       </main>
 
-      {/* Burbuja de Chat Global */}
-      <GlobalChatBubble />
+      {/* Burbuja de Chat Global - Solo para planes PRO o superior */}
+      {(planType === 'pro' || planType === 'pro_plus') && <GlobalChatBubble />}
     </div>
   )
 }
