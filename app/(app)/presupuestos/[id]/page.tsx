@@ -23,6 +23,9 @@ import {
   Wallet,
   ClipboardList,
   Zap,
+  Phone,
+  Mail,
+  Globe,
 } from 'lucide-react'
 
 type Budget = {
@@ -39,6 +42,8 @@ type Budget = {
     name: string
     cuit: string
     address: string | null
+    email: string | null
+    phone: string | null
   } | null
 }
 
@@ -111,7 +116,9 @@ export default function PresupuestoDetallePage() {
         clients (
           name,
           cuit,
-          address
+          address,
+          email,
+          phone
         )
       `)
       .eq('id', id)
@@ -341,7 +348,7 @@ export default function PresupuestoDetallePage() {
         @media print {
           @page {
             size: A4;
-            margin: 12mm;
+            margin: 10mm 15mm;
           }
 
           html,
@@ -369,7 +376,7 @@ export default function PresupuestoDetallePage() {
             margin: 0 !important;
             padding: 0 !important;
             background: white !important;
-            color: #0f172a !important;
+            color: #1e293b !important;
             box-shadow: none !important;
             border: 0 !important;
           }
@@ -379,120 +386,133 @@ export default function PresupuestoDetallePage() {
           }
 
           .print-card {
-            border: 1px solid #d7dee8 !important;
+            border: 0 !important;
             border-radius: 0 !important;
             box-shadow: none !important;
             background: white !important;
           }
 
           .print-header {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            align-items: start !important;
-            gap: 24px !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
             border-bottom: 2px solid #0f172a !important;
-            padding: 0 0 18px 0 !important;
-            margin-bottom: 18px !important;
+            padding: 0 0 20px 0 !important;
+            margin-bottom: 25px !important;
           }
 
           .print-company-logo {
-            max-height: 80px !important;
-            max-width: 220px !important;
+            max-height: 60px !important;
+            max-width: 180px !important;
             object-fit: contain !important;
-            margin-bottom: 8px !important;
+            margin-bottom: 12px !important;
           }
 
           .print-title {
-            font-size: 28px !important;
-            line-height: 1.1 !important;
+            font-size: 24px !important;
+            line-height: 1 !important;
             font-weight: 900 !important;
             color: #0f172a !important;
+            margin-bottom: 4px !important;
           }
 
           .print-subtitle {
-            font-size: 11px !important;
-            letter-spacing: 0.22em !important;
+            font-size: 10px !important;
+            letter-spacing: 0.15em !important;
             text-transform: uppercase !important;
-            color: #475569 !important;
+            color: #64748b !important;
             font-weight: 900 !important;
-          }
-
-          .print-client-grid {
-            display: grid !important;
-            grid-template-columns: repeat(3, 1fr) !important;
-            gap: 10px !important;
           }
 
           .print-section {
-            padding: 16px 0 !important;
-            border-bottom: 1px solid #d7dee8 !important;
+            padding: 0 !important;
+            margin-bottom: 25px !important;
           }
 
           .print-section-title {
-            font-size: 18px !important;
+            font-size: 14px !important;
             font-weight: 900 !important;
-            margin-bottom: 10px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            margin-bottom: 12px !important;
             color: #0f172a !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+          }
+
+          .print-client-box {
+            background: #f8fafc !important;
+            border-radius: 12px !important;
+            padding: 16px !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 16px !important;
+            border: 1px solid #e2e8f0 !important;
           }
 
           .print-table-wrap {
             display: block !important;
             overflow: visible !important;
-            border: 1px solid #d7dee8 !important;
-            border-radius: 0 !important;
+            border: 0 !important;
           }
 
           .print-table {
             width: 100% !important;
-            min-width: 0 !important;
             border-collapse: collapse !important;
-            table-layout: fixed !important;
-            font-size: 11px !important;
+            font-size: 10px !important;
           }
 
           .print-table th {
-            background: #f1f5f9 !important;
-            color: #0f172a !important;
+            background: #0f172a !important;
+            color: white !important;
             font-weight: 900 !important;
-            padding: 8px !important;
-            border-bottom: 1px solid #d7dee8 !important;
+            padding: 10px 12px !important;
+            text-align: left !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
           }
 
           .print-table td {
-            padding: 8px !important;
-            border-bottom: 1px solid #e2e8f0 !important;
-            color: #0f172a !important;
+            padding: 12px !important;
+            border-bottom: 1px solid #f1f5f9 !important;
+            color: #334155 !important;
             vertical-align: top !important;
           }
 
-          .print-table tr {
-            break-inside: avoid !important;
+          .print-total-section {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            margin-top: 30px !important;
             page-break-inside: avoid !important;
           }
 
-          .print-total {
-            margin-top: 16px !important;
-            margin-left: auto !important;
-            width: 260px !important;
-            border: 2px solid #0f172a !important;
-            padding: 12px !important;
-            background: white !important;
-            color: #0f172a !important;
+          .print-notes {
+            max-width: 60% !important;
+          }
+
+          .print-total-card {
+            background: #0f172a !important;
+            color: white !important;
+            padding: 20px !important;
+            border-radius: 16px !important;
+            min-width: 220px !important;
+            text-align: right !important;
           }
 
           .print-total-label {
             font-size: 10px !important;
-            letter-spacing: 0.18em !important;
+            letter-spacing: 0.1em !important;
             text-transform: uppercase !important;
-            color: #475569 !important;
+            color: #94a3b8 !important;
             font-weight: 900 !important;
           }
 
-          .print-total-number {
-            margin-top: 4px !important;
-            font-size: 26px !important;
-            line-height: 1.1 !important;
+          .print-total-amount {
+            font-size: 28px !important;
             font-weight: 900 !important;
+            margin-top: 4px !important;
           }
         }
       `}</style>
@@ -595,183 +615,131 @@ export default function PresupuestoDetallePage() {
           />
         </section>
 
+        {/* AREA DE IMPRESIÓN REDISEÑADA */}
         <section className="print-area print-card rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
-          <div className="print-header border-b border-slate-200 p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                {company?.logo_url && (
-                  <img
-                    src={company.logo_url}
-                    alt={company.name}
-                    className="print-company-logo mb-4 h-16 object-contain"
-                  />
-                )}
-                <h2 className="print-title text-3xl font-black text-slate-950">
-                  {company?.name || 'Presupuesto'}
-                </h2>
-                <div className="mt-2 space-y-1 text-sm font-bold text-slate-500">
-                  {company?.cuit && <p>CUIT: {company.cuit}</p>}
-                  {company?.address && <p>{company.address}</p>}
-                  {(company?.phone || company?.email) && (
-                    <p>
-                      {company.phone} {company.phone && company.email ? '·' : ''} {company.email}
-                    </p>
-                  )}
+          <div className="print-header">
+            <div>
+              {company?.logo_url ? (
+                <img
+                  src={company.logo_url}
+                  alt={company.name}
+                  className="print-company-logo"
+                />
+              ) : (
+                <div className="print-company-logo flex items-center gap-2 text-xl font-black text-slate-900">
+                  <Package className="text-blue-600" />
+                  {company?.name || 'ZOMA TECH'}
+                </div>
+              )}
+              <div className="space-y-0.5 text-[10px] font-bold text-slate-500">
+                {company?.cuit && <p>CUIT: {company.cuit}</p>}
+                {company?.address && <p>{company.address}</p>}
+                <div className="flex gap-3">
+                  {company?.phone && <p>{company.phone}</p>}
+                  {company?.email && <p>{company.email}</p>}
                 </div>
               </div>
+            </div>
 
-              <div className="text-left md:text-right">
-                <p className="print-subtitle text-xs font-black uppercase tracking-[0.25em] text-blue-700">
-                  Presupuesto
-                </p>
-                <h3 className="mt-1 text-2xl font-black text-slate-900">
-                  #{budgetLabel}
-                </h3>
-                <div className="mt-3 flex flex-col gap-1 text-sm font-bold text-slate-500 md:items-end">
-                  <p className="flex items-center gap-2">
-                    <CalendarDays size={14} />
-                    Fecha: {budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'}
-                  </p>
+            <div className="text-right">
+              <p className="print-subtitle">Presupuesto Comercial</p>
+              <h2 className="print-title">#{budgetLabel}</h2>
+              <div className="mt-2 text-[10px] font-black text-slate-700">
+                FECHA: {budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'}
+              </div>
+            </div>
+          </div>
+
+          <div className="print-section">
+            <h2 className="print-section-title">
+              <User size={14} className="text-slate-400" />
+              Datos del Cliente
+            </h2>
+            <div className="print-client-box">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Nombre / Razón Social</p>
+                  <p className="text-xs font-black text-slate-900">{budget.clients?.name || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">CUIT / DNI</p>
+                  <p className="text-xs font-bold text-slate-700">{budget.clients?.cuit || '-'}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Dirección de Entrega</p>
+                  <p className="text-xs font-bold text-slate-700">{budget.clients?.address || '-'}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Email</p>
+                    <p className="text-[10px] font-bold text-slate-700 truncate">{budget.clients?.email || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Teléfono</p>
+                    <p className="text-[10px] font-bold text-slate-700">{budget.clients?.phone || '-'}</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="print-section border-b border-slate-200 p-6">
-            <h2 className="print-section-title text-xl font-black text-slate-950">
-              Datos del cliente
+          <div className="print-section">
+            <h2 className="print-section-title">
+              <Package size={14} className="text-slate-400" />
+              Detalle de Productos
             </h2>
-
-            <div className="print-client-grid mt-4 grid gap-4 md:grid-cols-3">
-              <ClientData
-                icon={User}
-                label="Nombre"
-                value={budget.clients?.name || '-'}
-              />
-
-              <ClientData
-                icon={Hash}
-                label="CUIT"
-                value={budget.clients?.cuit || '-'}
-              />
-
-              <ClientData
-                icon={MapPin}
-                label="Dirección"
-                value={budget.clients?.address || '-'}
-              />
-            </div>
-          </div>
-
-          <div className="print-section p-6">
-            <h2 className="print-section-title mb-4 text-xl font-black text-slate-950">
-              Productos presupuestados
-            </h2>
-
-            {items.length === 0 ? (
-              <div className="rounded-3xl bg-slate-50 p-10 text-center text-sm font-bold text-slate-500">
-                Este presupuesto no tiene productos cargados.
-              </div>
-            ) : (
-              <>
-                <div className="print-table-wrap overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="print-table w-full min-w-[850px]">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <TableHead>Producto</TableHead>
-                        <TableHead>Código</TableHead>
-                        <TableHead>Categoría</TableHead>
-                        <TableHead align="right">Cantidad</TableHead>
-                        <TableHead align="right">Precio unit.</TableHead>
-                        <TableHead align="right">Total</TableHead>
+            <div className="print-table-wrap">
+              <table className="print-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '45%' }}>Descripción del Producto</th>
+                    <th style={{ width: '15%' }}>Código</th>
+                    <th style={{ width: '10%', textAlign: 'center' }}>Cant.</th>
+                    <th style={{ width: '15%', textAlign: 'right' }}>Unitario</th>
+                    <th style={{ width: '15%', textAlign: 'right' }}>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => {
+                    const itemTotal = item.total ?? (Number(item.quantity || 0) * Number(item.unit_price || 0))
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <div className="font-black text-slate-900">{item.product_name}</div>
+                          {item.discount_str && (
+                            <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-blue-600">
+                              <Zap size={8} />
+                              DESCUENTO APLICADO: -{item.discount_str}%
+                            </div>
+                          )}
+                        </td>
+                        <td className="font-bold text-slate-500">{item.product_code || '-'}</td>
+                        <td style={{ textAlign: 'center' }} className="font-black">{item.quantity}</td>
+                        <td style={{ textAlign: 'right' }} className="font-bold">${Number(item.unit_price).toLocaleString('es-AR')}</td>
+                        <td style={{ textAlign: 'right' }} className="font-black text-slate-900">${Number(itemTotal).toLocaleString('es-AR')}</td>
                       </tr>
-                    </thead>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                    <tbody className="divide-y divide-slate-100">
-                      {items.map((item) => {
-                        const itemTotal =
-                          item.total ??
-                          Number(item.quantity || 0) *
-                          Number(item.unit_price || 0)
+          <div className="print-total-section">
+            <div className="print-notes">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Condiciones Generales</h3>
+              <p className="text-[10px] font-medium leading-relaxed text-slate-600 italic">
+                {company?.default_notes || 'Este presupuesto tiene una validez de 15 días. Precios sujetos a cambios sin previo aviso.'}
+              </p>
+            </div>
 
-                        return (
-                          <tr
-                            key={item.id}
-                            className="transition hover:bg-blue-50/40"
-                          >
-                            <td className="px-5 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="print-hidden flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 print:hidden">
-                                  <Package size={19} />
-                                </div>
-
-                                <div>
-                                  <p className="font-black text-slate-950">
-                                    {item.product_name}
-                                  </p>
-                                  {item.discount_str && (
-                                    <div className="mt-1 flex items-center gap-1 text-[10px] font-black text-blue-600">
-                                      <Zap size={10} />
-                                      Desc. aplicado: -{item.discount_str}%
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-
-                            <td className="px-5 py-4">
-                              {item.product_code || '-'}
-                            </td>
-
-                            <td className="px-5 py-4">
-                              {item.category || 'Sin categoría'}
-                            </td>
-
-                            <td className="px-5 py-4 text-right font-bold text-slate-700">
-                              {Number(item.quantity || 0).toLocaleString(
-                                'es-AR'
-                              )}
-                            </td>
-
-                            <td className="px-5 py-4 text-right font-bold text-slate-700">
-                              $
-                              {Number(item.unit_price || 0).toLocaleString(
-                                'es-AR'
-                              )}
-                            </td>
-
-                            <td className="px-5 py-4 text-right text-lg font-black text-blue-700">
-                              $
-                              {Number(itemTotal || 0).toLocaleString('es-AR')}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="mt-8 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-                  <div className="max-w-md">
-                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
-                      Notas adicionales
-                    </h3>
-                    <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
-                      {company?.default_notes || 'Sin notas adicionales.'}
-                    </p>
-                  </div>
-
-                  <div className="print-total shrink-0 rounded-3xl bg-slate-950 p-8 text-white shadow-2xl">
-                    <p className="print-total-label text-xs font-black uppercase tracking-widest text-blue-400">
-                      Total a pagar
-                    </p>
-                    <p className="print-total-number mt-2 text-4xl font-black">
-                      ${finalTotal.toLocaleString('es-AR')}
-                    </p>
-                  </div>
-                </div>
-              </>
-            )}
+            <div className="print-total-card">
+              <p className="print-total-label">Importe Total Neto</p>
+              <h3 className="print-total-amount">${finalTotal.toLocaleString('es-AR')}</h3>
+              <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-tighter">Impuestos e IVA incluidos</p>
+            </div>
           </div>
         </section>
 
@@ -861,59 +829,6 @@ function InfoCard({
           </p>
         </div>
       </div>
-    </div>
-  )
-}
-
-function ClientData({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: any
-  label: string
-  value: string
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="mt-1 text-blue-600 print-hidden print:hidden">
-        <Icon size={18} />
-      </div>
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          {label}
-        </p>
-        <p className="text-sm font-bold text-slate-800">{value}</p>
-      </div>
-    </div>
-  )
-}
-
-function TableHead({
-  children,
-  align = 'left',
-}: {
-  children: React.ReactNode
-  align?: 'left' | 'right'
-}) {
-  return (
-    <th
-      className={`px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ${
-        align === 'right' ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
-function MiniData({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-3">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-        {label}
-      </p>
-      <p className="text-sm font-black text-slate-900">{value}</p>
     </div>
   )
 }
