@@ -33,7 +33,6 @@ const navItems = [
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
-  { href: '/notificaciones', label: 'Notificaciones', icon: Bell },
   { href: '/configuracion', label: 'Configuración', icon: Settings },
 ]
 
