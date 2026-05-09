@@ -152,6 +152,11 @@ export default function PresupuestosPage() {
 
 
   async function handleCancelBudget(budget: Budget) {
+    if (budget.status === 'approved') {
+      toast.error('No se puede anular un presupuesto que ya fue aprobado/convertido.')
+      return
+    }
+
     if (budget.payment_status === 'paid' || budget.payment_status === 'partial') {
       toast.error('No se puede anular un presupuesto que ya tiene pagos registrados.')
       return
@@ -661,7 +666,7 @@ function BudgetActions({
       </Link>
 
 
-      {!isCancelled && (
+      {!isCancelled && !isApproved && (
         <button
           type="button"
           disabled={isActionLoading}
