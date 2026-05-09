@@ -11,10 +11,10 @@ import {
   ClipboardList,
   Plus,
   Search,
-  User,
+  User as UserIcon,
   IdCard,
   MapPin,
-  Package,
+  Package as PackageIcon,
   Hash,
   Tag,
   Truck,
@@ -23,6 +23,7 @@ import {
   Loader2,
   FileText,
   Boxes,
+  DollarSign as DollarSignIcon,
 } from 'lucide-react'
 
 type Client = {
@@ -39,6 +40,7 @@ type Product = {
   category: string | null
   supplier: string | null
   active: boolean
+  cost_price: number | null
 }
 
 type CartItem = {
@@ -47,6 +49,7 @@ type CartItem = {
   product_name: string
   category: string | null
   quantity: number
+  unit_price: number
 }
 
 export default function NuevoPedidoPage() {
@@ -65,17 +68,26 @@ export default function NuevoPedidoPage() {
   const [productSearch, setProductSearch] = useState('')
   const [selectedProductId, setSelectedProductId] = useState('')
   const [quantity, setQuantity] = useState('1')
+  const [unitPrice, setUnitPrice] = useState('0')
 
   const [manualCode, setManualCode] = useState('')
   const [manualName, setManualName] = useState('')
   const [manualCategory, setManualCategory] = useState('')
   const [manualQuantity, setManualQuantity] = useState('1')
+  const [manualPrice, setManualPrice] = useState('0')
 
   const [items, setItems] = useState<CartItem[]>([])
 
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    const p = products.find((prod) => prod.id === selectedProductId)
+    if (p) {
+      setUnitPrice(String(p.cost_price || 0))
+    }
+  }, [selectedProductId, products])
 
   async function loadData() {
     const { data: userData, error: userError } = await supabase.auth.getUser()
@@ -115,7 +127,7 @@ export default function NuevoPedidoPage() {
 
       supabase
         .from('products')
-        .select('id, internal_code, name, category, supplier, active')
+        .select('id, internal_code, name, category, supplier, active, cost_price')
         .eq('company_id', currentCompanyId)
         .eq('active', true)
         .order('name', { ascending: true })
@@ -159,6 +171,10 @@ export default function NuevoPedidoPage() {
       .slice(0, 80)
   }, [products, productSearch])
 
+  const totalAmount = useMemo(() => {
+    return items.reduce((acc, item) => acc + (Number(item.quantity || 0) * Number(item.unit_price || 0)), 0)
+  }, [items])
+
   const totalUnits = useMemo(() => {
     return items.reduce((acc, item) => acc + Number(item.quantity || 0), 0)
   }, [items])
@@ -182,9 +198,15 @@ export default function NuevoPedidoPage() {
     }
 
     const qty = Number(quantity)
+    const price = Number(unitPrice)
 
     if (!qty || qty <= 0) {
       toast.error('Ingresá una cantidad válida.')
+      return
+    }
+
+    if (Number.isNaN(price) || price < 0) {
+      toast.error('Ingresá un precio válido.')
       return
     }
 
@@ -210,17 +232,20 @@ export default function NuevoPedidoPage() {
           product_name: product.name,
           category: product.category,
           quantity: qty,
+          unit_price: price,
         },
       ]
     })
 
     setSelectedProductId('')
     setQuantity('1')
+    setUnitPrice('0')
     setProductSearch('')
   }
 
   function addManualItem() {
     const qty = Number(manualQuantity)
+    const price = Number(manualPrice)
 
     if (!manualName.trim()) {
       toast.error('Ingresá el nombre del producto.')
@@ -232,6 +257,11 @@ export default function NuevoPedidoPage() {
       return
     }
 
+    if (Number.isNaN(price) || price < 0) {
+      toast.error('Ingresá un precio válido.')
+      return
+    }
+
     setItems((prev) => [
       ...prev,
       {
@@ -240,6 +270,7 @@ export default function NuevoPedidoPage() {
         product_name: manualName.trim(),
         category: manualCategory.trim() || null,
         quantity: qty,
+        unit_price: price,
       },
     ])
 
@@ -247,6 +278,7 @@ export default function NuevoPedidoPage() {
     setManualName('')
     setManualCategory('')
     setManualQuantity('1')
+    setManualPrice('0')
   }
 
   function updateQuantity(index: number, value: string) {
@@ -327,6 +359,7 @@ export default function NuevoPedidoPage() {
           order_code: orderCode,
           status: 'pending',
           source: 'manual',
+          total_amount: totalAmount,
           seller_id: profile?.role === 'vendedor' ? userData.user?.id : null,
           notes: notes.trim() || 'Pedido cargado manualmente',
         })
@@ -346,6 +379,7 @@ export default function NuevoPedidoPage() {
         product_name: item.product_name,
         category: item.category,
         quantity: item.quantity,
+        unit_price: item.unit_price,
       }))
 
       const { error: itemsError } = await supabase
@@ -411,12 +445,12 @@ export default function NuevoPedidoPage() {
             </div>
 
             <h1 className="text-3xl font-black tracking-tight">
-              Cargar pedido pendiente
+              Cargar Pedido / Orden de Venta
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              El pedido guarda productos y cantidades. Los precios se toman recién
-              cuando lo convertís en presupuesto.
+              Registrá una orden de compra confirmada. Los precios se guardan 
+              fijos al momento de la carga.
             </p>
           </div>
 
@@ -439,21 +473,21 @@ export default function NuevoPedidoPage() {
 
       <section className="grid gap-4 md:grid-cols-3">
         <InfoCard
-          icon={User}
+          icon={UserIcon}
           title="Cliente"
           value={selectedClient?.name || 'Sin seleccionar'}
         />
 
         <InfoCard
-          icon={Package}
+          icon={PackageIcon}
           title="Productos"
           value={String(items.length)}
         />
 
         <InfoCard
-          icon={Boxes}
-          title="Unidades"
-          value={String(totalUnits)}
+          icon={DollarSignIcon}
+          title="Total Pedido"
+          value={`$${totalAmount.toLocaleString('es-AR')}`}
         />
       </section>
 
@@ -462,7 +496,7 @@ export default function NuevoPedidoPage() {
           <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                <User size={22} />
+                <UserIcon size={22} />
               </div>
 
               <div>
@@ -539,7 +573,7 @@ export default function NuevoPedidoPage() {
           <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                <Package size={22} />
+                <PackageIcon size={22} />
               </div>
 
               <div>
@@ -605,6 +639,16 @@ export default function NuevoPedidoPage() {
                     min="1"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
+                    placeholder="Cant."
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  />
+
+                  <input
+                    type="number"
+                    min="0"
+                    value={unitPrice}
+                    onChange={(e) => setUnitPrice(e.target.value)}
+                    placeholder="Precio"
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                   />
 
@@ -695,6 +739,14 @@ export default function NuevoPedidoPage() {
                 placeholder="1"
               />
 
+              <InputField
+                label="Precio unitario"
+                type="number"
+                value={manualPrice}
+                onChange={setManualPrice}
+                placeholder="0"
+              />
+
               <div className="flex items-end">
                 <button
                   type="button"
@@ -753,11 +805,6 @@ export default function NuevoPedidoPage() {
                         <p className="line-clamp-2 font-black text-slate-950">
                           {item.product_name}
                         </p>
-
-                        <p className="mt-1 text-xs font-semibold text-slate-400">
-                          Código: {item.product_code || '-'} ·{' '}
-                          {item.category || 'Sin categoría'}
-                        </p>
                       </div>
 
                       <button
@@ -770,18 +817,36 @@ export default function NuevoPedidoPage() {
                       </button>
                     </div>
 
-                    <div className="mt-4">
-                      <label className="mb-1 block text-xs font-black uppercase tracking-widest text-slate-400">
-                        Cantidad
-                      </label>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-black uppercase tracking-widest text-slate-400">
+                          Cantidad
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => updateQuantity(index, e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-black uppercase tracking-widest text-slate-400">
+                          Precio
+                        </label>
+                        <div className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+                          ${item.unit_price.toLocaleString('es-AR')}
+                        </div>
+                      </div>
+                    </div>
 
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => updateQuantity(index, e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white"
-                      />
+                    <div className="mt-3 rounded-2xl bg-slate-50 p-3 text-right">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                        Subtotal
+                      </p>
+                      <p className="text-lg font-black text-blue-700">
+                        ${(item.unit_price * item.quantity).toLocaleString('es-AR')}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -813,7 +878,7 @@ export default function NuevoPedidoPage() {
               </button>
 
               <p className="mt-3 text-center text-xs font-semibold text-slate-400">
-                El pedido quedará pendiente hasta convertirlo a presupuesto.
+                El pedido quedará registrado como una orden firme.
               </p>
             </div>
           </section>

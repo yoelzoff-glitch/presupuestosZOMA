@@ -682,14 +682,14 @@ export default function PedidoDetallePage() {
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
               {isPortalOrder 
                 ? 'Detalle de la orden de venta enviada desde el portal de clientes.' 
-                : 'Revisá los productos solicitados y ajustá los precios antes de convertir el pedido en presupuesto.'}
+                : 'Detalle de la orden de compra cargada manualmente.'}
             </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <StatusBadge status={order.status} budgetId={order.budget_id} />
 
-            {canConvert && !isPortalOrder && (
+            {order.status === 'pending' && !isPortalOrder && (
               <>
                 <button
                   type="button"
@@ -707,16 +707,16 @@ export default function PedidoDetallePage() {
 
                 <button
                   type="button"
-                  onClick={handleConvertClick}
+                  onClick={confirmPortalOrder} // Reutilizamos la lógica de confirmar
                   disabled={converting || cancelling}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {converting ? (
                     <Loader2 size={18} className="animate-spin" />
                   ) : (
-                    <FileText size={18} />
+                    <CheckCircle2 size={18} />
                   )}
-                  {converting ? 'Convirtiendo...' : 'Convertir a presupuesto'}
+                  {converting ? 'Confirmando...' : 'Confirmar Pedido'}
                 </button>
               </>
             )}
@@ -817,7 +817,7 @@ export default function PedidoDetallePage() {
 
         <InfoCard
           icon={DollarSign}
-          title={isPortalOrder || isConverted ? "Total" : "Total a presupuestar"}
+          title="Total del pedido"
           value={formatCurrency(order.total_amount || totalAmount)}
         />
       </section>

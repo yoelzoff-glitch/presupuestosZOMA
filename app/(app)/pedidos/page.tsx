@@ -33,6 +33,7 @@ type Order = {
   budget_id: string | null
   notes: string | null
   created_at: string
+  total_amount: number | null
   clients?: {
     name: string
     cuit: string
@@ -97,6 +98,7 @@ export default function PedidosPage() {
         budget_id,
         notes,
         created_at,
+        total_amount,
         clients (
           name,
           cuit
@@ -381,6 +383,7 @@ export default function PedidosPage() {
                     <TableHead>Cliente</TableHead>
                     <TableHead>CUIT</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead align="right">Total</TableHead>
                     <TableHead>Notas</TableHead>
                     <TableHead align="right">Acciones</TableHead>
                   </tr>
@@ -420,6 +423,12 @@ export default function PedidosPage() {
 
                       <td className="px-5 py-4">
                         <StatusBadge status={order.status} />
+                      </td>
+                      
+                      <td className="px-5 py-4 text-right">
+                        <span className="text-sm font-black text-slate-900">
+                          ${(order.total_amount || 0).toLocaleString('es-AR')}
+                        </span>
                       </td>
 
                       <td className="px-5 py-4">
@@ -476,8 +485,14 @@ function OrderMobileCard({
 
       <div className="mt-4 space-y-3">
         <SourceBadge source={order.source} />
-        <DateBadge date={order.created_at || order.order_date} />
         <ClientName order={order} />
+
+        <div className="flex items-center justify-between rounded-2xl bg-blue-50 p-3">
+          <span className="text-xs font-bold text-blue-600 uppercase">Total</span>
+          <span className="text-base font-black text-blue-700">
+            ${(order.total_amount || 0).toLocaleString('es-AR')}
+          </span>
+        </div>
 
         <p className="rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
           {order.notes || 'Sin notas'}
