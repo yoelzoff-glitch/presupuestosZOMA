@@ -319,7 +319,7 @@ export default function ClientesPage() {
           <EmptyState hasSearch={Boolean(search.trim())} />
         ) : (
           <>
-            <div className="hidden overflow-x-auto lg:block">
+            <div className="hidden lg:block overflow-x-auto pb-4 custom-scrollbar">
               <table className="w-full min-w-[900px]">
                 <thead className="bg-slate-50">
                   <tr>

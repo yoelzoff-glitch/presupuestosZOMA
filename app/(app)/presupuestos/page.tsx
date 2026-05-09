@@ -384,8 +384,8 @@ export default function PresupuestosPage() {
           <EmptyState search={search} />
         ) : (
           <>
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1050px]">
+            <div className="hidden lg:block overflow-x-auto pb-4 custom-scrollbar">
+              <table className="w-full min-w-[950px]">
                 <thead className="bg-slate-50">
                   <tr>
                     <TableHead>Presupuesto</TableHead>

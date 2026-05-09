@@ -383,8 +383,8 @@ export default function PedidosPage() {
           <EmptyState />
         ) : (
           <>
-            <div className="hidden overflow-x-auto xl:block">
-              <table className="w-full min-w-[1120px]">
+            <div className="hidden lg:block overflow-x-auto pb-4 custom-scrollbar">
+              <table className="w-full min-w-[1000px]">
                 <thead className="bg-slate-50">
                   <tr>
                     <TableHead>Pedido</TableHead>
@@ -441,8 +441,8 @@ export default function PedidosPage() {
                         </span>
                       </td>
 
-                      <td className="px-5 py-4">
-                        <p className="line-clamp-2 max-w-xs text-sm font-semibold text-slate-500">
+                      <td className="px-5 py-4 max-w-[200px]">
+                        <p className="truncate text-sm font-semibold text-slate-500" title={order.notes || ''}>
                           {order.notes || '-'}
                         </p>
                       </td>
@@ -460,7 +460,7 @@ export default function PedidosPage() {
               </table>
             </div>
 
-            <div className="space-y-3 p-4 xl:hidden">
+            <div className="space-y-3 p-4 lg:hidden">
               {filteredOrders.map((order) => (
                 <OrderMobileCard
                   key={order.id}
