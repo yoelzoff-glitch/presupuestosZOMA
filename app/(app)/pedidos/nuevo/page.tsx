@@ -458,9 +458,7 @@ export default function NuevoPedidoPage() {
       console.error('Error guardando pedido:', error)
 
       toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo guardar el pedido.'
+        (error as any)?.message || 'No se pudo guardar el pedido.'
       )
     } finally {
       setSaving(false)
