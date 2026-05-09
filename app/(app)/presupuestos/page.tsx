@@ -150,25 +150,6 @@ export default function PresupuestosPage() {
     if (error) throw error
   }
 
-  async function handleApproveBudget(budget: Budget) {
-    try {
-      setActionLoadingId(budget.id)
-
-      const { error } = await supabase
-        .from('budgets')
-        .update({ status: 'approved' })
-        .eq('id', budget.id)
-
-      if (error) throw error
-
-      toast.success('Presupuesto aprobado correctamente.')
-      loadBudgets()
-    } catch (err: any) {
-      toast.error(err.message || 'Error al aprobar presupuesto.')
-    } finally {
-      setActionLoadingId(null)
-    }
-  }
 
   async function handleCancelBudget(budget: Budget) {
     if (budget.payment_status === 'paid' || budget.payment_status === 'partial') {
@@ -474,7 +455,6 @@ export default function PresupuestosPage() {
                       key={budget.id}
                       budget={budget}
                       actionLoadingId={actionLoadingId}
-                      onApprove={handleApproveBudget}
                       onCancel={handleCancelBudget}
                     />
                   ))}
@@ -488,7 +468,6 @@ export default function PresupuestosPage() {
                   key={budget.id}
                   budget={budget}
                   actionLoadingId={actionLoadingId}
-                  onApprove={handleApproveBudget}
                   onCancel={handleCancelBudget}
                 />
               ))}
@@ -502,12 +481,10 @@ export default function PresupuestosPage() {
 function BudgetRow({
   budget,
   actionLoadingId,
-  onApprove,
   onCancel,
 }: {
   budget: Budget
   actionLoadingId: string | null
-  onApprove: (budget: Budget) => void
   onCancel: (budget: Budget) => void
 }) {
   const isCancelled = budget.status === 'cancelled'
@@ -547,7 +524,6 @@ function BudgetRow({
         <BudgetActions
           budget={budget}
           isActionLoading={isActionLoading}
-          onApprove={onApprove}
           onCancel={onCancel}
         />
       </td>
@@ -558,12 +534,10 @@ function BudgetRow({
 function BudgetMobileCard({
   budget,
   actionLoadingId,
-  onApprove,
   onCancel,
 }: {
   budget: Budget
   actionLoadingId: string | null
-  onApprove: (budget: Budget) => void
   onCancel: (budget: Budget) => void
 }) {
   const isCancelled = budget.status === 'cancelled'
@@ -604,7 +578,6 @@ function BudgetMobileCard({
         <BudgetActions
           budget={budget}
           isActionLoading={isActionLoading}
-          onApprove={onApprove}
           onCancel={onCancel}
           mobile
         />
@@ -666,13 +639,11 @@ function DateBadge({ date }: { date: string }) {
 function BudgetActions({
   budget,
   isActionLoading,
-  onApprove,
   onCancel,
   mobile = false,
 }: {
   budget: Budget
   isActionLoading: boolean
-  onApprove: (budget: Budget) => void
   onCancel: (budget: Budget) => void
   mobile?: boolean
 }) {
@@ -689,21 +660,6 @@ function BudgetActions({
         Ver
       </Link>
 
-      {!isCancelled && !isApproved && (
-        <button
-          type="button"
-          disabled={isActionLoading}
-          onClick={() => onApprove(budget)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isActionLoading ? (
-            <Loader2 size={15} className="animate-spin" />
-          ) : (
-            <CheckCircle2 size={15} />
-          )}
-          Aprobar
-        </button>
-      )}
 
       {!isCancelled && (
         <button
