@@ -15,10 +15,10 @@ import {
   DollarSign,
   CheckCircle2,
   XCircle,
-  Trash2,
   Loader2,
   Clock3,
   Filter,
+  UserCheck,
 } from 'lucide-react'
 
 type BudgetStatus = 'all' | 'issued' | 'approved' | 'draft' | 'cancelled'
@@ -40,6 +40,11 @@ type Budget = {
   } | null
 }
 
+type SellerProfile = {
+  id: string
+  full_name: string
+}
+
 const statusFilters: { label: string; value: BudgetStatus }[] = [
   { label: 'Todos', value: 'all' },
   { label: 'Emitidos', value: 'issued' },
@@ -50,52 +55,68 @@ const statusFilters: { label: string; value: BudgetStatus }[] = [
 
 export default function PresupuestosPage() {
   const [budgets, setBudgets] = useState<Budget[]>([])
+  const [sellers, setSellers] = useState<SellerProfile[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<BudgetStatus>('all')
+  const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  const [companyId, setCompanyId] = useState<string | null>(null)
+  const [myId, setMyId] = useState<string | null>(null)
 
   useEffect(() => {
-    loadBudgets()
+    loadInitialData()
   }, [])
 
-  async function getCompanyId() {
-    const { data: userData } = await supabase.auth.getUser()
-
-    if (!userData.user) return null
-
-    const { data: profile } = await supabase
-      .from('users_profiles')
-      .select('company_id')
-      .eq('id', userData.user.id)
-      .single()
-
-    return profile?.company_id ?? null
-  }
-
-  async function loadBudgets() {
+  async function loadInitialData() {
     setLoading(true)
 
-    const { data: userData, error: userError } = await supabase.auth.getUser()
-    if (userError || !userData.user) {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) {
       toast.error('No se pudo autenticar al usuario.')
       setLoading(false)
       return
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('users_profiles')
-      .select('company_id, role')
+      .select('company_id, role, id')
       .eq('id', userData.user.id)
       .single()
 
-    if (profileError || !profile?.company_id) {
+    if (!profile?.company_id) {
       toast.error('No se encontró el perfil del usuario.')
       setLoading(false)
       return
     }
 
-    let query = supabase
+    setCompanyId(profile.company_id)
+    setMyId(profile.id)
+
+    // Cargar vendedores para el filtro
+    const { data: sellersData } = await supabase
+      .from('users_profiles')
+      .select('id, full_name')
+      .eq('company_id', profile.company_id)
+      .order('full_name')
+
+    setSellers(sellersData || [])
+
+    // Filtro inicial por defecto
+    if (profile.role === 'vendedor') {
+      setSellerFilter(profile.id)
+    }
+
+    await loadBudgets(profile.company_id)
+  }
+
+  async function loadBudgets(cid?: string) {
+    const currentCid = cid || companyId
+    if (!currentCid) return
+
+    setLoading(true)
+
+    const { data, error } = await supabase
       .from('budgets')
       .select(`
         id,
@@ -107,40 +128,31 @@ export default function PresupuestosPage() {
         payment_status,
         paid_amount,
         created_at,
+        seller_id,
         clients (
           name,
           cuit
         )
       `)
-      .eq('company_id', profile.company_id)
-
-    // If vendor, only show their own budgets
-    if (profile.role === 'vendedor') {
-      query = query.eq('seller_id', userData.user.id)
-    }
-
-    const { data, error } = await query.order('budget_number', { ascending: false })
+      .eq('company_id', currentCid)
+      .order('budget_number', { ascending: false })
       .range(0, 4999)
 
     if (error) {
       toast.error(error.message)
-      setLoading(false)
-      return
-    }
-
-    if (data) {
+    } else if (data) {
       const normalized = data.map((b: any) => ({
         ...b,
         client: Array.isArray(b.clients) ? b.clients[0] || null : b.clients || null,
       }))
-
       setBudgets(normalized)
     }
 
     setLoading(false)
   }
 
-  async function removeBudgetImpact(budgetId: string, companyId: string) {
+  async function removeBudgetImpact(budgetId: string) {
+    if (!companyId) return
     const { error } = await supabase
       .from('account_movements')
       .delete()
@@ -149,7 +161,6 @@ export default function PresupuestosPage() {
 
     if (error) throw error
   }
-
 
   async function handleCancelBudget(budget: Budget) {
     if (budget.status === 'approved') {
@@ -170,8 +181,6 @@ export default function PresupuestosPage() {
 
     setActionLoadingId(budget.id)
 
-    const companyId = await getCompanyId()
-
     if (!companyId) {
       toast.error('No se encontró la empresa del usuario.')
       setActionLoadingId(null)
@@ -179,7 +188,7 @@ export default function PresupuestosPage() {
     }
 
     try {
-      await removeBudgetImpact(budget.id, companyId)
+      await removeBudgetImpact(budget.id)
 
       const { error } = await supabase
         .from('budgets')
@@ -207,66 +216,10 @@ export default function PresupuestosPage() {
     }
   }
 
-  async function handleDeleteBudget(budget: Budget) {
-    if (budget.payment_status === 'paid' || budget.payment_status === 'partial') {
-      toast.error('No se puede eliminar un presupuesto que ya tiene pagos registrados.')
-      return
-    }
-
-    const confirmDelete = window.confirm(
-      `¿Seguro querés eliminar el presupuesto ${
-        budget.budget_code || budget.budget_number
-      }? Esta acción no se puede deshacer.`
-    )
-
-    if (!confirmDelete) return
-
-    setActionLoadingId(budget.id)
-
-    const companyId = await getCompanyId()
-
-    if (!companyId) {
-      toast.error('No se encontró la empresa del usuario.')
-      setActionLoadingId(null)
-      return
-    }
-
-    try {
-      await removeBudgetImpact(budget.id, companyId)
-
-      const { error: itemsError } = await supabase
-        .from('budget_items')
-        .delete()
-        .eq('budget_id', budget.id)
-
-      if (itemsError) throw itemsError
-
-      const { error } = await supabase
-        .from('budgets')
-        .delete()
-        .eq('budget_id', budget.id)
-        .eq('company_id', companyId)
-
-      if (error) throw error
-
-      setBudgets((prev) => prev.filter((item) => item.id !== budget.id))
-
-      toast.success('Presupuesto eliminado correctamente.')
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : 'No se pudo eliminar el presupuesto.'
-      )
-    } finally {
-      setActionLoadingId(null)
-    }
-  }
-
   const filteredBudgets = useMemo(() => {
     const q = search.toLowerCase().trim()
 
-    return budgets.filter((budget) => {
+    return budgets.filter((budget: any) => {
       const matchesSearch =
         !q ||
         budget.budget_code?.toLowerCase().includes(q) ||
@@ -278,9 +231,11 @@ export default function PresupuestosPage() {
       const matchesStatus =
         statusFilter === 'all' || budget.status === statusFilter
 
-      return matchesSearch && matchesStatus
+      const matchesSeller = sellerFilter === 'all' || budget.seller_id === sellerFilter
+
+      return matchesSearch && matchesStatus && matchesSeller
     })
-  }, [budgets, search, statusFilter])
+  }, [budgets, search, statusFilter, sellerFilter])
 
   const activeBudgets = budgets.filter((budget) => budget.status !== 'cancelled')
 
@@ -293,30 +248,6 @@ export default function PresupuestosPage() {
   const approvedCount = budgets.filter((b) => b.status === 'approved').length
   const draftCount = budgets.filter((b) => b.status === 'draft').length
   const cancelledCount = budgets.filter((b) => b.status === 'cancelled').length
-  function getPaymentBadge(paymentStatus?: string) {
-    switch (paymentStatus) {
-      case 'paid':
-        return (
-          <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-            Pagado
-          </span>
-        )
-
-      case 'partial':
-        return (
-          <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-            Pago parcial
-          </span>
-        )
-
-      default:
-        return (
-          <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-            Sin pagar
-          </span>
-        )
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -336,8 +267,7 @@ export default function PresupuestosPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Consultá presupuestos, filtrá por estado, revisá importes y
-              administrá anulaciones o eliminaciones desde una vista más clara.
+              Consultá presupuestos y colaborá con tus compañeros. Ahora podés alternar entre tus presupuestos y los del resto del equipo.
             </p>
           </div>
 
@@ -377,7 +307,7 @@ export default function PresupuestosPage() {
                 Listado de presupuestos
               </h2>
               <p className="text-sm text-slate-500">
-                Buscá por número, cliente, CUIT o estado.
+                Buscá por número, cliente o filtrá por vendedor asignado.
               </p>
             </div>
 
@@ -392,13 +322,26 @@ export default function PresupuestosPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar presupuesto..."
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:w-80"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:w-64"
                 />
               </div>
 
+              <select
+                value={sellerFilter}
+                onChange={(e) => setSellerFilter(e.target.value)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              >
+                <option value="all">Todos los vendedores</option>
+                {sellers.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name} {s.id === myId ? '(Yo)' : ''}
+                  </option>
+                ))}
+              </select>
+
               <button
                 type="button"
-                onClick={loadBudgets}
+                onClick={() => loadBudgets()}
                 disabled={loading}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -801,9 +744,7 @@ function EmptyState({ search }: { search: string }) {
       </h3>
 
       <p className="mt-1 text-sm text-slate-500">
-        {search
-          ? 'Probá cambiar la búsqueda o limpiar los filtros.'
-          : 'Creá un presupuesto nuevo para empezar a trabajar.'}
+        Probá cambiando el filtro o los términos de búsqueda.
       </p>
 
       <Link
