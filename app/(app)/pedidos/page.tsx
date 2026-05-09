@@ -383,8 +383,8 @@ export default function PedidosPage() {
           <EmptyState />
         ) : (
           <>
-            <div className="hidden lg:block overflow-x-auto pb-4 custom-scrollbar">
-              <table className="w-full min-w-[1000px]">
+            <div className="overflow-x-auto pb-4 custom-scrollbar">
+              <table className="w-full text-[13px]">
                 <thead className="bg-slate-50">
                   <tr>
                     <TableHead>Pedido</TableHead>
@@ -409,29 +409,29 @@ export default function PedidosPage() {
                           : 'hover:bg-blue-50/40'
                       }`}
                     >
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <OrderIdentity order={order} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <SourceBadge source={order.source} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <DateBadge date={order.created_at || order.order_date} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <ClientName order={order} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <span className="font-bold text-slate-600">
                           {order.clients?.cuit || '-'}
                         </span>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <StatusBadge status={order.status} />
                       </td>
                       
@@ -441,7 +441,7 @@ export default function PedidosPage() {
                         </span>
                       </td>
 
-                      <td className="px-5 py-4 max-w-[200px]">
+                      <td className="px-3 py-3 max-w-[140px]">
                         <p className="truncate text-sm font-semibold text-slate-500" title={order.notes || ''}>
                           {order.notes || '-'}
                         </p>
@@ -618,7 +618,7 @@ function OrderActions({
     <div className={`flex gap-2 ${mobile ? 'flex-col' : 'justify-end'}`}>
       <Link
         href={`/pedidos/${order.id}`}
-        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
       >
         <FileText size={15} />
         Ver
@@ -629,7 +629,7 @@ function OrderActions({
           type="button"
           onClick={onCancel}
           disabled={cancelling}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {cancelling ? (
             <Loader2 size={15} className="animate-spin" />
@@ -643,7 +643,7 @@ function OrderActions({
       {order.status === 'confirmed' && order.budget_id && (
         <Link
           href={`/presupuestos/${order.budget_id}`}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
         >
           <FileText size={15} />
           Presupuesto
@@ -703,7 +703,7 @@ function TableHead({
 }) {
   return (
     <th
-      className={`px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500 ${
+      className={`px-3 py-3 text-[11px] font-black uppercase tracking-wider text-slate-500 ${
         align === 'right' ? 'text-right' : 'text-left'
       }`}
     >

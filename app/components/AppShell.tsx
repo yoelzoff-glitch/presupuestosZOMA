@@ -233,7 +233,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-white/5 bg-slate-950 text-white lg:block">
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r border-white/5 bg-slate-950 text-white lg:block">
         <SidebarContent />
       </aside>
 
@@ -265,7 +265,7 @@ export default function AppShell({ children }: AppShellProps) {
         <SidebarContent onNavigate={() => setMobileOpen(false)} />
       </aside>
 
-      <main className="lg:pl-72">
+      <main className="lg:pl-64">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 px-4 py-4 backdrop-blur-xl sm:px-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
@@ -302,8 +302,8 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
         </header>
 
-        <section className="p-4 sm:p-6">
-          <div className="mx-auto w-full max-w-7xl">{children}</div>
+        <section className="p-4 lg:p-8">
+          <div className="mx-auto w-full max-w-[1800px]">{children}</div>
         </section>
       </main>
 
