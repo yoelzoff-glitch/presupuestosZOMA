@@ -88,9 +88,7 @@ export default function PresupuestoDetallePage() {
       .eq('id', userData.user?.id)
       .single()
 
-    if (userProfile) {
-      setRole(userProfile.role || 'vendedor')
-    }
+    if (userProfile) setRole(userProfile.role || 'vendedor')
 
     const { data, error } = await supabase
       .from('budgets')
@@ -125,7 +123,6 @@ export default function PresupuestoDetallePage() {
       ...data,
       clients: Array.isArray(data.clients) ? data.clients[0] : data.clients,
     }
-
     setBudget(normalizedBudget as Budget)
 
     const { data: companyData } = await supabase
@@ -170,7 +167,6 @@ export default function PresupuestoDetallePage() {
     try {
       setConvertingToOrder(true)
       const nextOrderNumber = await getNextOrderNumber(budget.company_id)
-
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -185,7 +181,6 @@ export default function PresupuestoDetallePage() {
         })
         .select('id')
         .single()
-
       if (orderError) throw orderError
 
       const orderItems = items.map((item) => ({
@@ -199,12 +194,11 @@ export default function PresupuestoDetallePage() {
         unit_price: item.unit_price,
         discount_str: item.discount_str,
       }))
-
       await supabase.from('order_items').insert(orderItems)
       setAssociatedOrderId(orderData.id)
-      toast.success('¡Operación realizada con éxito!')
+      toast.success('Pedido generado.')
     } catch (err: any) {
-      toast.error('Error al procesar el pedido.')
+      toast.error('Error.')
     } finally {
       setConvertingToOrder(false)
     }
@@ -224,21 +218,39 @@ export default function PresupuestoDetallePage() {
   return (
     <>
       <style jsx global>{`
+        /* Ocultar el bloque de impresion siempre en pantalla */
+        #print-section {
+          display: none;
+          visibility: hidden;
+          position: absolute;
+          left: -9999px;
+        }
+
         @media print {
           @page {
             size: A4;
             margin: 10mm 15mm;
           }
+
           body {
             background: white !important;
+            margin: 0 !important;
           }
-          .no-print {
+
+          /* Ocultar la UI de la app */
+          .print-hidden, .no-print, [class*="print:hidden"] {
             display: none !important;
           }
+
+          /* Mostrar el bloque de impresion con prioridad maxima */
           #print-section {
             display: block !important;
             visibility: visible !important;
+            position: relative !important;
+            left: 0 !important;
             width: 100% !important;
+            height: auto !important;
+            background: white !important;
           }
         }
       `}</style>
@@ -312,12 +324,12 @@ export default function PresupuestoDetallePage() {
         </section>
       </div>
 
-      {/* VISTA DE IMPRESIÓN (PDF) - Solo visible en impresión */}
-      <div id="print-section" className="hidden print:block bg-white text-slate-900 font-sans">
+      {/* VISTA DE IMPRESIÓN (PDF) - Forzada a ocultarse en pantalla */}
+      <div id="print-section">
         <div className="flex justify-between border-b-2 border-slate-900 pb-6 mb-8">
           <div>
             {company?.logo_url ? (
-              <img src={company.logo_url} alt="Logo" className="h-12 mb-2" />
+              <img src={company.logo_url} alt="Logo" style={{ height: '50px' }} />
             ) : (
               <h1 className="text-xl font-black uppercase">{company?.name || 'ZOMA TECH'}</h1>
             )}
