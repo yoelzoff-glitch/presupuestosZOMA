@@ -59,10 +59,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Error creando usuario de autenticación', detail: authError?.message }, { status: 400 })
     }
 
-    // 3. Create User Profile
+    // 3. Create/Update User Profile (Upsert to handle trigger)
     const { error: profileError } = await supabaseAdmin
       .from('users_profiles')
-      .insert({
+      .upsert({
         id: authData.user.id,
         company_id: profile.company_id,
         full_name,
