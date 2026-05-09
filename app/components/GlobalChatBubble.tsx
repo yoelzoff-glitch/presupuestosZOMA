@@ -27,7 +27,7 @@ type ChatUser = {
 export default function GlobalChatBubble() {
   const [isOpen, setIsOpen] = useState(false)
   const [view, setView] = useState<'contacts' | 'messages'>('contacts')
-  const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null) // null = Global
+  const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [users, setUsers] = useState<ChatUser[]>([])
   const [newMessage, setNewMessage] = useState('')
@@ -38,6 +38,14 @@ export default function GlobalChatBubble() {
   const [unreadCount, setUnreadCount] = useState(0)
   
   const scrollRef = useRef<HTMLDivElement>(null)
+  const selectedUserRef = useRef<ChatUser | null>(null)
+  const viewRef = useRef<'contacts' | 'messages'>('contacts')
+
+  // Mantener las refs actualizadas para el callback de tiempo real
+  useEffect(() => {
+    selectedUserRef.current = selectedUser
+    viewRef.current = view
+  }, [selectedUser, view])
 
   useEffect(() => {
     initChat()
@@ -46,7 +54,6 @@ export default function GlobalChatBubble() {
   useEffect(() => {
     if (!companyId || !currentUserId) return
 
-    // Suscribirse a TODOS los mensajes de la empresa en tiempo real
     const channel = supabase
       .channel(`company-chat-${companyId}`)
       .on(
@@ -60,31 +67,34 @@ export default function GlobalChatBubble() {
         async (payload) => {
           const newMsg = payload.new as Message
           
-          // Verificar si el mensaje me pertenece (global o privado para mí)
+          // 1. Verificar si el mensaje es relevante para MÍ
+          // (Es global O es para mí O yo lo envié)
           const isForMe = !newMsg.receiver_id || newMsg.receiver_id === currentUserId || newMsg.sender_id === currentUserId
-          
           if (!isForMe) return
 
-          // Traer perfil del remitente
+          // 2. Traer perfil
           const { data: profile } = await supabase
             .from('users_profiles')
             .select('full_name, role')
             .eq('id', newMsg.sender_id)
             .single()
 
-          const msgWithProfile = {
-            ...newMsg,
-            profiles: profile || undefined
-          }
+          const msgWithProfile = { ...newMsg, profiles: profile || undefined }
 
-          // Solo añadir a la lista si estamos en la conversación correcta
-          const isCurrentConversation = 
-            (!selectedUser && !newMsg.receiver_id) || 
-            (selectedUser && (newMsg.sender_id === selectedUser.id || newMsg.receiver_id === selectedUser.id))
+          // 3. ¿Es de la conversación que tengo abierta AHORA?
+          const currentSelUser = selectedUserRef.current
+          const currentView = viewRef.current
 
-          if (isCurrentConversation) {
+          const isGlobalChat = !currentSelUser && !newMsg.receiver_id
+          const isPrivateChat = currentSelUser && (
+            (newMsg.sender_id === currentSelUser.id && newMsg.receiver_id === currentUserId) ||
+            (newMsg.sender_id === currentUserId && newMsg.receiver_id === currentSelUser.id)
+          )
+
+          if (currentView === 'messages' && (isGlobalChat || isPrivateChat)) {
             setMessages((prev) => [...prev, msgWithProfile])
-          } else if (!isOpen || view === 'contacts') {
+          } else {
+            // Si no estoy en esa charla, sumar al contador global
             setUnreadCount((prev) => prev + 1)
           }
         }
@@ -94,7 +104,7 @@ export default function GlobalChatBubble() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [companyId, currentUserId, selectedUser, isOpen, view])
+  }, [companyId, currentUserId]) // Suscripción única por sesión
 
   useEffect(() => {
     if (isOpen && view === 'messages') {
@@ -136,8 +146,10 @@ export default function GlobalChatBubble() {
   }
 
   async function loadMessages(targetUserId: string | null) {
-    if (!companyId) return
+    if (!companyId || !currentUserId) return
     setLoading(true)
+    setMessages([]) // Limpiar mensajes anteriores antes de cargar los nuevos
+
     try {
       let query = supabase
         .from('company_messages')
@@ -156,7 +168,7 @@ export default function GlobalChatBubble() {
         .eq('company_id', companyId)
 
       if (targetUserId) {
-        // Chat Privado: (yo -> él) O (él -> yo)
+        // Chat Privado
         query = query.or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${targetUserId}),and(sender_id.eq.${targetUserId},receiver_id.eq.${currentUserId})`)
       } else {
         // Chat Global
@@ -170,7 +182,7 @@ export default function GlobalChatBubble() {
       if (error) throw error
       setMessages(data as any || [])
     } catch (error) {
-      console.error('Error:', error)
+      console.error('Error cargando mensajes:', error)
     } finally {
       setLoading(false)
     }
@@ -181,17 +193,20 @@ export default function GlobalChatBubble() {
     if (!newMessage.trim() || !companyId || !currentUserId || sending) return
 
     setSending(true)
+    const targetId = selectedUser?.id || null
+
     try {
       const { error } = await supabase.from('company_messages').insert({
         company_id: companyId,
         sender_id: currentUserId,
-        receiver_id: selectedUser?.id || null,
+        receiver_id: targetId,
         message: newMessage.trim(),
       })
 
       if (error) throw error
       setNewMessage('')
     } catch (error) {
+      console.error('Error enviando mensaje:', error)
       toast.error('Error al enviar mensaje')
     } finally {
       setSending(false)
@@ -226,7 +241,7 @@ export default function GlobalChatBubble() {
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/30">
                 {view === 'contacts' ? <Users size={20} /> : <UserIcon size={20} />}
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-black truncate max-w-[180px]">
                   {view === 'contacts' ? 'Mensajería' : (selectedUser?.full_name || 'Muro General')}
                 </h3>
