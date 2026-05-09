@@ -210,47 +210,72 @@ export default function PresupuestoDetallePage() {
 
   const finalTotal = Number(budget?.total_amount || calculatedTotal || 0)
 
-  if (loading) return <div className="p-20 text-center">Cargando...</div>
-  if (!budget) return <div className="p-20 text-center">No encontrado</div>
+  if (loading) return <div className="p-20 text-center font-black">Cargando...</div>
+  if (!budget) return <div className="p-20 text-center font-black">No encontrado</div>
 
   const budgetLabel = budget.budget_code || `000-${budget.budget_number}`
 
   return (
     <>
+      {/* ESTILOS GLOBALES DE ALTA PRIORIDAD PARA IMPRESIÓN */}
       <style jsx global>{`
         /* Ocultar el bloque de impresion siempre en pantalla */
         #print-section {
-          display: none;
-          visibility: hidden;
-          position: absolute;
-          left: -9999px;
+          display: none !important;
+          visibility: hidden !important;
         }
 
         @media print {
           @page {
             size: A4;
-            margin: 10mm 15mm;
+            margin: 0; /* Quitamos margenes para controlar con padding */
           }
 
-          body {
+          /* OCULTAR TODO LO QUE NO SEA EL PRESUPUESTO */
+          /* Esto apunta a los elementos comunes de layout de la app */
+          nav, aside, header, footer, .sidebar, .topbar, .no-print, 
+          button, .print-hidden, [class*="print:hidden"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Asegurar que el body y el html esten limpios */
+          html, body {
             background: white !important;
             margin: 0 !important;
+            padding: 0 !important;
+            width: 210mm !important;
+            height: auto !important;
           }
 
-          /* Ocultar la UI de la app */
-          .print-hidden, .no-print, [class*="print:hidden"] {
-            display: none !important;
+          /* EL CONTENEDOR DE NEXTJS DEBE SER TRANSPARENTE AL FLUJO */
+          #__next, main, .main-content {
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
           }
 
-          /* Mostrar el bloque de impresion con prioridad maxima */
+          /* EL PRESUPUESTO TOMA EL CONTROL */
           #print-section {
             display: block !important;
             visibility: visible !important;
-            position: relative !important;
+            position: absolute !important;
+            top: 0 !important;
             left: 0 !important;
-            width: 100% !important;
-            height: auto !important;
+            width: 210mm !important;
+            min-height: 297mm !important;
+            padding: 15mm !important;
             background: white !important;
+            z-index: 9999 !important;
+          }
+
+          /* Forzamos colores de fondo e imagenes para PDF */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
       `}</style>
@@ -281,7 +306,7 @@ export default function PresupuestoDetallePage() {
                 onClick={() => window.print()}
                 className="inline-flex items-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white hover:bg-slate-700"
               >
-                <Printer size={18} /> Imprimir
+                <Printer size={18} /> Imprimir / PDF
               </button>
             </div>
           </div>
@@ -324,7 +349,7 @@ export default function PresupuestoDetallePage() {
         </section>
       </div>
 
-      {/* VISTA DE IMPRESIÓN (PDF) - Forzada a ocultarse en pantalla */}
+      {/* VISTA DE IMPRESIÓN (PDF) - AISLADA TOTALMENTE */}
       <div id="print-section">
         <div className="flex justify-between border-b-2 border-slate-900 pb-6 mb-8">
           <div>
