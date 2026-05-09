@@ -21,6 +21,7 @@ import {
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
 import NotificationsBell from '@/app/components/NotificationsBell'
+import GlobalChatBubble from '@/app/components/GlobalChatBubble'
 
 type AppShellProps = {
   children: React.ReactNode
@@ -279,6 +280,9 @@ export default function AppShell({ children }: AppShellProps) {
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </section>
       </main>
+
+      {/* Burbuja de Chat Global */}
+      <GlobalChatBubble />
     </div>
   )
 }
