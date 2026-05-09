@@ -41,7 +41,6 @@ export default function GlobalChatBubble() {
   const selectedUserRef = useRef<ChatUser | null>(null)
   const viewRef = useRef<'contacts' | 'messages'>('contacts')
 
-  // Mantener las refs actualizadas para el callback de tiempo real
   useEffect(() => {
     selectedUserRef.current = selectedUser
     viewRef.current = view
@@ -67,12 +66,9 @@ export default function GlobalChatBubble() {
         async (payload) => {
           const newMsg = payload.new as Message
           
-          // 1. Verificar si el mensaje es relevante para MÍ
-          // (Es global O es para mí O yo lo envié)
           const isForMe = !newMsg.receiver_id || newMsg.receiver_id === currentUserId || newMsg.sender_id === currentUserId
           if (!isForMe) return
 
-          // 2. Traer perfil
           const { data: profile } = await supabase
             .from('users_profiles')
             .select('full_name, role')
@@ -81,7 +77,6 @@ export default function GlobalChatBubble() {
 
           const msgWithProfile = { ...newMsg, profiles: profile || undefined }
 
-          // 3. ¿Es de la conversación que tengo abierta AHORA?
           const currentSelUser = selectedUserRef.current
           const currentView = viewRef.current
 
@@ -94,7 +89,6 @@ export default function GlobalChatBubble() {
           if (currentView === 'messages' && (isGlobalChat || isPrivateChat)) {
             setMessages((prev) => [...prev, msgWithProfile])
           } else {
-            // Si no estoy en esa charla, sumar al contador global
             setUnreadCount((prev) => prev + 1)
           }
         }
@@ -104,7 +98,7 @@ export default function GlobalChatBubble() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [companyId, currentUserId]) // Suscripción única por sesión
+  }, [companyId, currentUserId])
 
   useEffect(() => {
     if (isOpen && view === 'messages') {
@@ -148,7 +142,7 @@ export default function GlobalChatBubble() {
   async function loadMessages(targetUserId: string | null) {
     if (!companyId || !currentUserId) return
     setLoading(true)
-    setMessages([]) // Limpiar mensajes anteriores antes de cargar los nuevos
+    setMessages([])
 
     try {
       let query = supabase
@@ -168,8 +162,10 @@ export default function GlobalChatBubble() {
         .eq('company_id', companyId)
 
       if (targetUserId) {
-        // Chat Privado
-        query = query.or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${targetUserId}),and(sender_id.eq.${targetUserId},receiver_id.eq.${currentUserId})`)
+        // Chat Privado: Simplificamos la lógica de consulta para evitar errores de OR
+        query = query
+          .in('sender_id', [currentUserId, targetUserId])
+          .in('receiver_id', [currentUserId, targetUserId])
       } else {
         // Chat Global
         query = query.is('receiver_id', null)
@@ -216,6 +212,7 @@ export default function GlobalChatBubble() {
   function openConversation(user: ChatUser | null) {
     setSelectedUser(user)
     setView('messages')
+    setUnreadCount(0) // Resetear notificaciones al abrir cualquier chat
     loadMessages(user?.id || null)
   }
 
