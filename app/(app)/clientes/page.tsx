@@ -24,6 +24,10 @@ type Client = {
   address: string | null
   active?: boolean | null
   created_at?: string
+  seller_id?: string | null
+  seller?: {
+    full_name: string
+  } | null
 }
 
 export default function ClientesPage() {
@@ -78,7 +82,16 @@ export default function ClientesPage() {
 
     let query = supabase
       .from('clients')
-      .select('id, cuit, name, address, active, created_at, seller_id')
+      .select(`
+        id, 
+        cuit, 
+        name, 
+        address, 
+        active, 
+        created_at, 
+        seller_id,
+        seller:users_profiles!seller_id(full_name)
+      `)
       .eq('company_id', profile.company_id)
 
     // If vendor, only show their own clients
@@ -95,7 +108,7 @@ export default function ClientesPage() {
       return
     }
 
-    setClients(data || [])
+    setClients((data as any) || [])
     setLoading(false)
   }
 
@@ -265,6 +278,7 @@ export default function ClientesPage() {
                     <TableHead>Cliente</TableHead>
                     <TableHead>CUIT</TableHead>
                     <TableHead>Dirección</TableHead>
+                    <TableHead>Vendedor</TableHead>
                     <TableHead>Alta</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead align="right">Acción</TableHead>
@@ -287,6 +301,15 @@ export default function ClientesPage() {
 
                       <td className="px-5 py-4">
                         <AddressText address={client.address} />
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                          <div className="h-6 w-6 flex items-center justify-center rounded-lg bg-blue-50 text-[10px] text-blue-600 border border-blue-100">
+                            {client.seller?.full_name?.charAt(0) || 'A'}
+                          </div>
+                          {client.seller?.full_name || 'Admin'}
+                        </div>
                       </td>
 
                       <td className="px-5 py-4">
@@ -329,6 +352,10 @@ function ClientMobileCard({ client }: { client: Client }) {
       <div className="mt-4 space-y-3">
         <CuitBadge cuit={client.cuit} />
         <AddressText address={client.address} />
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+          <span className="text-slate-400">Vendedor:</span>
+          {client.seller?.full_name || 'Admin'}
+        </div>
         <DateText date={client.created_at} />
       </div>
 
