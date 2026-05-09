@@ -369,6 +369,18 @@ export default function NuevoPedidoPage() {
       if (orderError) throw orderError
       if (!orderData?.id) throw new Error('No se pudo crear el pedido.')
 
+      // Insertar notificación para el admin
+      if (profile?.role === 'vendedor') {
+        await supabase.from('notifications').insert({
+          company_id: companyId,
+          title: 'Nuevo pedido pendiente',
+          message: `El vendedor ha cargado un nuevo pedido para ${selectedClient?.name}.`,
+          type: 'new_order',
+          link: `/pedidos/${orderData.id}`,
+          read: false,
+        })
+      }
+
       const orderId = orderData.id
 
       const itemsToInsert = items.map((item) => ({

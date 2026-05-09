@@ -89,6 +89,7 @@ export default function PedidoDetallePage() {
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({})
 
   const [loading, setLoading] = useState(true)
+  const [role, setRole] = useState<string | null>(null)
   const [converting, setConverting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
@@ -105,14 +106,21 @@ export default function PedidoDetallePage() {
   async function loadOrder() {
     setLoading(true)
 
-    const currentCompanyId = await getUserCompanyId()
+    const { data: userData } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userData.user?.id)
+      .single()
 
-    if (!currentCompanyId) {
-      toast.error('No se encontró la empresa del usuario.')
+    if (!profile?.company_id) {
+      toast.error('No se encontró el perfil del usuario.')
       setLoading(false)
       return
     }
 
+    const currentCompanyId = profile.company_id
+    setRole(profile.role || 'vendedor')
     setCompanyId(currentCompanyId)
 
     const { data: orderData, error: orderError } = await supabase
@@ -705,19 +713,21 @@ export default function PedidoDetallePage() {
                   {cancelling ? 'Anulando...' : 'Anular'}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={confirmPortalOrder} // Reutilizamos la lógica de confirmar
-                  disabled={converting || cancelling}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {converting ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : (
-                    <CheckCircle2 size={18} />
-                  )}
-                  {converting ? 'Confirmando...' : 'Confirmar Pedido'}
-                </button>
+                {role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={confirmPortalOrder}
+                    disabled={converting || cancelling}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {converting ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={18} />
+                    )}
+                    {converting ? 'Confirmando...' : 'Confirmar Pedido'}
+                  </button>
+                )}
               </>
             )}
 
@@ -737,19 +747,21 @@ export default function PedidoDetallePage() {
                   {cancelling ? 'Anulando...' : 'Anular'}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={confirmPortalOrder}
-                  disabled={converting || cancelling}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {converting ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : (
-                    <CheckCircle2 size={18} />
-                  )}
-                  {converting ? 'Confirmando...' : 'Confirmar Pedido'}
-                </button>
+                {role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={confirmPortalOrder}
+                    disabled={converting || cancelling}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {converting ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={18} />
+                    )}
+                    {converting ? 'Confirmando...' : 'Confirmar Pedido'}
+                  </button>
+                )}
               </>
             )}
 
