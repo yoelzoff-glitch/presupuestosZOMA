@@ -11,16 +11,12 @@ import {
   User,
   CalendarDays,
   DollarSign,
-  Hash,
-  Tag,
   Package,
   Printer,
   Loader2,
   CheckCircle2,
   XCircle,
   Clock3,
-  MapPin,
-  Wallet,
   ClipboardList,
   Zap,
 } from 'lucide-react'
@@ -85,7 +81,6 @@ export default function PresupuestoDetallePage() {
 
   async function loadBudget() {
     setLoading(true)
-
     const { data: userData } = await supabase.auth.getUser()
     const { data: userProfile } = await supabase
       .from('users_profiles')
@@ -121,14 +116,8 @@ export default function PresupuestoDetallePage() {
       .single()
 
     if (error || !data) {
-      toast.error(error?.message || 'No se encontró el presupuesto.')
+      toast.error('No se encontró el presupuesto.')
       setLoading(false)
-      return
-    }
-
-    if (userProfile?.role === 'vendedor' && data.seller_id !== userData.user?.id) {
-      toast.error('No tenés permiso para ver este presupuesto.')
-      router.push('/presupuestos')
       return
     }
 
@@ -145,30 +134,13 @@ export default function PresupuestoDetallePage() {
       .eq('id', data.company_id)
       .single()
 
-    if (companyData) {
-      setCompany(companyData as Company)
-    }
+    if (companyData) setCompany(companyData as Company)
 
-    const { data: itemsData, error: itemsError } = await supabase
+    const { data: itemsData } = await supabase
       .from('budget_items')
-      .select(`
-        id,
-        product_code,
-        product_name,
-        category,
-        quantity,
-        unit_price,
-        total,
-        discount_str
-      `)
+      .select('id, product_code, product_name, category, quantity, unit_price, total, discount_str')
       .eq('budget_id', id)
       .order('created_at', { ascending: true })
-
-    if (itemsError) {
-      toast.error(itemsError.message)
-      setLoading(false)
-      return
-    }
 
     setItems(itemsData || [])
 
@@ -179,36 +151,22 @@ export default function PresupuestoDetallePage() {
       .maybeSingle()
 
     setAssociatedOrderId(orderData?.id || null)
-
     setLoading(false)
   }
 
   async function getNextOrderNumber(currentCompanyId: string) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('orders')
       .select('order_number')
       .eq('company_id', currentCompanyId)
       .order('order_number', { ascending: false })
       .limit(1)
       .maybeSingle()
-
-    if (error) throw error
     return (data?.order_number ?? 0) + 1
   }
 
   async function convertToOrder() {
-    if (!budget || !role) return
-
-    if (budget.status === 'cancelled') {
-      toast.error('No se puede convertir un presupuesto anulado.')
-      return
-    }
-
-    if (associatedOrderId) {
-      toast.info('Este presupuesto ya fue convertido en pedido.')
-      return
-    }
-
+    if (!budget || !role || associatedOrderId) return
     try {
       setConvertingToOrder(true)
       const nextOrderNumber = await getNextOrderNumber(budget.company_id)
@@ -242,185 +200,76 @@ export default function PresupuestoDetallePage() {
         discount_str: item.discount_str,
       }))
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems)
-
-      if (itemsError) throw itemsError
+      await supabase.from('order_items').insert(orderItems)
       setAssociatedOrderId(orderData.id)
-      
-      const successMsg = role === 'admin' 
-        ? '¡Presupuesto convertido a pedido correctamente!' 
-        : '¡Pedido solicitado correctamente! El Admin debe aprobarlo.'
-      
-      toast.success(successMsg)
-
-      if (role === 'vendedor') {
-        await supabase.from('notifications').insert({
-          company_id: budget.company_id,
-          title: 'Nueva solicitud de pedido',
-          message: `El vendedor solicitó convertir el presupuesto ${budgetLabel} en pedido.`,
-          type: 'new_order',
-          link: `/pedidos/${orderData.id}`
-        })
-      }
+      toast.success('¡Operación realizada con éxito!')
     } catch (err: any) {
-      toast.error(err?.message || 'Error al convertir a pedido.')
+      toast.error('Error al procesar el pedido.')
     } finally {
       setConvertingToOrder(false)
     }
   }
 
-  const calculatedTotal = useMemo(() => {
-    return items.reduce((acc, item) => {
-      const itemTotal = item.total ?? (Number(item.quantity || 0) * Number(item.unit_price || 0))
-      return acc + Number(itemTotal || 0)
-    }, 0)
-  }, [items])
+  const calculatedTotal = items.reduce((acc, item) => {
+    return acc + (Number(item.quantity || 0) * Number(item.unit_price || 0))
+  }, 0)
 
   const finalTotal = Number(budget?.total_amount || calculatedTotal || 0)
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[420px] items-center justify-center rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <div>
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
-            <Loader2 size={28} className="animate-spin" />
-          </div>
-          <h2 className="text-xl font-black text-slate-900">Cargando presupuesto</h2>
-        </div>
-      </div>
-    )
-  }
-
-  if (!budget) {
-    return (
-      <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <h2 className="text-xl font-black text-slate-900">Presupuesto no encontrado</h2>
-        <Link href="/presupuestos" className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white">
-          <ArrowLeft size={18} /> Volver
-        </Link>
-      </div>
-    )
-  }
+  if (loading) return <div className="p-20 text-center">Cargando...</div>
+  if (!budget) return <div className="p-20 text-center">No encontrado</div>
 
   const budgetLabel = budget.budget_code || `000-${budget.budget_number}`
 
   return (
     <>
-      {/* ESTILOS EXCLUSIVOS PARA IMPRESIÓN */}
       <style jsx global>{`
         @media print {
           @page {
             size: A4;
             margin: 10mm 15mm;
           }
-
-          html, body {
-            width: 210mm;
-            height: 297mm;
+          body {
             background: white !important;
           }
-
-          /* Ocultar TODO lo que no sea el area de impresion */
-          body > *:not(#print-root) {
+          .no-print {
             display: none !important;
           }
-
-          #print-root {
+          #print-section {
             display: block !important;
+            visibility: visible !important;
             width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-
-          .print-header {
-            display: flex !important;
-            justify-content: space-between !important;
-            border-bottom: 2px solid #0f172a !important;
-            padding-bottom: 20px !important;
-            margin-bottom: 25px !important;
-          }
-
-          .print-title {
-            font-size: 24px !important;
-            font-weight: 900 !important;
-            color: #0f172a !important;
-          }
-
-          .print-table {
-            width: 100% !important;
-            border-collapse: collapse !important;
-          }
-
-          .print-table th {
-            background: #0f172a !important;
-            color: white !important;
-            padding: 10px !important;
-            font-size: 10px !important;
-            text-transform: uppercase !important;
-          }
-
-          .print-table td {
-            padding: 10px !important;
-            border-bottom: 1px solid #f1f5f9 !important;
-            font-size: 10px !important;
-          }
-
-          .print-client-box {
-            background: #f8fafc !important;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 12px !important;
-            padding: 15px !important;
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            gap: 20px !important;
-            margin-bottom: 20px !important;
-          }
-
-          .print-total-card {
-            background: #0f172a !important;
-            color: white !important;
-            padding: 20px !important;
-            border-radius: 16px !important;
-            text-align: right !important;
-            min-width: 200px !important;
           }
         }
       `}</style>
 
-      {/* VISTA DE PANTALLA (App UI) */}
+      {/* VISTA DE APLICACIÓN (Pantalla) */}
       <div className="space-y-6 print:hidden">
         <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl">
           <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
-          <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
-
           <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <Link href="/presupuestos" className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-blue-200 transition hover:text-white">
-                <ArrowLeft size={17} /> Volver a presupuestos
+                <ArrowLeft size={17} /> Volver
               </Link>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-200">
-                <FileText size={14} /> Detalle
-              </div>
               <h1 className="text-3xl font-black tracking-tight">Presupuesto {budgetLabel}</h1>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex gap-3">
               <StatusBadge status={budget.status || 'issued'} />
               <button
                 onClick={convertToOrder}
                 disabled={convertingToOrder || !!associatedOrderId || budget.status === 'cancelled'}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg transition hover:bg-blue-500 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500 disabled:opacity-50"
               >
                 {convertingToOrder ? <Loader2 size={18} className="animate-spin" /> : <ClipboardList size={18} />}
-                {associatedOrderId ? 'Ya es un pedido' : 'Convertir a pedido'}
+                {associatedOrderId ? 'Ya es pedido' : 'Pasar a pedido'}
               </button>
               <button
                 onClick={() => window.print()}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white shadow-lg transition hover:bg-slate-700"
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white hover:bg-slate-700"
               >
-                <Printer size={18} /> Imprimir / PDF
+                <Printer size={18} /> Imprimir
               </button>
             </div>
           </div>
@@ -428,114 +277,108 @@ export default function PresupuestoDetallePage() {
 
         <section className="grid gap-4 md:grid-cols-3">
           <InfoCard icon={User} title="Cliente" value={budget.clients?.name || 'Sin cliente'} detail={`CUIT: ${budget.clients?.cuit || '-'}`} />
-          <InfoCard icon={CalendarDays} title="Fecha" value={budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'} detail="Fecha de emisión" />
-          <InfoCard icon={DollarSign} title="Total" value={`$${finalTotal.toLocaleString('es-AR')}`} detail="Importe final" />
+          <InfoCard icon={CalendarDays} title="Fecha" value={budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'} detail="Fecha emisión" />
+          <InfoCard icon={DollarSign} title="Total" value={`$${finalTotal.toLocaleString('es-AR')}`} detail="Final" />
         </section>
 
-        {/* TABLA UI (Pantalla) */}
-        <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-            <h2 className="text-xl font-black text-slate-900">Productos presupuestados</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-slate-400">Producto</th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-slate-400 text-center">Cant.</th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-slate-400 text-right">Precio</th>
-                  <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-slate-400 text-right">Total</th>
+        <section className="rounded-[1.5rem] border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Producto</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 text-center">Cant.</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 text-right">Unitario</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td className="px-6 py-4">
+                    <p className="font-black text-slate-900">{item.product_name}</p>
+                    {item.discount_str && (
+                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded flex items-center gap-1 w-fit mt-1">
+                        <Zap size={10} /> -{item.discount_str}%
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-center font-bold">{item.quantity}</td>
+                  <td className="px-6 py-4 text-right font-bold text-slate-600">${Number(item.unit_price).toLocaleString('es-AR')}</td>
+                  <td className="px-6 py-4 text-right font-black text-blue-600">${(Number(item.quantity) * Number(item.unit_price)).toLocaleString('es-AR')}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {items.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-black text-slate-900">{item.product_name}</div>
-                      <div className="text-[10px] font-bold text-slate-400">{item.product_code || '-'}</div>
-                      {item.discount_str && (
-                        <div className="mt-1 inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-black text-blue-600">
-                          <Zap size={10} /> -{item.discount_str}%
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-center font-bold">{item.quantity}</td>
-                    <td className="px-6 py-4 text-right font-bold text-slate-600">${Number(item.unit_price).toLocaleString('es-AR')}</td>
-                    <td className="px-6 py-4 text-right font-black text-blue-600">${(Number(item.quantity) * Number(item.unit_price)).toLocaleString('es-AR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </section>
       </div>
 
-      {/* VISTA DE IMPRESIÓN (Solo visible al imprimir) */}
-      <div id="print-root" className="hidden">
-        <div className="print-header">
+      {/* VISTA DE IMPRESIÓN (PDF) - Solo visible en impresión */}
+      <div id="print-section" className="hidden print:block bg-white text-slate-900 font-sans">
+        <div className="flex justify-between border-b-2 border-slate-900 pb-6 mb-8">
           <div>
             {company?.logo_url ? (
-              <img src={company.logo_url} alt={company.name} style={{ height: '60px' }} />
+              <img src={company.logo_url} alt="Logo" className="h-12 mb-2" />
             ) : (
-              <h2 className="text-xl font-black">{company?.name || 'ZOMA TECH'}</h2>
+              <h1 className="text-xl font-black uppercase">{company?.name || 'ZOMA TECH'}</h1>
             )}
-            <div className="mt-2 text-[10px] text-slate-500 font-bold">
-              {company?.cuit && <p>CUIT: {company.cuit}</p>}
-              {company?.address && <p>{company.address}</p>}
-              <p>{company?.phone} | {company?.email}</p>
+            <div className="text-[10px] font-bold text-slate-500">
+              <p>{company?.address}</p>
+              <p>CUIT: {company?.cuit} | {company?.phone}</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Presupuesto</p>
-            <h2 className="print-title">#{budgetLabel}</h2>
-            <p className="text-[10px] font-black mt-2">FECHA: {budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'}</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Presupuesto</p>
+            <h2 className="text-2xl font-black">#{budgetLabel}</h2>
+            <p className="text-[10px] font-black mt-1 uppercase">Fecha: {budget.budget_date ? new Date(budget.budget_date).toLocaleDateString('es-AR') : '-'}</p>
           </div>
         </div>
 
-        <div className="print-client-box">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 grid grid-cols-2 gap-8 mb-8">
           <div>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Cliente</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Datos del Cliente</p>
             <p className="text-xs font-black">{budget.clients?.name}</p>
-            <p className="text-xs font-bold text-slate-600 mt-1">CUIT: {budget.clients?.cuit}</p>
+            <p className="text-[10px] font-bold text-slate-600 mt-1">CUIT: {budget.clients?.cuit || '-'}</p>
           </div>
           <div>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Dirección / Contacto</p>
-            <p className="text-xs font-bold text-slate-600">{budget.clients?.address || 'Sin dirección'}</p>
-            <p className="text-xs font-bold text-slate-600 mt-1">{budget.clients?.email || budget.clients?.phone}</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Envío / Contacto</p>
+            <p className="text-[10px] font-bold text-slate-600 leading-tight">{budget.clients?.address || 'Retira por local'}</p>
+            <p className="text-[10px] font-bold text-slate-600 mt-1">{budget.clients?.email || budget.clients?.phone}</p>
           </div>
         </div>
 
-        <table className="print-table">
+        <table className="w-full border-collapse mb-8 text-[10px]">
           <thead>
-            <tr>
-              <th style={{ width: '50%' }}>Producto</th>
-              <th style={{ textAlign: 'center' }}>Cant.</th>
-              <th style={{ textAlign: 'right' }}>Unitario</th>
-              <th style={{ textAlign: 'right' }}>Subtotal</th>
+            <tr className="bg-slate-900 text-white">
+              <th className="p-3 text-left uppercase font-black tracking-widest">Descripción</th>
+              <th className="p-3 text-center uppercase font-black tracking-widest">Cant.</th>
+              <th className="p-3 text-right uppercase font-black tracking-widest">Unitario</th>
+              <th className="p-3 text-right uppercase font-black tracking-widest">Subtotal</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100 border-b border-slate-200">
             {items.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <div className="font-black">{item.product_name}</div>
-                  {item.discount_str && <div className="text-[8px] font-black text-blue-600">Desc. aplicado: -{item.discount_str}%</div>}
+              <tr key={item.id} className="align-top">
+                <td className="p-3">
+                  <p className="font-black text-slate-950">{item.product_name}</p>
+                  {item.discount_str && (
+                    <p className="text-[8px] font-black text-blue-600 mt-1">DESCUENTO: -{item.discount_str}%</p>
+                  )}
                 </td>
-                <td style={{ textAlign: 'center' }} className="font-bold">{item.quantity}</td>
-                <td style={{ textAlign: 'right' }}>${Number(item.unit_price).toLocaleString('es-AR')}</td>
-                <td style={{ textAlign: 'right' }} className="font-black">${(Number(item.quantity) * Number(item.unit_price)).toLocaleString('es-AR')}</td>
+                <td className="p-3 text-center font-bold">{item.quantity}</td>
+                <td className="p-3 text-right font-bold text-slate-700">${Number(item.unit_price).toLocaleString('es-AR')}</td>
+                <td className="p-3 text-right font-black text-slate-950">${(Number(item.quantity) * Number(item.unit_price)).toLocaleString('es-AR')}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px' }}>
-          <div style={{ maxWidth: '60%' }}>
-            <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Condiciones</p>
-            <p className="text-[10px] text-slate-500 italic">{company?.default_notes || 'Válido por 15 días.'}</p>
+        <div className="flex justify-between items-start pt-4">
+          <div className="max-w-[60%]">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Observaciones</p>
+            <p className="text-[9px] text-slate-500 italic leading-relaxed">{company?.default_notes || 'Validez: 15 días.'}</p>
           </div>
-          <div className="print-total-card">
-            <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Total Final</p>
+          <div className="bg-slate-900 text-white p-5 rounded-2xl min-w-[200px] text-right">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</p>
             <p className="text-3xl font-black">${finalTotal.toLocaleString('es-AR')}</p>
           </div>
         </div>
