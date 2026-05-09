@@ -377,7 +377,7 @@ export default function PedidoDetallePage() {
             client_id: order.client_id,
             budget_number: nextBudgetNumber,
             total_amount: total,
-            status: 'converted', // Nace convertido
+            status: 'issued', // Cambiado de 'converted' por restricción de BD
             seller_id: order.seller_id,
           })
           .select('id')

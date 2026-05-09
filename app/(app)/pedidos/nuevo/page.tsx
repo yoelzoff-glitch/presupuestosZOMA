@@ -373,7 +373,7 @@ export default function NuevoPedidoPage() {
           client_id: clientId,
           budget_number: nextBudgetNumber,
           total_amount: totalAmount,
-          status: 'converted', // Ya nace convertido
+          status: 'issued', // Cambiado de 'converted' por restricción de BD
           seller_id: profile?.role === 'vendedor' ? userData.user?.id : null,
         })
         .select('id')
