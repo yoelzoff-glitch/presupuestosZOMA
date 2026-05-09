@@ -17,13 +17,17 @@ import {
   CalendarDays,
   Filter,
   UserCheck,
+  Mail,
+  Phone,
 } from 'lucide-react'
 
 type Client = {
   id: string
-  cuit: string
+  cuit: string | null
   name: string
   address: string | null
+  email: string | null
+  phone: string | null
   active?: boolean | null
   created_at?: string
   seller_id?: string | null
@@ -120,6 +124,8 @@ export default function ClientesPage() {
         cuit, 
         name, 
         address, 
+        email,
+        phone,
         active, 
         created_at, 
         seller_id,
@@ -150,6 +156,7 @@ export default function ClientesPage() {
       const matchesSearch = !q || 
         client.name?.toLowerCase().includes(q) ||
         client.cuit?.toLowerCase().includes(q) ||
+        client.email?.toLowerCase().includes(q) ||
         client.address?.toLowerCase().includes(q)
 
       const matchesSeller = sellerFilter === 'all' || client.seller_id === sellerFilter
@@ -184,7 +191,7 @@ export default function ClientesPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Alta, consulta y edición de clientes. Ahora podés ver los clientes de tus compañeros en caso de ser necesario.
+              Alta, consulta y edición de clientes. Ahora podés cargar tanto empresas como consumidores finales de forma simple.
             </p>
           </div>
 
@@ -247,7 +254,7 @@ export default function ClientesPage() {
               </h2>
 
               <p className="text-sm text-slate-500">
-                Buscá por nombre, CUIT o filtrá por vendedor.
+                Buscá por nombre, CUIT/DNI o mail.
               </p>
             </div>
 
@@ -320,13 +327,14 @@ export default function ClientesPage() {
         ) : (
           <>
             <div className="hidden lg:block overflow-x-auto pb-4 custom-scrollbar">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[1000px]">
                 <thead className="bg-slate-50">
                   <tr>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>CUIT</TableHead>
+                    <TableHead>CUIT / DNI</TableHead>
+                    <TableHead>Contacto</TableHead>
                     <TableHead>Dirección</TableHead>
-                    <TableHead>Vendedor Asignado</TableHead>
+                    <TableHead>Vendedor</TableHead>
                     <TableHead>Alta</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead align="right">Acción</TableHead>
@@ -339,19 +347,23 @@ export default function ClientesPage() {
                       key={client.id}
                       className="transition hover:bg-blue-50/40"
                     >
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <ClientIdentity client={client} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <CuitBadge cuit={client.cuit} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
+                        <ContactInfo email={client.email} phone={client.phone} />
+                      </td>
+
+                      <td className="px-3 py-3">
                         <AddressText address={client.address} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                           <div className="h-7 w-7 flex items-center justify-center rounded-lg bg-blue-50 text-[10px] font-black text-blue-600 border border-blue-200">
                             {client.seller?.full_name?.charAt(0) || 'A'}
@@ -360,15 +372,15 @@ export default function ClientesPage() {
                         </div>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <DateText date={client.created_at} />
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-3">
                         <StatusBadge active={client.active !== false} />
                       </td>
 
-                      <td className="px-5 py-4 text-right">
+                      <td className="px-3 py-3 text-right">
                         <EditButton id={client.id} />
                       </td>
                     </tr>
@@ -399,6 +411,7 @@ function ClientMobileCard({ client }: { client: Client }) {
 
       <div className="mt-4 space-y-3">
         <CuitBadge cuit={client.cuit} />
+        <ContactInfo email={client.email} phone={client.phone} />
         <AddressText address={client.address} />
         <div className="flex items-center gap-2 rounded-2xl bg-slate-50 p-3 text-xs font-bold text-slate-600">
           <span className="text-slate-400 uppercase tracking-widest text-[9px]">Vendedor:</span>
@@ -431,11 +444,34 @@ function ClientIdentity({ client }: { client: Client }) {
   )
 }
 
-function CuitBadge({ cuit }: { cuit: string }) {
+function CuitBadge({ cuit }: { cuit: string | null }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
+    <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-bold ${
+      cuit ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
+    }`}>
       <IdCard size={15} />
-      {cuit || '-'}
+      {cuit || 'Consumidor Final'}
+    </div>
+  )
+}
+
+function ContactInfo({ email, phone }: { email: string | null, phone: string | null }) {
+  if (!email && !phone) return <span className="text-xs font-bold text-slate-400">Sin contacto</span>
+
+  return (
+    <div className="space-y-1">
+      {email && (
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+          <Mail size={12} className="text-slate-400" />
+          <span className="truncate max-w-[150px]">{email}</span>
+        </div>
+      )}
+      {phone && (
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+          <Phone size={12} className="text-slate-400" />
+          <span>{phone}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -484,7 +520,7 @@ function EditButton({
   return (
     <Link
       href={`/clientes/${id}`}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 ${
+      className={`inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 ${
         fullWidth ? 'w-full' : ''
       }`}
     >
@@ -545,7 +581,7 @@ function TableHead({
 }) {
   return (
     <th
-      className={`px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-500 ${
+      className={`px-3 py-3 text-[11px] font-black uppercase tracking-wider text-slate-500 ${
         align === 'right' ? 'text-right' : 'text-left'
       }`}
     >

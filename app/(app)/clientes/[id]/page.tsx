@@ -16,6 +16,8 @@ import {
   MapPin,
   Building2,
   ShieldCheck,
+  Mail,
+  Phone,
 } from 'lucide-react'
 
 type ClientStatus = boolean | null
@@ -27,6 +29,8 @@ export default function EditarCliente() {
   const [cuit, setCuit] = useState('')
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [active, setActive] = useState<ClientStatus>(true)
 
   const [loading, setLoading] = useState(false)
@@ -44,7 +48,7 @@ export default function EditarCliente() {
 
     const { data, error } = await supabase
       .from('clients')
-      .select('id, cuit, name, address, active')
+      .select('id, cuit, name, address, active, email, phone')
       .eq('id', id)
       .single()
 
@@ -58,6 +62,8 @@ export default function EditarCliente() {
       setCuit(data.cuit || '')
       setName(data.name || '')
       setAddress(data.address || '')
+      setEmail(data.email || '')
+      setPhone(data.phone || '')
       setActive(data.active !== false)
     }
 
@@ -75,9 +81,11 @@ export default function EditarCliente() {
     const { error } = await supabase
       .from('clients')
       .update({
-        cuit: cuit.trim(),
+        cuit: cuit.trim() || null,
         name: name.trim(),
-        address: address.trim(),
+        address: address.trim() || null,
+        email: email.trim() || null,
+        phone: phone.trim() || null,
       })
       .eq('id', id)
 
@@ -132,31 +140,30 @@ export default function EditarCliente() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl">
-        <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
-
-        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="relative overflow-hidden rounded-[2.5rem] bg-slate-950 p-8 text-white shadow-xl">
+        <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-blue-500/20 blur-[100px] -mr-32 -mt-32" />
+        
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <Link
               href="/clientes"
-              className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-blue-200 transition hover:text-white"
+              className="mb-5 inline-flex items-center gap-2 text-sm font-bold text-blue-300 transition hover:text-white"
             >
-              <ArrowLeft size={17} />
-              Volver a clientes
+              <ArrowLeft size={18} />
+              Volver al listado
             </Link>
 
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-200">
-              <User size={14} />
-              Cliente
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-blue-300 backdrop-blur-md">
+              <Building2 size={14} />
+              Gestión de Cliente
             </div>
 
-            <h1 className="text-3xl font-black tracking-tight">
-              Editar cliente
+            <h1 className="text-4xl font-black tracking-tight">
+              {initialLoading ? 'Cargando...' : name}
             </h1>
 
-            <p className="mt-2 text-sm text-slate-300">
-              Modificá los datos del cliente y administrá si está activo o inactivo.
+            <p className="mt-2 text-base text-slate-400 font-medium">
+              Actualizá la información de contacto y fiscal del cliente.
             </p>
           </div>
 
@@ -167,32 +174,32 @@ export default function EditarCliente() {
       </section>
 
       {initialLoading ? (
-        <section className="rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
-            <Loader2 size={26} className="animate-spin" />
+        <section className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-16 text-center shadow-sm">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-[2rem] bg-blue-50 text-blue-600 shadow-inner">
+            <Loader2 size={32} className="animate-spin" />
           </div>
 
-          <h2 className="text-lg font-black text-slate-900">
-            Cargando cliente
+          <h2 className="text-xl font-black text-slate-900">
+            Cargando expediente
           </h2>
 
-          <p className="mt-1 text-sm font-semibold text-slate-500">
-            Estamos buscando los datos registrados.
+          <p className="mt-2 text-sm font-semibold text-slate-500">
+            Estamos recuperando los datos del cliente...
           </p>
         </section>
       ) : (
         <>
-          <section className="grid gap-4 md:grid-cols-3">
+          <section className="grid gap-5 md:grid-cols-3">
             <InfoCard
-              icon={Building2}
-              title="Cliente"
-              value={name || 'Sin nombre'}
+              icon={Mail}
+              title="Contacto Mail"
+              value={email || 'No registrado'}
             />
 
             <InfoCard
-              icon={IdCard}
-              title="CUIT"
-              value={cuit || 'Sin CUIT'}
+              icon={Phone}
+              title="Teléfono"
+              value={phone || 'No registrado'}
             />
 
             <InfoCard
@@ -202,90 +209,135 @@ export default function EditarCliente() {
             />
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-6">
-              <h2 className="text-xl font-black text-slate-950">
-                Datos del cliente
+          <section className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm">
+            <div className="mb-8 border-b border-slate-100 pb-6">
+              <h2 className="text-2xl font-black text-slate-950">
+                Información General
               </h2>
 
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                Estos datos se usan en presupuestos, cuenta corriente y consultas comerciales.
+              <p className="mt-2 text-sm font-semibold text-slate-500">
+                Los campos con <span className="text-red-500">*</span> son requeridos.
               </p>
             </div>
 
-            <div className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-black text-slate-700">
-                  CUIT
-                </label>
+            <div className="space-y-8">
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="group">
+                  <label className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                    Nombre / Razón Social *
+                  </label>
 
-                <div className="relative">
-                  <IdCard
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
+                  <div className="relative">
+                    <User
+                      size={20}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500"
+                    />
 
-                  <input
-                    value={cuit}
-                    onChange={(e) => setCuit(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                    placeholder="Ej: 30-12345678-9"
-                  />
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full rounded-2xl border-2 border-slate-50 bg-slate-50/50 py-4 pl-12 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
+                      placeholder="Ej: Juan Pérez"
+                    />
+                  </div>
+                </div>
+
+                <div className="group">
+                  <label className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                    CUIT / DNI
+                  </label>
+
+                  <div className="relative">
+                    <IdCard
+                      size={20}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500"
+                    />
+
+                    <input
+                      value={cuit}
+                      onChange={(e) => setCuit(e.target.value)}
+                      className="w-full rounded-2xl border-2 border-slate-50 bg-slate-50/50 py-4 pl-12 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
+                      placeholder="Opcional"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-black text-slate-700">
-                  Nombre / Razón Social *
-                </label>
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="group">
+                  <label className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                    Email de contacto
+                  </label>
 
-                <div className="relative">
-                  <User
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
+                  <div className="relative">
+                    <Mail
+                      size={20}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500"
+                    />
 
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                    placeholder="Ej: Juan Pérez SRL"
-                  />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full rounded-2xl border-2 border-slate-50 bg-slate-50/50 py-4 pl-12 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
+                      placeholder="ejemplo@correo.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="group">
+                  <label className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                    Teléfono / WhatsApp
+                  </label>
+
+                  <div className="relative">
+                    <Phone
+                      size={20}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500"
+                    />
+
+                    <input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full rounded-2xl border-2 border-slate-50 bg-slate-50/50 py-4 pl-12 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
+                      placeholder="Ej: +54 9 11 ..."
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-black text-slate-700">
+              <div className="group">
+                <label className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
                   Dirección
                 </label>
 
                 <div className="relative">
                   <MapPin
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={20}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500"
                   />
 
                   <input
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                    placeholder="Ej: Av. Corrientes 1234"
+                    className="w-full rounded-2xl border-2 border-slate-50 bg-slate-50/50 py-4 pl-12 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
+                    placeholder="Calle, Ciudad..."
                   />
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <section className="rounded-[2.5rem] border-2 border-slate-100 bg-white p-8 shadow-sm">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-xl font-black text-slate-950">
-                  Estado del cliente
+                <h2 className="text-2xl font-black text-slate-950">
+                  Estado Operativo
                 </h2>
 
-                <p className="mt-1 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
-                  Un cliente inactivo queda identificado como tal para evitar usarlo por error
-                  en nuevas operaciones, pero no se elimina su historial.
+                <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-slate-500">
+                  Al desactivar un cliente, este ya no podrá ser seleccionado en nuevos pedidos o presupuestos, 
+                  pero sus datos históricos permanecerán intactos.
                 </p>
               </div>
 
@@ -293,18 +345,18 @@ export default function EditarCliente() {
                 type="button"
                 onClick={toggleClientStatus}
                 disabled={statusLoading}
-                className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`inline-flex items-center justify-center gap-3 rounded-2xl px-6 py-4 text-sm font-black shadow-lg transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
                   isActive
-                    ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                    : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    ? 'bg-amber-50 text-amber-700 shadow-amber-900/5 hover:bg-amber-100'
+                    : 'bg-emerald-50 text-emerald-700 shadow-emerald-900/5 hover:bg-emerald-100'
                 }`}
               >
                 {statusLoading ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : isActive ? (
-                  <ToggleRight size={19} />
+                  <ToggleRight size={22} />
                 ) : (
-                  <ToggleLeft size={19} />
+                  <ToggleLeft size={22} />
                 )}
 
                 {statusLoading
@@ -316,25 +368,25 @@ export default function EditarCliente() {
             </div>
           </section>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-4 sm:flex-row sm:justify-end">
             <Link
               href="/clientes"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-8 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 active:scale-95"
             >
               <ArrowLeft size={18} />
-              Volver
+              Cancelar
             </Link>
 
             <button
               type="button"
               onClick={updateClient}
               disabled={loading}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-3 rounded-2xl bg-blue-600 px-10 py-4 text-sm font-black text-white shadow-xl shadow-blue-900/20 transition hover:bg-blue-700 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
-                <Loader2 size={18} className="animate-spin" />
+                <Loader2 size={20} className="animate-spin" />
               ) : (
-                <Save size={18} />
+                <Save size={20} />
               )}
 
               {loading ? 'Guardando...' : 'Guardar cambios'}
@@ -349,17 +401,17 @@ export default function EditarCliente() {
 function StatusBadge({ active }: { active: boolean }) {
   if (!active) {
     return (
-      <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700">
-        <ToggleLeft size={18} />
-        Inactivo
+      <span className="inline-flex items-center justify-center gap-3 rounded-2xl bg-slate-900 px-6 py-4 text-sm font-black text-white shadow-xl">
+        <div className="h-2 w-2 rounded-full bg-slate-400" />
+        Cliente Inactivo
       </span>
     )
   }
 
   return (
-    <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
-      <ToggleRight size={18} />
-      Activo
+    <span className="inline-flex items-center justify-center gap-3 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-xl">
+      <div className="h-2 w-2 rounded-full bg-blue-300 animate-pulse" />
+      Cliente Activo
     </span>
   )
 }
@@ -374,18 +426,18 @@ function InfoCard({
   value: string
 }) {
   return (
-    <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-          <Icon size={22} />
+    <div className="min-w-0 rounded-[2rem] border-2 border-slate-50 bg-white p-6 shadow-sm transition hover:shadow-md">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-inner">
+          <Icon size={24} />
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-slate-500">
+          <p className="truncate text-xs font-black uppercase tracking-widest text-slate-400">
             {title}
           </p>
 
-          <h2 className="truncate text-xl font-black text-slate-950">
+          <h2 className="mt-0.5 truncate text-lg font-black text-slate-900">
             {value}
           </h2>
         </div>

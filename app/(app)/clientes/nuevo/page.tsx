@@ -9,19 +9,27 @@ import {
   Loader2,
   MapPin,
   Upload,
+  Mail,
+  Phone,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { toast } from 'sonner'
 
 type ExcelClient = {
   cuit: string
   name: string
   address: string
+  email: string
+  phone: string
 }
 
 export default function NuevoCliente() {
   const [cuit, setCuit] = useState('')
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -57,18 +65,14 @@ export default function NuevoCliente() {
     setErrorMsg('')
     setSuccessMsg('')
 
-    if (!cuit.trim()) {
-      setErrorMsg('Ingresá el CUIT.')
-      return
-    }
-
-    if (!/^\d+$/.test(cuit.trim())) {
-      setErrorMsg('El CUIT debe ser numérico, sin guiones ni espacios.')
-      return
-    }
-
     if (!name.trim()) {
-      setErrorMsg('Ingresá el nombre del cliente.')
+      setErrorMsg('El Nombre / Razón Social es obligatorio.')
+      return
+    }
+
+    // El CUIT/DNI ya no es obligatorio, pero si se pone, debe ser numérico
+    if (cuit.trim() && !/^\d+$/.test(cuit.trim())) {
+      setErrorMsg('El CUIT/DNI debe ser numérico, sin guiones ni espacios.')
       return
     }
 
@@ -79,15 +83,17 @@ export default function NuevoCliente() {
 
       const { error } = await supabase.from('clients').insert({
         company_id: companyId,
-        cuit: cuit.trim(),
+        cuit: cuit.trim() || null,
         name: name.trim(),
-        address: address.trim(),
+        address: address.trim() || null,
+        email: email.trim() || null,
+        phone: phone.trim() || null,
         seller_id: role === 'vendedor' ? userId : null
       })
 
       if (error) {
         if (error.message.toLowerCase().includes('duplicate')) {
-          setErrorMsg('Ese CUIT ya existe.')
+          setErrorMsg('Ese CUIT/DNI ya existe en la base de datos.')
         } else {
           console.error(error)
           setErrorMsg('Error al guardar el cliente.')
@@ -99,6 +105,8 @@ export default function NuevoCliente() {
       setCuit('')
       setName('')
       setAddress('')
+      setEmail('')
+      setPhone('')
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error inesperado.')
     } finally {
@@ -167,8 +175,8 @@ export default function NuevoCliente() {
 
       const clients: ExcelClient[] = rows
         .map((row) => {
-          const client = {
-            cuit: getValue(row, ['cuit', 'CUIT']),
+          return {
+            cuit: getValue(row, ['cuit', 'dni', 'documento', 'identificacion']),
             name: getValue(row, [
               'name',
               'nombre',
@@ -182,33 +190,26 @@ export default function NuevoCliente() {
               'dirección',
               'domicilio',
             ]),
+            email: getValue(row, ['email', 'mail', 'correo', 'e-mail']),
+            phone: getValue(row, ['phone', 'telefono', 'tel', 'celular', 'whatsapp']),
           }
-
-          client.cuit = client.cuit.replace(/\D/g, '')
-
-          return client
         })
-        .filter((client) => client.cuit && client.name)
+        .filter((client) => client.name) // Solo pedimos nombre obligatorio
 
       if (!clients.length) {
         setErrorMsg(
-          'No se encontraron clientes válidos. El Excel debe tener columnas CUIT y Nombre.'
+          'No se encontraron clientes válidos. El Excel debe tener al menos una columna de Nombre.'
         )
-        return
-      }
-
-      const invalidCuit = clients.find((client) => !/^\d+$/.test(client.cuit))
-
-      if (invalidCuit) {
-        setErrorMsg('Hay CUIT inválidos. Deben ser numéricos.')
         return
       }
 
       const payload = clients.map((client) => ({
         company_id: companyId,
-        cuit: client.cuit,
+        cuit: client.cuit.replace(/\D/g, '') || null,
         name: client.name,
-        address: client.address,
+        address: client.address || null,
+        email: client.email || null,
+        phone: client.phone || null,
         seller_id: role === 'vendedor' ? userId : null
       }))
 
@@ -216,15 +217,11 @@ export default function NuevoCliente() {
 
       if (error) {
         console.error(error)
-
         if (error.message.toLowerCase().includes('duplicate')) {
-          setErrorMsg(
-            'Hay CUIT repetidos o clientes que ya existen en la base de datos.'
-          )
+          setErrorMsg('Hay CUIT/DNI repetidos en el Excel que ya existen en la base de datos.')
         } else {
-          setErrorMsg('Error al importar clientes desde Excel.')
+          setErrorMsg('Error al importar clientes. Verificá que las columnas sean correctas.')
         }
-
         return
       }
 
@@ -242,45 +239,49 @@ export default function NuevoCliente() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 px-8 py-8 text-white">
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-4 py-2 text-sm font-semibold text-blue-200">
-            <Building2 size={16} />
-            Alta de cliente
+      <div className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:shadow-xl">
+        <div className="bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 px-8 py-10 text-white relative">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[100px] rounded-full -mr-32 -mt-32"></div>
+          
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-4 py-2 text-sm font-semibold text-blue-200 backdrop-blur-md">
+              <Building2 size={16} />
+              Alta de cliente flexible
+            </div>
+
+            <h1 className="mt-5 text-4xl font-black tracking-tight">
+              Nuevo Cliente
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-300 font-medium">
+              Cargá empresas o consumidores finales. Solo el nombre es obligatorio; 
+              el resto de los datos podés completarlos luego.
+            </p>
           </div>
-
-          <h1 className="mt-5 text-3xl font-black tracking-tight">
-            Nuevo Cliente
-          </h1>
-
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-            Cargá los datos principales del cliente para poder generar
-            presupuestos, comprobantes y cuenta corriente.
-          </p>
         </div>
 
-        <div className="border-b border-slate-100 bg-slate-50 px-8 py-6">
-          <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-dashed border-blue-300 bg-white px-5 py-4 transition hover:bg-blue-50">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-blue-100 p-3 text-blue-700">
+        <div className="border-b border-slate-100 bg-slate-50/50 px-8 py-8">
+          <label className="flex cursor-pointer flex-col sm:flex-row items-center justify-between gap-5 rounded-[2rem] border-2 border-dashed border-blue-200 bg-white px-7 py-6 transition-all hover:border-blue-400 hover:bg-blue-50/50 group">
+            <div className="flex items-center gap-5">
+              <div className="rounded-2xl bg-blue-600 p-4 text-white shadow-lg shadow-blue-600/30 transition group-hover:scale-110">
                 {importing ? (
-                  <Loader2 size={22} className="animate-spin" />
+                  <Loader2 size={24} className="animate-spin" />
                 ) : (
-                  <Upload size={22} />
+                  <Upload size={24} />
                 )}
               </div>
 
-              <div>
-                <p className="text-sm font-black text-slate-800">
-                  Importar listado desde Excel
+              <div className="text-center sm:text-left">
+                <p className="text-lg font-black text-slate-900">
+                  Importar desde Excel
                 </p>
-                <p className="text-xs font-semibold text-slate-500">
-                  Acepta .xlsx, .xls y .xlsm. Columnas: CUIT, Nombre y Dirección.
+                <p className="text-sm font-semibold text-slate-500 leading-relaxed">
+                  Columnas sugeridas: Nombre, CUIT/DNI, Dirección, Mail, Teléfono.
                 </p>
               </div>
             </div>
 
-            <span className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white">
+            <span className="shrink-0 rounded-2xl bg-slate-950 px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-xl transition hover:bg-blue-600 active:scale-95">
               Seleccionar archivo
             </span>
 
@@ -294,81 +295,121 @@ export default function NuevoCliente() {
           </label>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 p-8">
+        <form onSubmit={handleSubmit} className="space-y-8 p-8 lg:p-10">
           {errorMsg && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700 animate-in fade-in slide-in-from-top-2">
               {errorMsg}
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
-              <CheckCircle2 size={18} />
+            <div className="flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-bold text-green-700 animate-in fade-in slide-in-from-top-2">
+              <CheckCircle2 size={20} />
               {successMsg}
             </div>
           )}
 
-          <div className="grid gap-5 md:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-bold text-slate-700">
-                CUIT
+          <div className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <label className="block group">
+                <span className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                  Nombre / Razón social <span className="text-red-500">*</span>
+                </span>
+
+                <div className="flex items-center gap-3 rounded-[1.25rem] border-2 border-slate-100 bg-slate-50/50 px-5 py-4 transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100/50">
+                  <Building2 size={20} className="text-slate-400 group-focus-within:text-blue-500" />
+                  <input
+                    value={name}
+                    required
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ej: Juan Pérez o Empresa S.A."
+                    className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder:font-semibold placeholder:text-slate-400"
+                  />
+                </div>
+              </label>
+
+              <label className="block group">
+                <span className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                  CUIT / DNI
+                </span>
+
+                <div className="flex items-center gap-3 rounded-[1.25rem] border-2 border-slate-100 bg-slate-50/50 px-5 py-4 transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100/50">
+                  <IdCard size={20} className="text-slate-400 group-focus-within:text-blue-500" />
+                  <input
+                    value={cuit}
+                    onChange={(e) => setCuit(e.target.value)}
+                    placeholder="Opcional: Solo números"
+                    className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder:font-semibold placeholder:text-slate-400"
+                  />
+                </div>
+              </label>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <label className="block group">
+                <span className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                  Email
+                </span>
+
+                <div className="flex items-center gap-3 rounded-[1.25rem] border-2 border-slate-100 bg-slate-50/50 px-5 py-4 transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100/50">
+                  <Mail size={20} className="text-slate-400 group-focus-within:text-blue-500" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="ejemplo@correo.com"
+                    className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder:font-semibold placeholder:text-slate-400"
+                  />
+                </div>
+              </label>
+
+              <label className="block group">
+                <span className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                  Teléfono / WhatsApp
+                </span>
+
+                <div className="flex items-center gap-3 rounded-[1.25rem] border-2 border-slate-100 bg-slate-50/50 px-5 py-4 transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100/50">
+                  <Phone size={20} className="text-slate-400 group-focus-within:text-blue-500" />
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Ej: +54 9 11 ..."
+                    className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder:font-semibold placeholder:text-slate-400"
+                  />
+                </div>
+              </label>
+            </div>
+
+            <label className="block group">
+              <span className="mb-2.5 block text-sm font-black text-slate-700 transition group-focus-within:text-blue-600">
+                Dirección completa
               </span>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-                <IdCard size={18} className="text-slate-400" />
+              <div className="flex items-center gap-3 rounded-[1.25rem] border-2 border-slate-100 bg-slate-50/50 px-5 py-4 transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100/50">
+                <MapPin size={20} className="text-slate-400 group-focus-within:text-blue-500" />
                 <input
-                  value={cuit}
-                  onChange={(e) => setCuit(e.target.value)}
-                  placeholder="Ej: 30712345678"
-                  className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:font-medium placeholder:text-slate-400"
-                />
-              </div>
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-bold text-slate-700">
-                Nombre / Razón social
-              </span>
-
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-                <Building2 size={18} className="text-slate-400" />
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Nombre del cliente"
-                  className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:font-medium placeholder:text-slate-400"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Calle, Número, Localidad..."
+                  className="w-full bg-transparent text-base font-bold text-slate-900 outline-none placeholder:font-semibold placeholder:text-slate-400"
                 />
               </div>
             </label>
           </div>
 
-          <label className="block">
-            <span className="mb-2 block text-sm font-bold text-slate-700">
-              Dirección
-            </span>
-
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100">
-              <MapPin size={18} className="text-slate-400" />
-              <input
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Dirección del cliente"
-                className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:font-medium placeholder:text-slate-400"
-              />
-            </div>
-          </label>
-
-          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-6">
+          <div className="flex items-center justify-end gap-4 border-t border-slate-100 pt-8">
             <button
               type="button"
               onClick={() => {
                 setCuit('')
                 setName('')
                 setAddress('')
+                setEmail('')
+                setPhone('')
                 setErrorMsg('')
                 setSuccessMsg('')
               }}
-              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              className="rounded-2xl border-2 border-slate-200 bg-white px-8 py-4 text-sm font-black text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 active:scale-95"
             >
               Limpiar
             </button>
@@ -376,9 +417,9 @@ export default function NuevoCliente() {
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex items-center justify-center gap-3 rounded-2xl bg-blue-600 px-10 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/25 transition-all hover:bg-blue-700 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {loading && <Loader2 size={18} className="animate-spin" />}
+              {loading && <Loader2 size={20} className="animate-spin" />}
               {loading ? 'Guardando...' : 'Guardar cliente'}
             </button>
           </div>
