@@ -34,7 +34,10 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Solo los administradores pueden crear vendedores' }, { status: 403 })
+      return NextResponse.json({ 
+        error: 'Permiso denegado', 
+        detail: `Tu rol actual es: "${profile?.role || 'No definido'}" y el sistema requiere "admin".` 
+      }, { status: 403 })
     }
 
     const body = await req.json()
