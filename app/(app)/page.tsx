@@ -479,20 +479,24 @@ export default function DashboardPage() {
               description="Alta rápida con CUIT, nombre y dirección."
             />
             <QuickAction
-              href="/productos"
-              title="Ver productos"
-              description="Consultar lista de precios y proveedores."
-            />
-            <QuickAction
-              href="/productos/aumentos"
-              title="Actualizar precios"
-              description="Aplicar aumentos por proveedor o producto."
-            />
-            <QuickAction
               href="/presupuestos"
               title="Crear presupuesto"
               description="Armar presupuesto con productos e importes."
             />
+            {role === 'admin' && (
+              <>
+                <QuickAction
+                  href="/productos"
+                  title="Ver productos"
+                  description="Consultar lista de precios y proveedores."
+                />
+                <QuickAction
+                  href="/productos/aumentos"
+                  title="Actualizar precios"
+                  description="Aplicar aumentos por proveedor o producto."
+                />
+              </>
+            )}
           </div>
         </div>
 

@@ -78,25 +78,40 @@ export default function NuevoPedidoPage() {
   }, [])
 
   async function loadData() {
-    setLoading(true)
-
-    const currentCompanyId = await getUserCompanyId()
-
-    if (!currentCompanyId) {
-      toast.error('No se encontró la empresa del usuario.')
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError || !userData.user) {
+      toast.error('No se pudo autenticar al usuario.')
       setLoading(false)
       return
     }
 
+    const { data: profile, error: profileError } = await supabase
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userData.user.id)
+      .single()
+
+    if (profileError || !profile?.company_id) {
+      toast.error('No se encontró el perfil del usuario.')
+      setLoading(false)
+      return
+    }
+
+    const currentCompanyId = profile.company_id
     setCompanyId(currentCompanyId)
 
+    let clientsQuery = supabase
+      .from('clients')
+      .select('id, name, cuit, address')
+      .eq('company_id', currentCompanyId)
+      .eq('active', true)
+
+    if (profile.role === 'vendedor') {
+      clientsQuery = clientsQuery.eq('seller_id', userData.user.id)
+    }
+
     const [clientsRes, productsRes] = await Promise.all([
-      supabase
-        .from('clients')
-        .select('id, name, cuit, address')
-        .eq('company_id', currentCompanyId)
-        .eq('active', true)
-        .order('name', { ascending: true }),
+      clientsQuery.order('name', { ascending: true }),
 
       supabase
         .from('products')
@@ -296,6 +311,13 @@ export default function NuevoPedidoPage() {
       const nextNumber = await getNextOrderNumber(companyId)
       const orderCode = `PED-${String(nextNumber).padStart(6, '0')}`
 
+      const { data: userData } = await supabase.auth.getUser()
+      const { data: profile } = await supabase
+        .from('users_profiles')
+        .select('role')
+        .eq('id', userData.user?.id)
+        .single()
+
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -305,6 +327,7 @@ export default function NuevoPedidoPage() {
           order_code: orderCode,
           status: 'pending',
           source: 'manual',
+          seller_id: profile?.role === 'vendedor' ? userData.user?.id : null,
           notes: notes.trim() || 'Pedido cargado manualmente',
         })
         .select('id')

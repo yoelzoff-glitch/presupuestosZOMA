@@ -104,12 +104,17 @@ export default function NuevoPresupuestoPage() {
       return
     }
 
+    let clientsQuery = supabase
+      .from('clients')
+      .select('id, name, cuit')
+      .eq('company_id', currentCompanyId)
+
+    if (context?.role === 'vendedor') {
+      clientsQuery = clientsQuery.eq('seller_id', context.userId)
+    }
+
     const [clientsRes, productsRes] = await Promise.all([
-      supabase
-        .from('clients')
-        .select('id, name, cuit')
-        .eq('company_id', currentCompanyId)
-        .order('name', { ascending: true }),
+      clientsQuery.order('name', { ascending: true }),
 
       supabase
         .from('products')
