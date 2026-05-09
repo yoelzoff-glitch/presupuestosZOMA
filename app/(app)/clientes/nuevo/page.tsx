@@ -27,7 +27,7 @@ export default function NuevoCliente() {
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
-  async function getCompanyId() {
+  async function getUserContext() {
     const { data: userData, error: userError } = await supabase.auth.getUser()
 
     if (userError || !userData.user) {
@@ -36,7 +36,7 @@ export default function NuevoCliente() {
 
     const { data: profile, error: profileError } = await supabase
       .from('users_profiles')
-      .select('company_id')
+      .select('company_id, role')
       .eq('id', userData.user.id)
       .single()
 
@@ -44,7 +44,11 @@ export default function NuevoCliente() {
       throw new Error('No se pudo obtener la empresa del usuario.')
     }
 
-    return profile.company_id
+    return { 
+      companyId: profile.company_id, 
+      role: profile.role, 
+      userId: userData.user.id 
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -71,13 +75,14 @@ export default function NuevoCliente() {
     setLoading(true)
 
     try {
-      const companyId = await getCompanyId()
+      const { companyId, role, userId } = await getUserContext()
 
       const { error } = await supabase.from('clients').insert({
         company_id: companyId,
         cuit: cuit.trim(),
         name: name.trim(),
         address: address.trim(),
+        seller_id: role === 'vendedor' ? userId : null
       })
 
       if (error) {
@@ -144,7 +149,7 @@ export default function NuevoCliente() {
     setImporting(true)
 
     try {
-      const companyId = await getCompanyId()
+      const { companyId, role, userId } = await getUserContext()
 
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array' })
@@ -204,6 +209,7 @@ export default function NuevoCliente() {
         cuit: client.cuit,
         name: client.name,
         address: client.address,
+        seller_id: role === 'vendedor' ? userId : null
       }))
 
       const { error } = await supabase.from('clients').insert(payload)

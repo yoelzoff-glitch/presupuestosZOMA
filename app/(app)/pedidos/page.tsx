@@ -62,17 +62,28 @@ export default function PedidosPage() {
     setLoading(true)
     setErrorMsg('')
 
-    const id = await getUserCompanyId()
-
-    if (!id) {
-      setErrorMsg('No se encontró la empresa del usuario.')
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError || !userData.user) {
+      setErrorMsg('No se pudo autenticar al usuario.')
       setLoading(false)
       return
     }
 
-    setCompanyId(id)
+    const { data: profile, error: profileError } = await supabase
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userData.user.id)
+      .single()
 
-    const { data, error } = await supabase
+    if (profileError || !profile?.company_id) {
+      setErrorMsg('No se encontró el perfil del usuario.')
+      setLoading(false)
+      return
+    }
+
+    setCompanyId(profile.company_id)
+
+    let query = supabase
       .from('orders')
       .select(`
         id,
@@ -91,8 +102,14 @@ export default function PedidosPage() {
           cuit
         )
       `)
-      .eq('company_id', id)
-      .order('created_at', { ascending: false })
+      .eq('company_id', profile.company_id)
+
+    // If vendor, only show their own orders
+    if (profile.role === 'vendedor') {
+      query = query.eq('seller_id', userData.user.id)
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false })
 
     if (error) {
       console.error('Error cargando pedidos:', error)

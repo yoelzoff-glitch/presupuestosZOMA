@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -16,7 +16,9 @@ import {
   ClipboardList,
   Bell,
   LifeBuoy,
+  Loader2,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
 import NotificationsBell from '@/app/components/NotificationsBell'
 
@@ -68,6 +70,41 @@ function isActiveRoute(pathname: string, href: string) {
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function getProfile() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('users_profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        setProfile(data)
+      }
+      setLoading(false)
+    }
+    getProfile()
+  }, [])
+
+  const isAdmin = profile?.role === 'admin'
+
+  const filteredNavItems = navItems.filter((item) => {
+    if (loading) return false
+    // Vendedores cannot see Account Current, Settings or Sellers management
+    if (profile?.role === 'vendedor') {
+      const hiddenForVendedores = ['/cuenta-corriente', '/configuracion', '/vendedores']
+      return !hiddenForVendedores.includes(item.href)
+    }
+    return true
+  })
+
+  // Add Vendedores to navItems for Admin
+  const finalNavItems = isAdmin 
+    ? [...navItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users }, ...navItems.slice(2)]
+    : filteredNavItems
 
   return (
     <div className="flex h-full flex-col">
@@ -88,40 +125,46 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1.5 px-3 py-4">
-        {navItems.map((item) => {
-          const Icon = item.icon
-          const active = isActiveRoute(pathname, item.href)
+      <nav className="flex-1 space-y-1.5 px-3 py-4 overflow-y-auto">
+        {loading ? (
+          <div className="flex justify-center p-8">
+            <Loader2 className="animate-spin text-slate-700" size={20} />
+          </div>
+        ) : (
+          finalNavItems.map((item) => {
+            const Icon = item.icon
+            const active = isActiveRoute(pathname, item.href)
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={`group relative flex items-center gap-3.5 rounded-2xl px-4 py-3 text-sm font-bold transition-all duration-300 ${
-                active
-                  ? 'bg-blue-600/10 text-white'
-                  : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
-              }`}
-            >
-              {active && (
-                <div className="absolute left-0 h-5 w-1 rounded-r-full bg-blue-500" />
-              )}
-
-              <span
-                className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 ${
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                className={`group relative flex items-center gap-3.5 rounded-2xl px-4 py-3 text-sm font-bold transition-all duration-300 ${
                   active
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                    : 'bg-white/[0.03] text-slate-500 group-hover:bg-white/[0.08] group-hover:text-slate-300'
+                    ? 'bg-blue-600/10 text-white'
+                    : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
                 }`}
               >
-                <Icon size={18} strokeWidth={2.5} />
-              </span>
+                {active && (
+                  <div className="absolute left-0 h-5 w-1 rounded-r-full bg-blue-500" />
+                )}
 
-              <span className="tracking-tight">{item.label}</span>
-            </Link>
-          )
-        })}
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 ${
+                    active
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                      : 'bg-white/[0.03] text-slate-500 group-hover:bg-white/[0.08] group-hover:text-slate-300'
+                  }`}
+                >
+                  <Icon size={18} strokeWidth={2.5} />
+                </span>
+
+                <span className="tracking-tight">{item.label}</span>
+              </Link>
+            )
+          })
+        )}
       </nav>
 
       <div className="p-4 space-y-4">

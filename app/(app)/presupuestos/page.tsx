@@ -33,6 +33,7 @@ type Budget = {
   payment_status: 'unpaid' | 'partial' | 'paid'
   paid_amount: number
   created_at: string
+  seller_id?: string
   client: {
     name: string
     cuit: string
@@ -75,15 +76,26 @@ export default function PresupuestosPage() {
   async function loadBudgets() {
     setLoading(true)
 
-    const companyId = await getCompanyId()
-
-    if (!companyId) {
-      toast.error('No se encontró la empresa del usuario.')
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError || !userData.user) {
+      toast.error('No se pudo autenticar al usuario.')
       setLoading(false)
       return
     }
 
-    const { data, error } = await supabase
+    const { data: profile, error: profileError } = await supabase
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userData.user.id)
+      .single()
+
+    if (profileError || !profile?.company_id) {
+      toast.error('No se encontró el perfil del usuario.')
+      setLoading(false)
+      return
+    }
+
+    let query = supabase
       .from('budgets')
       .select(`
         id,
@@ -100,8 +112,14 @@ export default function PresupuestosPage() {
           cuit
         )
       `)
-      .eq('company_id', companyId)
-      .order('budget_number', { ascending: false })
+      .eq('company_id', profile.company_id)
+
+    // If vendor, only show their own budgets
+    if (profile.role === 'vendedor') {
+      query = query.eq('seller_id', userData.user.id)
+    }
+
+    const { data, error } = await query.order('budget_number', { ascending: false })
       .range(0, 4999)
 
     if (error) {

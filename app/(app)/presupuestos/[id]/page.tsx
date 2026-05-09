@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import {
@@ -33,6 +33,7 @@ type Budget = {
   budget_date: string | null
   total_amount: number | null
   status: string | null
+  seller_id: string | null
   clients: {
     name: string
     cuit: string
@@ -63,6 +64,7 @@ type BudgetItem = {
 
 export default function PresupuestoDetallePage() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
 
   const [budget, setBudget] = useState<Budget | null>(null)
@@ -80,6 +82,13 @@ export default function PresupuestoDetallePage() {
   async function loadBudget() {
     setLoading(true)
 
+    const { data: userData } = await supabase.auth.getUser()
+    const { data: userProfile } = await supabase
+      .from('users_profiles')
+      .select('role')
+      .eq('id', userData.user?.id)
+      .single()
+
     const { data, error } = await supabase
       .from('budgets')
       .select(`
@@ -91,6 +100,7 @@ export default function PresupuestoDetallePage() {
         budget_date,
         total_amount,
         status,
+        seller_id,
         clients (
           name,
           cuit,
@@ -100,9 +110,16 @@ export default function PresupuestoDetallePage() {
       .eq('id', id)
       .single()
 
-    if (error) {
-      toast.error(error.message)
+    if (error || !data) {
+      toast.error(error?.message || 'No se encontró el presupuesto.')
       setLoading(false)
+      return
+    }
+
+    // Security check: Vendor can only see their own budgets
+    if (userProfile?.role === 'vendedor' && data.seller_id !== userData.user?.id) {
+      toast.error('No tenés permiso para ver este presupuesto.')
+      router.push('/presupuestos')
       return
     }
 
@@ -216,6 +233,7 @@ export default function PresupuestoDetallePage() {
           order_date: new Date().toISOString(),
           status: 'confirmed',
           source: 'Manual',
+          seller_id: budget.seller_id
         })
         .select('id')
         .single()

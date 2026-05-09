@@ -73,25 +73,30 @@ export default function NuevoPresupuestoPage() {
     loadData()
   }, [])
 
-  async function getCompanyId() {
+  async function getUserContext() {
     const { data: userData } = await supabase.auth.getUser()
 
     if (!userData.user) return null
 
     const { data: profile } = await supabase
       .from('users_profiles')
-      .select('company_id')
+      .select('company_id, role')
       .eq('id', userData.user.id)
       .single()
 
-    return profile?.company_id ?? null
+    return { 
+      companyId: profile?.company_id ?? null,
+      role: profile?.role ?? null,
+      userId: userData.user.id
+    }
   }
 
   async function loadData() {
     setLoading(true)
 
-    const currentCompanyId = await getCompanyId()
-    setCompanyId(currentCompanyId)
+    const context = await getUserContext()
+    const currentCompanyId = context?.companyId
+    setCompanyId(currentCompanyId || null)
 
     if (!currentCompanyId) {
       toast.error('No se encontró la empresa del usuario.')
@@ -291,16 +296,21 @@ export default function NuevoPresupuestoPage() {
     setSaving(true)
 
     try {
-      const nextNumber = await getNextBudgetNumber(companyId)
+      const context = await getUserContext()
+      if (!context?.companyId) throw new Error('Empresa no encontrada')
 
+      const nextNumber = await getNextBudgetNumber(context.companyId)
+
+      // 1. Create Budget
       const { data: budget, error: budgetError } = await supabase
         .from('budgets')
         .insert({
-          company_id: companyId,
+          company_id: context.companyId,
           client_id: clientId,
           budget_number: nextNumber,
           total_amount: total,
           status: 'issued',
+          seller_id: context.role === 'vendedor' ? context.userId : null
         })
         .select('id')
         .single()

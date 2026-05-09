@@ -51,34 +51,34 @@ export default function DashboardPage() {
   })
 
   const [loading, setLoading] = useState(true)
+  const [role, setRole] = useState<string | null>(null)
 
   useEffect(() => {
     loadDashboard()
   }, [])
 
-  async function getCompanyId() {
-    const { data: userData } = await supabase.auth.getUser()
-
-    if (!userData.user) return null
-
-    const { data: profile } = await supabase
-      .from('users_profiles')
-      .select('company_id')
-      .eq('id', userData.user.id)
-      .single()
-
-    return profile?.company_id ?? null
-  }
-
   async function loadDashboard() {
     setLoading(true)
 
-    const companyId = await getCompanyId()
-
-    if (!companyId) {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData?.user) {
       setLoading(false)
       return
     }
+
+    const { data: profile } = await supabase
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userData.user.id)
+      .single()
+
+    if (!profile?.company_id) {
+      setLoading(false)
+      return
+    }
+
+    const companyId = profile.company_id
+    const isVendedor = profile.role === 'vendedor'
 
     const [
       clientsRes,
@@ -88,40 +88,35 @@ export default function DashboardPage() {
       historyRes,
       itemsRes,
     ] = await Promise.all([
-      supabase
-        .from('clients')
-        .select('id', { count: 'exact', head: true })
-        .eq('company_id', companyId),
+      // Clients: Filter if vendor
+      isVendedor 
+        ? supabase.from('clients').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('seller_id', userData.user.id)
+        : supabase.from('clients').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
 
       supabase
         .from('products')
         .select('id', { count: 'exact', head: true })
         .eq('company_id', companyId),
 
-      supabase
-        .from('budgets')
-        .select('id', { count: 'exact', head: true })
-        .eq('company_id', companyId)
-        .neq('status', 'cancelled'),
+      // Budgets: Filter if vendor
+      isVendedor
+        ? supabase.from('budgets').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('seller_id', userData.user.id)
+        : supabase.from('budgets').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
 
-      supabase
-        .from('account_movements')
-        .select('debit, credit')
-        .eq('company_id', companyId),
+      // Balance: Zero out for vendor
+      isVendedor
+        ? Promise.resolve({ data: [], error: null })
+        : supabase.from('account_movements').select('debit, credit').eq('company_id', companyId),
 
-      supabase
-        .from('budgets')
-        .select('total_amount, created_at, payment_status')
-        .eq('company_id', companyId)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false })
-        .limit(100),
+      // History: Filter if vendor
+      isVendedor
+        ? supabase.from('budgets').select('created_at, total_amount, payment_status').eq('company_id', companyId).eq('seller_id', userData.user.id).neq('status', 'cancelled')
+        : supabase.from('budgets').select('created_at, total_amount, payment_status').eq('company_id', companyId).neq('status', 'cancelled'),
 
-      supabase
-        .from('budget_items')
-        .select('product_name, quantity, budgets!inner(company_id)')
-        .eq('budgets.company_id', companyId)
-        .limit(200),
+      // Top Products: Filter if vendor (via budgets items joining)
+      isVendedor
+        ? supabase.from('budget_items').select('product_name, quantity, budgets!inner(company_id, seller_id)').eq('budgets.company_id', companyId).eq('budgets.seller_id', userData.user.id)
+        : supabase.from('budget_items').select('product_name, quantity, budgets!inner(company_id)').eq('budgets.company_id', companyId),
     ])
 
     const totalBalance =
@@ -185,6 +180,7 @@ export default function DashboardPage() {
       paymentStatus,
     })
 
+    setRole(profile.role)
     setLoading(false)
   }
 
@@ -253,36 +249,40 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+      {role === 'admin' && (
+        <section className="relative overflow-hidden rounded-[2rem] bg-emerald-950 p-8 text-white shadow-2xl">
+          <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
+          <div className="absolute bottom-0 left-20 h-56 w-56 rounded-full bg-teal-400/10 blur-3xl" />
 
-      <section className="relative overflow-hidden rounded-[2rem] bg-emerald-950 p-8 text-white shadow-2xl">
-        <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
-        <div className="absolute bottom-0 left-20 h-56 w-56 rounded-full bg-teal-400/10 blur-3xl" />
-
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/20 px-3 py-1 text-xs font-bold uppercase tracking-widest text-emerald-200">
-              <Wallet size={14} />
-              Cuentas por Cobrar
+          <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-5">
+              <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/20 text-emerald-400 shadow-inner">
+                <Wallet size={32} />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400">
+                  Saldo de Cuenta Corriente
+                </p>
+                <h2 className="mt-1 text-4xl font-black tracking-tight lg:text-5xl">
+                  {loading ? (
+                    <span className="opacity-50">...</span>
+                  ) : (
+                    `$${stats.balance.toLocaleString('es-AR')}`
+                  )}
+                </h2>
+              </div>
             </div>
 
-            <h2 className="text-sm font-bold text-emerald-300">Total pendiente de cobro</h2>
-            
-            <p className="mt-1 text-5xl font-black tracking-tight lg:text-6xl">
-              {loading ? '...' : `$${stats.balance.toLocaleString('es-AR')}`}
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row">
             <Link
               href="/cuenta-corriente"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-400"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-emerald-950 shadow-xl transition hover:bg-emerald-50 active:scale-95"
             >
-              Ver detalle de cobros
-              <ArrowRight size={18} />
+              Ver detalle completo
+              <ArrowRight size={18} strokeWidth={3} />
             </Link>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="grid gap-5 md:grid-cols-3 xl:grid-cols-3">
         {cards.map((card) => {

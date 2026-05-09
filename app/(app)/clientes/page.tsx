@@ -57,20 +57,36 @@ export default function ClientesPage() {
     setErrorMsg('')
     setLoading(true)
 
-    const companyId = await getCompanyId()
-
-    if (!companyId) {
-      setErrorMsg('No se encontró la empresa del usuario.')
-      setClients([])
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError || !userData.user) {
+      setErrorMsg('No se pudo autenticar al usuario.')
       setLoading(false)
       return
     }
 
-    const { data, error } = await supabase
+    const { data: profile, error: profileError } = await supabase
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userData.user.id)
+      .single()
+
+    if (profileError || !profile?.company_id) {
+      setErrorMsg('No se encontró el perfil del usuario.')
+      setLoading(false)
+      return
+    }
+
+    let query = supabase
       .from('clients')
-      .select('id, cuit, name, address, active, created_at')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
+      .select('id, cuit, name, address, active, created_at, seller_id')
+      .eq('company_id', profile.company_id)
+
+    // If vendor, only show their own clients
+    if (profile.role === 'vendedor') {
+      query = query.eq('seller_id', userData.user.id)
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false })
 
     if (error) {
       setErrorMsg('Error al cargar clientes.')
