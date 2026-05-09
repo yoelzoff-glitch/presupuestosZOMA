@@ -484,11 +484,6 @@ export default function PedidoDetallePage(): any {
       return
     }
 
-    if (order.budget_id) {
-      toast.error('Este pedido ya fue convertido a presupuesto.')
-      return
-    }
-
     if (items.length === 0) {
       toast.error('El pedido no tiene productos.')
       return
@@ -575,7 +570,15 @@ export default function PedidoDetallePage(): any {
 
       if (orderError) throw orderError
 
-      toast.success('Pedido confirmado y presupuesto generado. Ahora podés pasarlo a cuenta corriente cuando desees.')
+      // 3. Actualizar estado del presupuesto a 'approved'
+      if (budgetId) {
+        await supabase
+          .from('budgets')
+          .update({ status: 'approved', updated_at: new Date().toISOString() })
+          .eq('id', budgetId)
+      }
+
+      toast.success('Pedido confirmado correctamente. Ahora podés pasarlo a cuenta corriente cuando desees.')
       await loadOrder()
     } catch (err: any) {
       console.error('Error confirmando pedido:', err)
@@ -737,8 +740,8 @@ export default function PedidoDetallePage(): any {
 
   const orderLabel = getOrderLabel(order)
   const isPortalOrder = order.source === 'portal'
-  const canConvert = order.status === 'pending' && !order.budget_id && !isPortalOrder
-  const isConverted = order.status === 'confirmed' || Boolean(order.budget_id)
+  const canConvert = order.status === 'pending'
+  const isConverted = order.status === 'confirmed'
   const isCancelled = order.status === 'cancelled'
 
   return (
@@ -776,7 +779,7 @@ export default function PedidoDetallePage(): any {
           <div className="flex flex-col gap-3 sm:flex-row">
             <StatusBadge status={order!.status} budgetId={order!.budget_id} />
 
-            {order.status === 'pending' && !order.budget_id && !isPortalOrder && (
+            {order.status === 'pending' && !isPortalOrder && (
               <>
                 <button
                   type="button"
@@ -810,7 +813,7 @@ export default function PedidoDetallePage(): any {
               </>
             )}
 
-            {isPortalOrder && order.status === 'pending' && !order.budget_id && (
+            {isPortalOrder && order.status === 'pending' && (
               <>
                 <button
                   type="button"
@@ -923,7 +926,7 @@ export default function PedidoDetallePage(): any {
 
       {!isPortalOrder && isConverted && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-700">
-          Este pedido ya fue convertido en presupuesto. No se puede convertir nuevamente.
+          Este pedido ya se encuentra confirmado.
         </div>
       )}
 
