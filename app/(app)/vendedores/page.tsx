@@ -109,6 +109,14 @@ export default function VendedoresPage() {
   )
 
 
+  if (!planType) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
+
   if (planType === 'base') {
     return (
       <div className="flex min-h-[70vh] flex-col items-center justify-center p-4 text-center animate-in fade-in zoom-in-95 duration-500">

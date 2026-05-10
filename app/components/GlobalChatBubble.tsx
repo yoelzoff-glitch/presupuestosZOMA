@@ -37,7 +37,7 @@ export default function GlobalChatBubble() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [unreadChannels, setUnreadChannels] = useState<Set<string | null>>(new Set())
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
-  const [isProPlan, setIsProPlan] = useState<boolean>(true) // Por defecto true para evitar parpadeo, luego se valida
+  const [isProPlan, setIsProPlan] = useState<boolean>(false) // Por defecto false para evitar flash en plan base
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const selectedUserRef = useRef<ChatUser | null>(null)
