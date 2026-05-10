@@ -11,17 +11,22 @@ function safeCompare(a: string, b: string) {
 }
 
 export function verifyMercadoPagoWebhookSignature(req: NextRequest) {
-  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET
+  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim()
 
   if (!secret) {
-    console.error('Falta MERCADOPAGO_WEBHOOK_SECRET')
+    console.error('❌ No se encontró MERCADOPAGO_WEBHOOK_SECRET');
     return false
   }
 
   const xSignature = req.headers.get('x-signature')
   const xRequestId = req.headers.get('x-request-id')
 
-  if (!xSignature) return false
+  console.log('🔍 Debug Signature - Headers:', { 'x-signature': xSignature, 'x-request-id': xRequestId });
+
+  if (!xSignature) {
+    console.error('❌ Falta header x-signature');
+    return false
+  }
 
   let ts = ''
   let receivedHash = ''
@@ -60,14 +65,14 @@ export function verifyMercadoPagoWebhookSignature(req: NextRequest) {
   manifest += `ts:${ts};`
 
   console.log('🔍 Debug Signature - Manifest:', manifest);
-  console.log('🔍 Debug Signature - Received Hash:', receivedHash);
+  console.log('🔍 Debug Signature - Hash Recibido:', receivedHash);
 
   const generatedHash = crypto
     .createHmac('sha256', secret)
     .update(manifest)
     .digest('hex')
 
-  console.log('🔍 Debug Signature - Generated Hash:', generatedHash);
+  console.log('🔍 Debug Signature - Hash Generado:', generatedHash);
 
   const timestamp = Number(ts)
   const timestampMs =
