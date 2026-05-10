@@ -61,6 +61,12 @@ export default function Login() {
       return
     }
 
+    if (profile.role === 'vendedor') {
+      router.replace('/vendedor')
+      router.refresh()
+      return
+    }
+
     router.replace('/')
     router.refresh()
   }

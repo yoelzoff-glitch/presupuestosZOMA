@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
@@ -90,28 +90,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   }, [])
 
   const isAdmin = profile?.role === 'admin'
-
   const planType = profile?.company?.plan_type || 'base'
   const isPro = planType === 'pro' || planType === 'pro_plus'
 
-  const filteredNavItems = navItems.filter((item) => {
-    if (loading) return false
-    
-    // Si no es PRO, ocultar Vendedores del menú
-    if (item.href === '/vendedores' && !isPro) return false
-
-    // Vendedores cannot see Account Current, Settings or Sellers management
-    if (profile?.role === 'vendedor') {
-      const hiddenForVendedores = ['/productos', '/cuenta-corriente', '/configuracion', '/vendedores']
-      return !hiddenForVendedores.includes(item.href)
-    }
-    return true
-  })
-
-  // Add Vendedores to navItems for Admin
+  // Admin sees all, but we hide Sellers management if not PRO
   const finalNavItems = isAdmin 
     ? [...navItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users }, ...navItems.slice(2)]
-    : filteredNavItems
+        .filter(item => item.href !== '/vendedores' || isPro)
+    : navItems
 
   return (
     <div className="flex h-full flex-col">
@@ -207,26 +193,32 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [planType, setPlanType] = useState<string | null>(null)
 
   useEffect(() => {
-    async function getPlan() {
+    async function checkAccess() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data } = await supabase
           .from('users_profiles')
-          .select('company_id, company:companies(plan_type)')
+          .select('role, company_id, company:companies(plan_type)')
           .eq('id', user.id)
           .single()
         
-        // Ahora que la columna existe, volvemos a la lógica real de planes
+        if (data?.role === 'vendedor') {
+          // Si es vendedor, FUERA de (app)
+          router.push('/vendedor')
+          return
+        }
+
         const rawPlan = (data?.company as any)?.plan_type
         setPlanType(rawPlan || 'base')
       }
     }
-    getPlan()
-  }, [])
+    checkAccess()
+  }, [router])
 
   const title = getPageTitle(pathname)
   const description = getPageDescription(pathname)
