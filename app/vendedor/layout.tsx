@@ -41,12 +41,20 @@ export default function VendedorLayout({
 
       const { data: profile } = await supabase
         .from('users_profiles')
-        .select('*, companies(name)')
+        .select('*, companies(name, plan_type)')
         .eq('id', user.id)
         .single()
 
       if (!profile || (profile.role !== 'vendedor' && profile.role !== 'admin')) {
         router.push('/auth/login')
+        return
+      }
+
+      // Protección por Plan SaaS
+      const plan = profile.companies?.plan_type || 'base'
+      if (plan === 'base') {
+        await supabase.auth.signOut()
+        router.push('/auth/login?error=plan_restriction')
         return
       }
 

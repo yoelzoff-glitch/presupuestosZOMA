@@ -37,6 +37,7 @@ export default function GlobalChatBubble() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [unreadChannels, setUnreadChannels] = useState<Set<string | null>>(new Set())
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+  const [isProPlan, setIsProPlan] = useState<boolean>(true) // Por defecto true para evitar parpadeo, luego se valida
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const selectedUserRef = useRef<ChatUser | null>(null)
@@ -122,7 +123,15 @@ export default function GlobalChatBubble() {
     const { data: profile } = await supabase.from('users_profiles').select('company_id, role').eq('id', userData.user.id).single()
     if (profile?.company_id) {
       setCompanyId(profile.company_id)
-      loadUsers(profile.company_id, userData.user.id)
+      
+      // Validar plan de la empresa
+      const { data: company } = await supabase.from('companies').select('plan_type').eq('id', profile.company_id).single()
+      const isPro = company?.plan_type === 'pro'
+      setIsProPlan(isPro)
+      
+      if (isPro) {
+        loadUsers(profile.company_id, userData.user.id)
+      }
     }
   }
 
@@ -181,7 +190,7 @@ export default function GlobalChatBubble() {
     return new Date(d1).toDateString() === new Date(d2).toDateString()
   }
 
-  if (!companyId) return null
+  if (!companyId || !isProPlan) return null
   const totalUnread = unreadChannels.size
 
   return (

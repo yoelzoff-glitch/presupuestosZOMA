@@ -13,6 +13,8 @@ import {
   AlertCircle,
   Search,
   MoreVertical,
+  Sparkles,
+  ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -21,6 +23,7 @@ export default function VendedoresPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [planType, setPlanType] = useState<string | null>(null)
 
   // Form states
   const [fullName, setFullName] = useState('')
@@ -39,11 +42,19 @@ export default function VendedoresPage() {
 
       const { data: profile } = await supabase
         .from('users_profiles')
-        .select('company_id')
+        .select('company_id, company:companies(plan_type)')
         .eq('id', user.id)
         .single()
 
       if (!profile) return
+
+      const plan = (profile.company as any)?.plan_type || 'base'
+      setPlanType(plan)
+
+      if (plan === 'base') {
+        setLoading(false)
+        return
+      }
 
       const { data, error } = await supabase
         .from('users_profiles')
@@ -96,6 +107,59 @@ export default function VendedoresPage() {
     v.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     v.email?.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+
+  if (planType === 'base') {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center p-4 text-center animate-in fade-in zoom-in-95 duration-500">
+        <div className="relative mb-8">
+          <div className="absolute inset-0 bg-blue-500/20 blur-[60px] rounded-full" />
+          <div className="relative flex h-24 w-24 items-center justify-center rounded-[2rem] bg-slate-950 text-blue-500 shadow-2xl">
+            <Users size={48} strokeWidth={2.5} />
+          </div>
+        </div>
+        
+        <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-blue-600 ring-1 ring-blue-500/20 mb-6">
+          <Sparkles size={14} /> Función Exclusiva PRO
+        </div>
+        
+        <h2 className="text-4xl font-black tracking-tight text-slate-900 mb-4 max-w-lg">
+          Llevá tu fuerza de ventas al <span className="text-blue-600 underline decoration-blue-600/20 underline-offset-8">siguiente nivel.</span>
+        </h2>
+        
+        <p className="max-w-md text-lg font-bold text-slate-500 leading-relaxed mb-10">
+          El módulo de Gestión de Vendedores te permite delegar la carga de presupuestos y pedidos manteniendo el control total del negocio.
+        </p>
+        
+        <div className="grid gap-6 sm:grid-cols-2 max-w-2xl mb-12 text-left">
+          <div className="flex gap-4 p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><Users size={20}/></div>
+            <div>
+              <p className="font-black text-slate-900 text-sm">Equipos de Venta</p>
+              <p className="text-xs font-bold text-slate-500 mt-1">Cuentas ilimitadas para tus vendedores con acceso restringido.</p>
+            </div>
+          </div>
+          <div className="flex gap-4 p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600"><Mail size={20}/></div>
+            <div>
+              <p className="font-black text-slate-900 text-sm">Chat Interno</p>
+              <p className="text-xs font-bold text-slate-500 mt-1">Comunicación fluida entre administración y vendedores en tiempo real.</p>
+            </div>
+          </div>
+        </div>
+
+        <a
+          href="https://wa.me/5491100000000?text=Hola,%20quiero%20mejorar%20mi%20plan%20al%20PRO%20para%20activar%20vendedores"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-3 rounded-2xl bg-slate-950 px-10 py-5 text-sm font-black text-white shadow-2xl transition-all hover:bg-slate-900 active:scale-95"
+        >
+          Mejorar mi Plan a PRO
+          <ChevronRight size={18} />
+        </a>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
