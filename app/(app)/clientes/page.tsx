@@ -19,6 +19,7 @@ import {
   UserCheck,
   Mail,
   Phone,
+  Lock,
 } from 'lucide-react'
 
 type Client = {
@@ -49,6 +50,7 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [planType, setPlanType] = useState('base')
 
   useEffect(() => {
     loadInitialData()
@@ -61,10 +63,17 @@ export default function ClientesPage() {
       setErrorMsg('No se pudo autenticar al usuario.'); setLoading(false); return
     }
 
-    const { data: profile } = await supabase.from('users_profiles').select('company_id').eq('id', userData.user.id).single()
+    const { data: profile } = await supabase
+      .from('users_profiles')
+      .select('company_id, company:companies(plan_type)')
+      .eq('id', userData.user.id)
+      .single()
+    
     if (!profile?.company_id) {
       setErrorMsg('No se encontró el perfil del usuario.'); setLoading(false); return
     }
+
+    setPlanType((profile.company as any)?.plan_type || 'base')
 
     const companyId = profile.company_id
 
@@ -150,10 +159,25 @@ export default function ClientesPage() {
             <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400"><Filter size={14} /> Filtrar por Vendedor:</div>
             <div className="relative">
               <UserCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" />
-              <select value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500">
+              <select 
+                value={sellerFilter} 
+                disabled={planType === 'base'}
+                onChange={(e) => setSellerFilter(e.target.value)} 
+                className={`rounded-xl border-2 py-2 pl-9 pr-4 text-sm font-bold text-slate-700 outline-none transition ${
+                  planType === 'base'
+                    ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
+                    : 'border-slate-200 bg-white focus:border-blue-500'
+                }`}
+              >
                 <option value="all">Todos los vendedores</option>
                 {sellers.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
               </select>
+
+              {planType === 'base' && (
+                <div className="absolute -top-2.5 -right-2 flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-white shadow-lg ring-2 ring-white">
+                  <Lock size={8} /> PRO
+                </div>
+              )}
             </div>
           </div>
         </div>

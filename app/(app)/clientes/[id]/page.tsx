@@ -18,6 +18,8 @@ import {
   ShieldCheck,
   Mail,
   Phone,
+  UserPlus,
+  Lock,
 } from 'lucide-react'
 
 type ClientStatus = boolean | null
@@ -36,6 +38,9 @@ export default function EditarCliente() {
   const [loading, setLoading] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [selectedSellerId, setSelectedSellerId] = useState('')
+  const [sellers, setSellers] = useState<any[]>([])
+  const [planType, setPlanType] = useState('base')
 
   useEffect(() => {
     if (id) {
@@ -48,7 +53,7 @@ export default function EditarCliente() {
 
     const { data, error } = await supabase
       .from('clients')
-      .select('id, cuit, name, address, active, email, phone')
+      .select('id, cuit, name, address, active, email, phone, seller_id')
       .eq('id', id)
       .single()
 
@@ -65,6 +70,27 @@ export default function EditarCliente() {
       setEmail(data.email || '')
       setPhone(data.phone || '')
       setActive(data.active !== false)
+      setSelectedSellerId(data.seller_id || '')
+    }
+
+    // Load sellers and plan info
+    const { data: userData } = await supabase.auth.getUser()
+    if (userData.user) {
+      const { data: profile } = await supabase
+        .from('users_profiles')
+        .select('company_id, company:companies(plan_type)')
+        .eq('id', userData.user.id)
+        .single()
+      
+      if (profile) {
+        setPlanType((profile.company as any)?.plan_type || 'base')
+        const { data: sellersData } = await supabase
+          .from('users_profiles')
+          .select('id, full_name')
+          .eq('company_id', profile.company_id)
+          .order('full_name')
+        setSellers(sellersData || [])
+      }
     }
 
     setInitialLoading(false)
@@ -86,6 +112,7 @@ export default function EditarCliente() {
         address: address.trim() || null,
         email: email.trim() || null,
         phone: phone.trim() || null,
+        seller_id: selectedSellerId || null,
       })
       .eq('id', id)
 
@@ -323,6 +350,40 @@ export default function EditarCliente() {
                     className="w-full rounded-2xl border-2 border-slate-50 bg-slate-50/50 py-4 pl-12 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
                     placeholder="Calle, Ciudad..."
                   />
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <div className="rounded-[2rem] bg-blue-50/50 p-6 border border-blue-100 flex flex-col sm:flex-row items-center gap-6 relative">
+                  <div className="h-14 w-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-600/20">
+                    <UserPlus size={28} />
+                  </div>
+                  <div className="flex-1 text-center sm:text-left">
+                    <p className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Vendedor Asignado</p>
+                    <p className="text-xs font-bold text-slate-500">Cambiar el vendedor responsable de este cliente.</p>
+                  </div>
+                  
+                  <div className="relative">
+                    <select 
+                      value={selectedSellerId} 
+                      disabled={planType === 'base'}
+                      onChange={(e) => setSelectedSellerId(e.target.value)}
+                      className={`w-full sm:w-64 rounded-2xl border-2 bg-white px-5 py-3.5 text-sm font-black text-slate-700 shadow-sm outline-none transition ${
+                        planType === 'base' 
+                          ? 'border-slate-100 opacity-60 cursor-not-allowed' 
+                          : 'border-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
+                      }`}
+                    >
+                      <option value="">Sin asignar (Admin)</option>
+                      {sellers.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                    </select>
+
+                    {planType === 'base' && (
+                      <div className="absolute -top-3 -right-3 flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow-xl ring-2 ring-white animate-bounce">
+                        <Lock size={10} /> PRO
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

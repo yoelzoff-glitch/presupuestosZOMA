@@ -12,6 +12,7 @@ import {
   Mail,
   Phone,
   UserCheck,
+  Lock,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
@@ -32,16 +33,23 @@ export default function NuevoCliente() {
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [planType, setPlanType] = useState<string>('base')
 
   useEffect(() => {
     async function loadSellers() {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user) return
 
-      const { data: profile } = await supabase.from('users_profiles').select('company_id').eq('id', userData.user.id).single()
+      const { data: profile } = await supabase
+        .from('users_profiles')
+        .select('company_id, company:companies(plan_type)')
+        .eq('id', userData.user.id)
+        .single()
+      
       if (!profile?.company_id) return
       
       setCompanyId(profile.company_id)
+      setPlanType((profile.company as any)?.plan_type || 'base')
 
       const { data: sellersData } = await supabase.from('users_profiles').select('id, full_name').eq('company_id', profile.company_id).order('full_name')
       setSellers(sellersData || [])
@@ -127,14 +135,27 @@ export default function NuevoCliente() {
                 <p className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Vendedor Asignado</p>
                 <p className="text-xs font-bold text-slate-500">¿A quién le pertenece este cliente? (Opcional)</p>
              </div>
-             <select 
-               value={selectedSellerId} 
-               onChange={(e) => setSelectedSellerId(e.target.value)}
-               className="w-full sm:w-64 rounded-2xl border-2 border-white bg-white px-5 py-3.5 text-sm font-black text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-             >
-               <option value="">Sin asignar (Admin)</option>
-               {sellers.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-             </select>
+              <div className="relative group">
+                <select 
+                  value={selectedSellerId} 
+                  disabled={planType === 'base'}
+                  onChange={(e) => setSelectedSellerId(e.target.value)}
+                  className={`w-full sm:w-64 rounded-2xl border-2 bg-white px-5 py-3.5 text-sm font-black text-slate-700 shadow-sm outline-none transition ${
+                    planType === 'base' 
+                      ? 'border-slate-100 opacity-60 cursor-not-allowed' 
+                      : 'border-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
+                  }`}
+                >
+                  <option value="">Sin asignar (Admin)</option>
+                  {sellers.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                </select>
+
+                {planType === 'base' && (
+                  <div className="absolute -top-3 -right-3 flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow-xl ring-2 ring-white animate-bounce">
+                    <Lock size={10} /> PRO
+                  </div>
+                )}
+              </div>
           </div>
 
           <div className="grid gap-10 lg:grid-cols-2">
