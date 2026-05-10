@@ -31,6 +31,7 @@ type Budget = {
   total_amount: number | null
   status: string | null
   seller_id: string | null
+  notes: string | null
   clients: {
     name: string
     cuit: string
@@ -102,6 +103,7 @@ export default function PresupuestoDetallePage() {
         total_amount,
         status,
         seller_id,
+        notes,
         clients (
           name,
           cuit,
@@ -177,7 +179,8 @@ export default function PresupuestoDetallePage() {
           order_date: new Date().toISOString(),
           status: role === 'admin' ? 'confirmed' : 'pending',
           source: 'Manual',
-          seller_id: budget.seller_id
+          seller_id: budget.seller_id,
+          notes: budget.notes || 'Convertido desde presupuesto'
         })
         .select('id')
         .single()
@@ -420,9 +423,9 @@ export default function PresupuestoDetallePage() {
         </table>
 
         <div className="flex justify-between items-start pt-4">
-          <div className="max-w-[60%]">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Observaciones</p>
-            <p className="text-[9px] text-slate-500 italic leading-relaxed">{company?.default_notes || 'Validez: 15 días.'}</p>
+          <div className="max-w-[70%]">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Condiciones y Observaciones</p>
+            <p className="text-[9px] text-slate-600 leading-relaxed whitespace-pre-wrap">{budget.notes || company?.default_notes || 'Validez del presupuesto: 15 días.\nPrecios sujetos a cambio sin previo aviso.'}</p>
           </div>
           <div className="bg-slate-900 text-white p-5 rounded-2xl min-w-[200px] text-right">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</p>

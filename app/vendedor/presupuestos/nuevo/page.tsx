@@ -61,6 +61,7 @@ export default function VendedorNuevoPresupuesto() {
   const [productQty, setProductQty] = useState('1')
   const [productPrice, setProductPrice] = useState('')
   const [productDiscount, setProductDiscount] = useState('')
+  const [budgetNotes, setBudgetNotes] = useState('')
 
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   const clientParam = searchParams?.get('client')
@@ -102,11 +103,12 @@ export default function VendedorNuevoPresupuesto() {
 
     const { data: companyData } = await supabase
       .from('companies')
-      .select('enable_cascading_discounts')
+      .select('enable_cascading_discounts, default_notes')
       .eq('id', cid)
       .single()
     
     setCascadingEnabled(companyData?.enable_cascading_discounts ?? false)
+    setBudgetNotes(companyData?.default_notes || 'Validez: 15 días.\nPrecios sujetos a cambio.')
 
     // Cargar clientes (si es vendedor, solo los suyos)
     let clientsQuery = supabase.from('clients').select('id, name, cuit').eq('company_id', cid)
@@ -163,7 +165,8 @@ export default function VendedorNuevoPresupuesto() {
         budget_number: nextNumber,
         total_amount: total,
         status: 'issued',
-        seller_id: role === 'vendedor' ? userData.user?.id : null
+        seller_id: role === 'vendedor' ? userData.user?.id : null,
+        notes: budgetNotes.trim() || null
       }).select('id').single()
 
       if (bError) throw bError
@@ -294,6 +297,23 @@ export default function VendedorNuevoPresupuesto() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* CONDICIONES / NOTAS */}
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
+            <h3 className="font-black text-slate-900 mb-4 flex items-center gap-2">
+              <FileText size={18} className="text-blue-600" /> Condiciones del Presupuesto
+            </h3>
+            <p className="text-xs font-semibold text-slate-500 mb-4">
+              Estas notas aparecerán al pie del PDF. Podés editarlas para este caso puntual.
+            </p>
+            <textarea 
+              value={budgetNotes}
+              onChange={(e) => setBudgetNotes(e.target.value)}
+              rows={6}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-4 px-4 text-sm font-bold text-slate-700 outline-none focus:border-blue-500 transition resize-none"
+              placeholder="Validez, plazos de entrega, formas de pago..."
+            />
           </div>
         </div>
 

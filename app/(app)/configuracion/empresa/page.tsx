@@ -29,6 +29,7 @@ type Company = {
   email: string | null
   website: string | null
   logo_url: string | null
+  default_notes: string | null
 }
 
 export default function EmpresaPage() {
@@ -82,6 +83,7 @@ export default function EmpresaPage() {
         email: company.email,
         website: company.website,
         logo_url: company.logo_url,
+        default_notes: company.default_notes,
       })
       .eq('id', company.id)
 
@@ -297,6 +299,20 @@ export default function EmpresaPage() {
                     onChange={(e) => setCompany({ ...company, address: e.target.value })}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                     placeholder="Calle, Ciudad, Provincia"
+                  />
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-700 ml-1">
+                    <FileText size={16} className="text-slate-400" />
+                    Condiciones Predeterminadas (Aparecen en el Presupuesto)
+                  </label>
+                  <textarea
+                    value={company.default_notes || ''}
+                    onChange={(e) => setCompany({ ...company, default_notes: e.target.value })}
+                    rows={8}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                    placeholder="Ej: Validez del presupuesto: 5 días. Forma de pago: Transferencia bancaria anticipada..."
                   />
                 </div>
               </div>

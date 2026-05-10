@@ -70,6 +70,7 @@ export default function NuevoPresupuestoPage() {
     quantity: '1',
     discount: '',
   })
+  const [budgetNotes, setBudgetNotes] = useState('')
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -109,14 +110,15 @@ export default function NuevoPresupuestoPage() {
       return
     }
 
-    // Cargar config de empresa para descuentos en cascada
+    // Cargar config de empresa para descuentos en cascada y notas
     const { data: companyData } = await supabase
       .from('companies')
-      .select('enable_cascading_discounts')
+      .select('enable_cascading_discounts, default_notes')
       .eq('id', currentCompanyId)
       .single()
     
     setCascadingEnabled(companyData?.enable_cascading_discounts ?? false)
+    setBudgetNotes(companyData?.default_notes || 'Validez: 15 días.\nPrecios sujetos a cambio.')
 
     const clientsQuery = supabase
       .from('clients')
@@ -361,7 +363,8 @@ export default function NuevoPresupuestoPage() {
           budget_number: nextNumber,
           total_amount: total,
           status: 'issued',
-          seller_id: context.role === 'vendedor' ? context.userId : null
+          seller_id: context.role === 'vendedor' ? context.userId : null,
+          notes: budgetNotes.trim() || null
         })
         .select('id')
         .single()
@@ -717,6 +720,22 @@ export default function NuevoPresupuestoPage() {
               <Plus size={18} />
               Agregar producto manual
             </button>
+          </section>
+
+          <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-black text-slate-950 mb-4 flex items-center gap-2">
+              <FileText size={20} className="text-blue-600" /> Condiciones y Notas
+            </h2>
+            <p className="text-sm text-slate-500 mb-4 font-semibold">
+              Escribí los términos legales o comerciales que aparecerán en el PDF.
+            </p>
+            <textarea
+              value={budgetNotes}
+              onChange={(e) => setBudgetNotes(e.target.value)}
+              rows={8}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              placeholder="Ej: Validez del presupuesto..."
+            />
           </section>
         </div>
 

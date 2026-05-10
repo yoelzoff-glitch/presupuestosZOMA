@@ -36,6 +36,7 @@ export default function GlobalChatBubble() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [unreadChannels, setUnreadChannels] = useState<Set<string | null>>(new Set())
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const selectedUserRef = useRef<ChatUser | null>(null)
@@ -69,7 +70,43 @@ export default function GlobalChatBubble() {
         setUnreadChannels((prev) => new Set(prev).add(channelKey))
       }
     }).subscribe()
-    return () => { supabase.removeChannel(channel) }
+
+    // PRESENCIA (Online/Offline)
+    const presenceChannel = supabase.channel(`presence-${companyId}`, {
+      config: { presence: { key: currentUserId } }
+    })
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const newState = presenceChannel.presenceState()
+        const onlineIds = new Set<string>()
+        Object.keys(newState).forEach((key) => onlineIds.add(key))
+        setOnlineUsers(onlineIds)
+      })
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
+        newPresences.forEach((p: any) => {
+          setOnlineUsers((prev) => new Set(prev).add(p.presence_ref || p.key))
+        })
+      })
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        leftPresences.forEach((p: any) => {
+          setOnlineUsers((prev) => {
+            const next = new Set(prev)
+            next.delete(p.presence_ref || p.key)
+            return next
+          })
+        })
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ online_at: new Date().toISOString() })
+        }
+      })
+
+    return () => { 
+      supabase.removeChannel(channel) 
+      supabase.removeChannel(presenceChannel)
+    }
   }, [companyId, currentUserId])
 
   useEffect(() => {
@@ -156,8 +193,15 @@ export default function GlobalChatBubble() {
               {view === 'messages' && ( <button onClick={() => setView('contacts')} className="mr-1 rounded-xl p-1.5 transition hover:bg-white/10"><ChevronLeft size={20} /></button> )}
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/30">{view === 'contacts' ? <Users size={20} /> : <UserIcon size={20} />}</div>
               <div className="min-w-0">
-                <h3 className="text-sm font-black truncate max-w-[180px]">{view === 'contacts' ? 'Mensajería' : (selectedUser?.full_name || 'Muro General')}</h3>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">{view === 'contacts' ? 'Seleccioná un chat' : (selectedUser ? 'Chat Privado' : 'Canal Global')}</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-black truncate max-w-[180px]">{view === 'contacts' ? 'Mensajería' : (selectedUser?.full_name || 'Muro General')}</h3>
+                  {view === 'messages' && selectedUser && onlineUsers.has(selectedUser.id) && (
+                    <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  )}
+                </div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
+                  {view === 'contacts' ? 'Seleccioná un chat' : (selectedUser ? (onlineUsers.has(selectedUser.id) ? 'En línea ahora' : 'Desconectado') : 'Canal Global')}
+                </p>
               </div>
             </div>
             <button onClick={() => setIsOpen(false)} className="rounded-xl p-2 transition hover:bg-white/10"><X size={20} /></button>
@@ -174,8 +218,21 @@ export default function GlobalChatBubble() {
               <p className="px-2 mt-6 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Mensajes Directos</p>
               {users.map(user => (
                 <button key={user.id} onClick={() => openConversation(user)} className="relative flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white p-4 text-left shadow-sm transition hover:border-blue-500/30 hover:bg-blue-50 group">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 transition group-hover:scale-110"><UserIcon size={22} /></div>
-                  <div className="flex-1 min-w-0"><h4 className="text-sm font-black text-slate-900">{user.full_name}</h4><p className="text-xs font-semibold text-slate-500 truncate capitalize">{user.role}</p></div>
+                  <div className="relative">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 transition group-hover:scale-110">
+                      <UserIcon size={22} />
+                    </div>
+                    {onlineUsers.has(user.id) && (
+                      <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 shadow-sm" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-black text-slate-900">{user.full_name}</h4>
+                      {onlineUsers.has(user.id) && <span className="text-[8px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">En línea</span>}
+                    </div>
+                    <p className="text-xs font-semibold text-slate-500 truncate capitalize">{user.role}</p>
+                  </div>
                   {unreadChannels.has(user.id) && <div className="h-3 w-3 rounded-full bg-red-600 shadow-sm animate-pulse" />}
                 </button>
               ))}
