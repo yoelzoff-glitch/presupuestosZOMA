@@ -402,14 +402,16 @@ async function handleWebhook(req: NextRequest) {
     }
 
     // -----------------------------------------------------------------------
-    // BRANCH: Standard single-budget payment (existing logic unchanged)
+    // BRANCH: Standard single-budget payment
     // -----------------------------------------------------------------------
+    const preferenceId = mpPayment.preference_id
+
     const { data: previousPayment, error: previousPaymentError } =
       await supabaseAdmin
         .from('payments')
         .select('id, company_id, client_id, budget_id, amount, status')
         .eq('company_id', companyId)
-        .eq('mp_external_reference', mpPayment.external_reference)
+        .eq('mp_preference_id', preferenceId) // Búsqueda exacta por ID de preferencia
         .maybeSingle()
 
     if (previousPaymentError) {
@@ -431,7 +433,7 @@ async function handleWebhook(req: NextRequest) {
       .from('payments')
       .update(updatePayload)
       .eq('company_id', companyId)
-      .eq('mp_external_reference', mpPayment.external_reference)
+      .eq('mp_preference_id', preferenceId) // Actualización exacta
       .select('id, company_id, client_id, budget_id, amount, status, mp_external_reference')
       .limit(1)
 
@@ -462,6 +464,30 @@ async function handleWebhook(req: NextRequest) {
           }
         }
 
+        // Determinamos el tipo de pago (Total o Parcial) comparando el saldo
+        let paymentType = 'Pago parcial'
+        let totalPaidSoFar = 0
+
+        if (localPayment.budget_id) {
+          const { data: budget } = await supabaseAdmin
+            .from('budgets')
+            .select('total_amount')
+            .eq('id', localPayment.budget_id)
+            .single()
+
+          const { data: otherMovements } = await supabaseAdmin
+            .from('account_movements')
+            .select('credit')
+            .eq('budget_id', localPayment.budget_id)
+
+          const previousCredits = (otherMovements || []).reduce((acc, m) => acc + Number(m.credit || 0), 0)
+          totalPaidSoFar = previousCredits + Number(mpPayment.transaction_amount)
+
+          if (budget && totalPaidSoFar >= Number(budget.total_amount)) {
+            paymentType = 'Pago total'
+          }
+        }
+
         const { error: movementError } = await supabaseAdmin
           .from('account_movements')
           .insert({
@@ -470,10 +496,10 @@ async function handleWebhook(req: NextRequest) {
             budget_id: localPayment.budget_id,
             payment_id: localPayment.id,
             movement_type: 'Pago',
-            payment_type: 'Pago total',
+            payment_type: paymentType,
             description: movementDescription,
             debit: 0,
-            credit: Number(localPayment.amount),
+            credit: Number(mpPayment.transaction_amount), // Usamos el monto REAL de MP
           })
 
         if (movementError) {

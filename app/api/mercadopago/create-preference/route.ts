@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     } | null = null
 
     if (budget_id) {
-      // 3. Fetch budget and verify ownership
+      // 3. Fetch budget
       const { data: budget, error: budgetError } = await supabaseAdmin
         .from('budgets')
         .select(`
@@ -76,7 +76,6 @@ export async function POST(req: NextRequest) {
           budget_number,
           budget_code,
           total_amount,
-          paid_amount,
           status
         `)
         .eq('id', budget_id)
@@ -90,18 +89,26 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No se puede pagar un presupuesto anulado' }, { status: 400 })
       }
 
-      const balance = Number(budget.total_amount || 0) - Number(budget.paid_amount || 0)
+      // Calculamos el saldo real desde los movimientos de cuenta
+      const { data: movements } = await supabaseAdmin
+        .from('account_movements')
+        .select('debit, credit')
+        .eq('budget_id', budget_id)
+
+      const totalCargo = (movements || []).reduce((acc, m) => acc + Number(m.debit || 0), 0)
+      const totalAbono = (movements || []).reduce((acc, m) => acc + Number(m.credit || 0), 0)
+      const realBalance = totalCargo - totalAbono
 
       paymentData = {
         id: budget.id,
         company_id: budget.company_id,
         client_id: budget.client_id,
         title: `Presupuesto ${budget.budget_code || budget.budget_number}`,
-        balance: balance,
+        balance: realBalance,
         external_reference: `budget:${budget.id}`,
       }
     } else {
-      // 3b. Fetch order and verify ownership
+      // 3b. Fetch order
       const { data: order, error: orderError } = await supabaseAdmin
         .from('orders')
         .select(`
@@ -123,16 +130,32 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No se puede pagar un pedido anulado' }, { status: 400 })
       }
 
-      // Por ahora tomamos el total_amount como balance. 
-      // (En una versión más avanzada podríamos restar pagos parciales si existieran en orders)
-      const balance = Number(order.total_amount || 0)
+      // Buscamos si este pedido tiene un presupuesto asociado para ver los movimientos
+      const { data: budgetLinked } = await supabaseAdmin
+        .from('budgets')
+        .select('id')
+        .eq('budget_code', order.order_code.replace('PED-', '000-')) // Intento de matcheo de código
+        .maybeSingle()
+
+      let realBalance = Number(order.total_amount || 0)
+
+      if (budgetLinked) {
+        const { data: movements } = await supabaseAdmin
+          .from('account_movements')
+          .select('debit, credit')
+          .eq('budget_id', budgetLinked.id)
+
+        const totalCargo = (movements || []).reduce((acc, m) => acc + Number(m.debit || 0), 0)
+        const totalAbono = (movements || []).reduce((acc, m) => acc + Number(m.credit || 0), 0)
+        realBalance = totalCargo - totalAbono
+      }
 
       paymentData = {
         id: order.id,
         company_id: order.company_id,
         client_id: order.client_id,
         title: `Pedido ${order.order_code}`,
-        balance: balance,
+        balance: realBalance,
         external_reference: `order:${order.id}`,
       }
     }
