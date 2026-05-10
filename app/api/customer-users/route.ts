@@ -104,9 +104,11 @@ export async function POST(req: Request) {
 
     authUserId = authData.user.id
 
+    // Usamos UPSERT atómico. Si el trigger ya lo creó, lo actualiza. Si no, lo inserta.
+    // Esto evita errores de duplicado por condiciones de carrera.
     const { error: profileError } = await supabaseAdmin
       .from('users_profiles')
-      .insert({
+      .upsert({
         id: authUserId,
         company_id: companyId,
         role: 'customer',
