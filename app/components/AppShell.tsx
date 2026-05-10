@@ -93,10 +93,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const planType = profile?.company?.plan_type || 'base'
   const isPro = planType === 'pro' || planType === 'pro_plus'
 
-  // Admin sees all, but we hide Sellers management if not PRO
+  // Admin sees all. We show Vendedores even if not PRO to encourage upgrade.
   const finalNavItems = isAdmin 
-    ? [...navItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users }, ...navItems.slice(2)]
-        .filter(item => item.href !== '/vendedores' || isPro)
+    ? [...navItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users, isProFeature: true }, ...navItems.slice(2)]
     : navItems
 
   return (
@@ -153,7 +152,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   <Icon size={18} strokeWidth={2.5} />
                 </span>
 
-                <span className="tracking-tight">{item.label}</span>
+                <span className="flex-1 tracking-tight">{item.label}</span>
+
+                {(item as any).isProFeature && !isPro && (
+                  <span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-500 ring-1 ring-blue-500/20">
+                    PRO
+                  </span>
+                )}
               </Link>
             )
           })
