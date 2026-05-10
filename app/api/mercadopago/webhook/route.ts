@@ -268,8 +268,9 @@ async function handleWebhook(req: NextRequest) {
   const isValidSignature = verifyMercadoPagoWebhookSignature(req)
 
   if (!isValidSignature) {
-    console.error('Firma webhook Mercado Pago inválida')
-
+    console.error('❌ Firma webhook Mercado Pago inválida o falta secreto');
+    // Para propósitos de debug en desarrollo, podrías comentar el return 
+    // pero en producción es VITAL.
     return NextResponse.json(
       {
         received: false,
@@ -318,54 +319,63 @@ async function handleWebhook(req: NextRequest) {
 
     let query = supabaseAdmin
       .from('mp_accounts')
-      .select('company_id, access_token')
-      .eq('connected', true)
+    console.log(`📡 Webhook recibido - Topic: ${topic}, ID: ${paymentId}`);
 
-    if (mpUserId) {
-      query = query.eq('mp_user_id', mpUserId)
+    // 4. Buscar todas las cuentas de Mercado Pago conectadas
+    const { data: mpAccounts } = await supabaseAdmin
+      .from('mercadopago_accounts')
+      .select('*')
+
+    if (!mpAccounts || mpAccounts.length === 0) {
+      console.error('❌ No hay cuentas de Mercado Pago conectadas en la base de datos');
+      return NextResponse.json({ received: true, message: 'No accounts connected' })
     }
 
-    const { data: mpAccounts, error: accountsError } = await query
-
-    if (accountsError || !mpAccounts?.length) {
-      console.log('No MP accounts:', accountsError)
-      return NextResponse.json({ received: true, message: 'No MP accounts' })
-    }
+    console.log(`🔍 Buscando pago en ${mpAccounts.length} cuentas conectadas...`);
 
     let mpPayment: any = null
     let companyId: string | null = null
 
     for (const account of mpAccounts) {
-      const validAccessToken = await getValidMercadoPagoAccessToken(
-        account.company_id
-      )
+      try {
+        // Determinamos el endpoint según el topic
+        const endpoint = topic === 'payment' || topic === 'payment.created' || topic === 'payment.updated'
+          ? `https://api.mercadopago.com/v1/payments/${paymentId}`
+          : topic === 'merchant_order'
+          ? `https://api.mercadopago.com/merchant_orders/${paymentId}`
+          : null;
 
-      if (!validAccessToken) {
-        continue
-      }
-
-      const response = await fetch(
-        `https://api.mercadopago.com/v1/payments/${paymentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${validAccessToken}`,
-          },
+        if (!endpoint) {
+          console.warn('⚠️ Topic no soportado para búsqueda directa:', topic);
+          continue;
         }
-      )
 
-      const text = await response.text()
-      console.log('MP PAYMENT RESPONSE:', response.status, text)
+        const response = await fetch(endpoint, {
+          headers: {
+            Authorization: `Bearer ${account.access_token}`,
+          },
+        })
 
-      if (response.ok) {
-        mpPayment = JSON.parse(text)
-        companyId = account.company_id
-        break
+        if (response.ok) {
+          mpPayment = await response.json()
+          companyId = account.company_id
+          console.log(`✅ Pago encontrado en la cuenta de la empresa: ${companyId}`);
+          break
+        } else {
+          const errorText = await response.text();
+          console.log(`- Intento fallido en cuenta ${account.company_id}: ${response.status} ${errorText}`);
+        }
+      } catch (error) {
+        console.error('Error fetching MP payment:', error)
       }
     }
 
     if (!mpPayment || !companyId) {
+      console.error('❌ No se encontró el pago en Mercado Pago con ninguna de las cuentas conectadas. ID:', paymentId);
       return NextResponse.json({ received: true, message: 'Payment not found' })
     }
+
+    console.log('✅ Pago recuperado de MP:', mpPayment.id, 'Status:', mpPayment.status, 'Preference:', mpPayment.preference_id);
 
     const mappedStatus =
       mpPayment.status === 'approved'
@@ -414,9 +424,25 @@ async function handleWebhook(req: NextRequest) {
         .eq('mp_preference_id', preferenceId) // Búsqueda exacta por ID de preferencia
         .maybeSingle()
 
-    if (previousPaymentError) {
-      console.log('PREVIOUS PAYMENT READ ERROR:', previousPaymentError)
+    if (!previousPayment) {
+      console.error('❌ No se encontró el registro de pago en Supabase para la preferencia:', preferenceId);
+      // Opcional: intentar buscar por external_reference si falló la preferencia
+      const { data: retryPayment } = await supabaseAdmin
+        .from('payments')
+        .select('id, company_id, client_id, budget_id, amount, status')
+        .eq('company_id', companyId)
+        .eq('mp_external_reference', mpPayment.external_reference)
+        .maybeSingle()
+
+      if (retryPayment) {
+        console.log('⚠️ Se encontró el pago por external_reference como fallback.');
+        // Continuamos con el fallback
+      } else {
+        return NextResponse.json({ received: true, message: 'Local payment not found' })
+      }
     }
+
+    console.log('✅ Pago local encontrado ID:', previousPayment?.id || 'via fallback');
 
     const wasAlreadyApproved = previousPayment?.status === 'approved'
 

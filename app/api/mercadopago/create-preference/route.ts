@@ -198,7 +198,12 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://presupuestos-zoma.vercel.app'
+    // Detectamos la URL base dinámicamente
+    const host = req.headers.get('host')
+    const protocol = host?.includes('localhost') ? 'http' : 'https'
+    const dynamicAppUrl = `${protocol}://${host}`
+    
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || dynamicAppUrl
     const externalReference = paymentData.external_reference
 
     // 6. Create Preference
