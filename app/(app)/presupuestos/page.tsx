@@ -38,6 +38,7 @@ export default async function PresupuestosPage() {
       presupuestosIniciales={presupuestos}
       vendedoresIniciales={resVendedores.data || []}
       idEmpresa={contexto.idEmpresa}
+      planType={contexto.tipoPlan}
     />
   )
 }

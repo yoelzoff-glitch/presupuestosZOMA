@@ -17,6 +17,7 @@ import {
   XCircle,
   Loader2,
   Clock3,
+  Lock,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -50,12 +51,14 @@ type Props = {
   presupuestosIniciales: Presupuesto[]
   vendedoresIniciales: PerfilVendedor[]
   idEmpresa: string
+  planType: string
 }
 
 export default function PresupuestosClient({
   presupuestosIniciales,
   vendedoresIniciales,
   idEmpresa,
+  planType,
 }: Props) {
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>(presupuestosIniciales)
   const [vendedores] = useState<PerfilVendedor[]>(vendedoresIniciales)
@@ -133,10 +136,25 @@ export default function PresupuestosClient({
             <div><h2 className="text-xl font-black text-slate-950">Listado General</h2><p className="text-sm text-slate-500">Filtrá por número, cliente o vendedor.</p></div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="relative"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar..." className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold outline-none focus:border-blue-500 sm:w-64" /></div>
-              <select value={filtroVendedor} onChange={(e) => setFiltroVendedor(e.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500">
-                <option value="all">Todos los vendedores</option>
-                {vendedores.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
-              </select>
+               <div className="relative group">
+                <select 
+                  value={filtroVendedor} 
+                  disabled={planType === 'base'}
+                  onChange={(e) => setFiltroVendedor(e.target.value)} 
+                  className={`rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 ${
+                    planType === 'base' ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <option value="all">Todos los vendedores</option>
+                  {vendedores.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
+                </select>
+
+                {planType === 'base' && (
+                  <div className="absolute -top-3 -right-3 flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow-xl ring-2 ring-white animate-bounce">
+                    <Lock size={10} /> PRO
+                  </div>
+                )}
+              </div>
               <button onClick={cargarPresupuestos} className="p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition"><RefreshCw size={17} className={cargando ? 'animate-spin' : ''} /></button>
             </div>
           </div>
