@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { createServerClient as createSSRClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
@@ -35,11 +36,12 @@ export function createSupabaseAdminClient() {
   )
 }
 
+
 /**
  * Ayudante para obtener el perfil del usuario actual y la información de la empresa.
  * Retorna null si el usuario no está autenticado.
  */
-export async function getServerUserContext() {
+export const getServerUserContext = cache(async () => {
   const supabase = await createServerComponentClient()
 
   const {
@@ -68,5 +70,5 @@ export async function getServerUserContext() {
     nombreCompleto: (profile?.full_name || user.user_metadata?.full_name || 'Usuario') as string,
     tipoPlan: ((profile?.company as any)?.plan_type || 'base') as string,
     nombreEmpresa: ((profile?.company as any)?.name || '') as string,
-  }
 }
+})
