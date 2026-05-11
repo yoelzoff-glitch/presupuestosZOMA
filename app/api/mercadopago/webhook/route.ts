@@ -411,35 +411,27 @@ async function handleWebhook(req: NextRequest) {
     // -----------------------------------------------------------------------
     // BRANCH: Standard single-budget payment
     // -----------------------------------------------------------------------
-    const preferenceId = mpPayment.preference_id
+    // Intentar obtener el preference_id y la referencia de varios lugares posibles
+    const preferenceId = mpPayment.preference_id || mpPayment.order?.id || mpPayment.merchant_order_id;
+    const externalRef = mpPayment.external_reference;
 
-    const { data: previousPayment, error: previousPaymentError } =
-      await supabaseAdmin
-        .from('payments')
-        .select('id, company_id, client_id, budget_id, amount, status')
-        .eq('company_id', companyId)
-        .eq('mp_preference_id', preferenceId) // Búsqueda exacta por ID de preferencia
-        .maybeSingle()
+    console.log('🔍 Buscando pago local:', { preferenceId, externalRef, companyId });
 
-    if (!previousPayment) {
-      console.error('❌ No se encontró el registro de pago en Supabase para la preferencia:', preferenceId);
-      // Opcional: intentar buscar por external_reference si falló la preferencia
-      const { data: retryPayment } = await supabaseAdmin
-        .from('payments')
-        .select('id, company_id, client_id, budget_id, amount, status')
-        .eq('company_id', companyId)
-        .eq('mp_external_reference', mpPayment.external_reference)
-        .maybeSingle()
+    // Construimos la consulta de forma atómica para evitar errores de tipo
+    const { data: localRecord, error: localError } = await (preferenceId 
+      ? supabaseAdmin.from('payments').select('*').eq('company_id', companyId).eq('mp_preference_id', preferenceId).maybeSingle()
+      : externalRef 
+        ? supabaseAdmin.from('payments').select('*').eq('company_id', companyId).eq('mp_external_reference', externalRef).maybeSingle()
+        : { data: null, error: new Error('Faltan identificadores') }
+    );
 
-      if (retryPayment) {
-        console.log('⚠️ Se encontró el pago por external_reference como fallback.');
-        // Continuamos con el fallback
-      } else {
-        return NextResponse.json({ received: true, message: 'Local payment not found' })
-      }
+    if (localError || !localRecord) {
+      console.error('❌ No se encontró el registro de pago en Supabase:', { preferenceId, externalRef, error: localError });
+      return NextResponse.json({ received: true, message: 'Local payment not found' })
     }
 
-    console.log('✅ Pago local encontrado ID:', previousPayment?.id || 'via fallback');
+    const previousPayment = localRecord;
+    console.log('✅ Registro de pago local encontrado:', previousPayment.id);
 
     const wasAlreadyApproved = previousPayment?.status === 'approved'
 
@@ -491,20 +483,28 @@ async function handleWebhook(req: NextRequest) {
         let paymentType = 'Pago parcial'
         let totalPaidSoFar = 0
 
-        if (localPayment.budget_id) {
+        // Detección robusta del monto (transaction_amount para pagos, total_amount para órdenes)
+        const amountToRecord = Number(
+          mpPayment.transaction_amount || 
+          mpPayment.total_amount || 
+          mpPayment.paid_amount || 
+          previousPayment.amount || 0
+        );
+
+        if (previousPayment.budget_id) {
           const { data: budget } = await supabaseAdmin
             .from('budgets')
             .select('total_amount')
-            .eq('id', localPayment.budget_id)
+            .eq('id', previousPayment.budget_id)
             .single()
 
           const { data: otherMovements } = await supabaseAdmin
             .from('account_movements')
             .select('credit')
-            .eq('budget_id', localPayment.budget_id)
+            .eq('budget_id', previousPayment.budget_id)
 
           const previousCredits = (otherMovements || []).reduce((acc, m) => acc + Number(m.credit || 0), 0)
-          totalPaidSoFar = previousCredits + Number(mpPayment.transaction_amount)
+          totalPaidSoFar = previousCredits + amountToRecord
 
           if (budget && totalPaidSoFar >= Number(budget.total_amount)) {
             paymentType = 'Pago total'
@@ -514,15 +514,15 @@ async function handleWebhook(req: NextRequest) {
         const { error: movementError } = await supabaseAdmin
           .from('account_movements')
           .insert({
-            company_id: localPayment.company_id,
-            client_id: localPayment.client_id,
-            budget_id: localPayment.budget_id,
-            payment_id: localPayment.id,
+            company_id: previousPayment.company_id,
+            client_id: previousPayment.client_id,
+            budget_id: previousPayment.budget_id,
+            payment_id: previousPayment.id,
             movement_type: 'Pago',
             payment_type: paymentType,
             description: movementDescription,
             debit: 0,
-            credit: Number(mpPayment.transaction_amount), // Usamos el monto REAL de MP
+            credit: amountToRecord,
           })
 
         if (movementError) {
@@ -531,15 +531,15 @@ async function handleWebhook(req: NextRequest) {
       }
 
       if (!wasAlreadyApproved) {
-        await createPaymentNotification(localPayment as LocalPayment)
+        await createPaymentNotification(previousPayment)
       }
 
-      if (localPayment.budget_id) {
+      if (previousPayment.budget_id) {
         const { data: movements, error: movementsError } =
           await supabaseAdmin
             .from('account_movements')
             .select('credit')
-            .eq('budget_id', localPayment.budget_id)
+            .eq('budget_id', previousPayment.budget_id)
 
         if (movementsError) {
           console.log('MOVEMENTS READ ERROR:', movementsError)
@@ -579,7 +579,7 @@ async function handleWebhook(req: NextRequest) {
               paid_at:
                 paymentStatus === 'paid' ? new Date().toISOString() : null,
             })
-            .eq('id', localPayment.budget_id)
+            .eq('id', previousPayment.budget_id)
 
           if (budgetUpdateError) {
             console.log('BUDGET UPDATE ERROR:', budgetUpdateError)
