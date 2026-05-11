@@ -54,40 +54,43 @@ export async function createNewCompany(name: string, adminEmail: string) {
     // 2. Crear la Empresa
     const { data: company, error: companyError } = await supabaseAdmin
       .from('companies')
-      .insert({ name })
-      .select('id')
+      .insert({ 
+        name: name,
+        plan_type: 'base' // Aseguramos el plan inicial
+      })
+      .select()
       .single()
 
     if (companyError) {
-      console.error('Error Company:', companyError)
+      console.error('Error detallado Company:', companyError)
       // Cleanup
       await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
-      return { error: `Error de Base de Datos (Empresa): ${companyError.message}` }
+      return { error: `Error DB Empresa: ${companyError.message} - Código: ${companyError.code}` }
     }
 
-    // 3. Crear el Perfil
+    // 3. Crear/Actualizar el Perfil (usamos upsert por seguridad)
     const { error: profileError } = await supabaseAdmin
       .from('users_profiles')
-      .insert({
+      .upsert({
         id: authUser.user.id,
         company_id: company.id,
-        full_name: name,
+        full_name: 'Administrador', // Valor genérico seguro
         role: 'admin'
       })
 
     if (profileError) {
-      console.error('Error Profile:', profileError)
-      return { error: `Error de Base de Datos (Perfil): ${profileError.message}` }
+      console.error('Error detallado Profile:', profileError)
+      return { error: `Error DB Perfil: ${profileError.message} - Código: ${profileError.code}` }
     }
 
-    // 4. Generar link de recuperación (opcional, si falla no bloqueamos todo)
-    try {
-      await supabaseAdmin.auth.admin.generateLink({
-        type: 'recovery',
-        email: adminEmail,
-      })
-    } catch (e) {
-      console.warn('No se pudo enviar el mail de bienvenida, pero el usuario fue creado.')
+    // 4. Generar link de recuperación
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email: adminEmail,
+    })
+
+    if (linkError) {
+      console.warn('No se pudo enviar mail, pero el usuario está creado:', linkError.message)
     }
 
     revalidatePath('/superadmin')
