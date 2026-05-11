@@ -41,7 +41,7 @@ export function verifyMercadoPagoWebhookSignature(req: NextRequest) {
   }
 
   if (!ts || !receivedHash) {
-    console.error('❌ Faltan componentes de firma (ts o v1)');
+    console.error('❌ Faltan componentes de firma (ts o v1)', { ts, receivedHash });
     return false;
   }
 
@@ -64,15 +64,15 @@ export function verifyMercadoPagoWebhookSignature(req: NextRequest) {
 
   manifest += `ts:${ts};`
 
-  console.log('🔍 Debug Signature - Manifest:', manifest);
-  console.log('🔍 Debug Signature - Hash Recibido:', receivedHash);
-
   const generatedHash = crypto
     .createHmac('sha256', secret)
     .update(manifest)
     .digest('hex')
 
-  console.log('🔍 Debug Signature - Hash Generado:', generatedHash);
+  console.log('🔍 Debug Signature - Secret (last 4):', secret.slice(-4));
+  console.log('🔍 Debug Signature - Manifest:', manifest);
+  console.log('🔍 Debug Signature - Generated Hash:', generatedHash);
+  console.log('🔍 Debug Signature - Received Hash:', receivedHash);
 
   const timestamp = Number(ts)
   const timestampMs =

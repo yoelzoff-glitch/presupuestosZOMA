@@ -268,7 +268,7 @@ async function handleWebhook(req: NextRequest) {
   const isValidSignature = verifyMercadoPagoWebhookSignature(req)
 
   if (!isValidSignature) {
-    console.error('⚠️ ATENCIÓN: Firma webhook inválida, pero se procesará igual para DEBUG');
+    console.error('⚠️ ATENCIÓN: Firma webhook inválida. Se recomienda revisar el MERCADOPAGO_WEBHOOK_SECRET.');
     // Comentamos el return para que el pago impacte igual mientras testeamos
     /*
     return NextResponse.json(
@@ -450,7 +450,25 @@ async function handleWebhook(req: NextRequest) {
     }
 
     if (localError || !localRecord) {
-      console.error('❌ No se encontró el registro de pago en Supabase después de agotar opciones:', { preferenceId, externalRef, error: localError });
+      console.error('❌ No se encontró el registro de pago en Supabase con el filtro de empresa:', { preferenceId, externalRef, companyId });
+      
+      // Búsqueda GLOBAL (sin filtro de empresa) para diagnóstico
+      const { data: globalRecord } = await supabaseAdmin
+        .from('payments')
+        .select('id, company_id, mp_preference_id, mp_external_reference')
+        .or(`mp_preference_id.eq.${preferenceId || 'null'},mp_external_reference.eq.${externalRef || 'null'}`)
+        .maybeSingle();
+      
+      if (globalRecord) {
+        console.error('🚨 ¡CRÍTICO! El registro existe pero pertenece a OTRA EMPRESA:', {
+          paymentRecordId: globalRecord.id,
+          paymentCompanyId: globalRecord.company_id,
+          mpAccountCompanyId: companyId
+        });
+      } else {
+        console.error('❌ El registro definitivamente NO existe en la tabla payments con estos IDs.');
+      }
+
       return NextResponse.json({ received: true, message: 'Local payment not found' })
     }
 
