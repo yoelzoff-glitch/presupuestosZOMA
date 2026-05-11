@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { budget_id, order_code } = body
+    const { budget_id, order_code, amount: sentAmount } = body
 
     if (!budget_id && !order_code) {
       return NextResponse.json({ error: 'Falta budget_id u order_code' }, { status: 400 })
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
           company_id: movement.company_id,
           client_id: movement.client_id,
           title: movement.description || 'Saldo pendiente',
-          balance: realBalance,
+          balance: sentAmount !== undefined ? Number(sentAmount) : realBalance,
           external_reference: `movement:${movement.id}`,
         }
       } else {
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
           company_id: budget.company_id,
           client_id: budget.client_id,
           title: `Presupuesto ${budget.budget_code || budget.budget_number}`,
-          balance: realBalance,
+          balance: sentAmount !== undefined ? Number(sentAmount) : realBalance,
           external_reference: `budget:${budget.id}`,
         }
       }
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
         company_id: order.company_id,
         client_id: order.client_id,
         title: `Pedido ${order.order_code}`,
-        balance: realBalance,
+        balance: sentAmount !== undefined ? Number(sentAmount) : realBalance,
         external_reference: `order:${order.id}`,
       }
     }

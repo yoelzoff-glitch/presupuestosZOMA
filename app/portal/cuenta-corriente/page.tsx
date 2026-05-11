@@ -174,9 +174,10 @@ export default function PortalCuentaCorrientePage() {
     setLoading(false)
   }
 
-  async function payBudget(budgetId: string) {
+  async function payBudget(doc: PendingBudget) {
     try {
-      setPayingBudgetId(budgetId)
+      setPayingBudgetId(doc.id)
+      const budgetId = doc.id
 
       const response = await fetch('/api/mercadopago/create-preference', {
         method: 'POST',
@@ -187,6 +188,7 @@ export default function PortalCuentaCorrientePage() {
           // Si el ID parece un UUID es un presupuesto, si no es un código de pedido
           budget_id: budgetId.includes('-') && budgetId.length > 20 ? budgetId : null,
           order_code: !budgetId.includes('-') || budgetId.length < 20 ? budgetId : null,
+          amount: doc.balance,
         }),
       })
 
@@ -228,8 +230,16 @@ export default function PortalCuentaCorrientePage() {
 
   const pendingBudgets = useMemo<PendingBudget[]>(() => {
     const grouped = new Map<string, PendingBudget>()
+    let unlinkedCredit = 0
 
+    // Primero procesamos todos los movimientos
     movements.forEach((movement) => {
+      // Si es un pago sin presupuesto, lo acumulamos como crédito a distribuir
+      if (movement.movement_type === 'Pago' && !movement.budget_id) {
+        unlinkedCredit += Number(movement.credit || 0)
+        return
+      }
+
       let key = movement.budget_id
       let label = ''
 
@@ -239,18 +249,12 @@ export default function PortalCuentaCorrientePage() {
           (movement.budgets?.budget_number
             ? `000-${movement.budgets.budget_number}`
             : 'Presupuesto')
+      } else if (movement.movement_type === 'Venta') {
+        // Es una venta manual (ej: Saldo Inicial)
+        key = movement.id
+        label = movement.description || 'Venta directa'
       } else {
-        // Buscar código de pedido en la descripción (ej: "Venta - Pedido PED-000006")
-        const match = movement.description?.match(/Pedido (PED-[0-9]+)/i)
-        if (match) {
-          key = match[1] // Usamos el código del pedido como clave
-          label = match[1]
-        } else if (movement.movement_type === 'Venta') {
-          key = movement.id
-          label = movement.description || 'Venta directa'
-        } else {
-          return
-        }
+        return
       }
 
       const current = grouped.get(key) || {
@@ -268,7 +272,32 @@ export default function PortalCuentaCorrientePage() {
       grouped.set(key, current)
     })
 
-    return Array.from(grouped.values()).filter((doc) => doc.balance > 0)
+    // Ahora distribuimos el crédito "a cuenta" entre los saldos pendientes (FIFO - del más antiguo al más nuevo)
+    const docs = Array.from(grouped.values()).sort((a, b) => {
+      // Intentamos ordenar por fecha si estuviera disponible, si no mantenemos orden de proceso
+      return 0 
+    })
+
+    const finalDocs: PendingBudget[] = []
+    
+    // Aplicamos el crédito sobrante a los documentos con saldo
+    for (const doc of docs) {
+      if (doc.balance <= 0) {
+        finalDocs.push(doc)
+        continue
+      }
+
+      if (unlinkedCredit > 0) {
+        const amountToSubtract = Math.min(unlinkedCredit, doc.balance)
+        doc.paid += amountToSubtract
+        doc.balance -= amountToSubtract
+        unlinkedCredit -= amountToSubtract
+      }
+      
+      finalDocs.push(doc)
+    }
+
+    return finalDocs.filter((doc) => doc.balance > 0)
   }, [movements])
 
   if (loading) {
@@ -416,7 +445,7 @@ export default function PortalCuentaCorrientePage() {
 
                     <button
                       type="button"
-                      onClick={() => payBudget(doc.id)}
+                      onClick={() => payBudget(doc)}
                       disabled={payingBudgetId === doc.id}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:opacity-50"
                     >
