@@ -14,26 +14,46 @@ export default function UpdatePassword() {
   const [successMsg, setSuccessMsg] = useState('')
 
   useEffect(() => {
-    // Escuchador de estado de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        console.log('Evento de recuperación detectado')
-      }
+    const handleSession = async () => {
+      // 1. Intentamos obtener la sesión normal
+      const { data: { session } } = await supabase.auth.getSession()
       
       if (session) {
-        setErrorMsg('') // Limpiamos errores si hay sesión
-      } else {
-        // Si después de 2 segundos no hay sesión, asumimos link inválido
-        setTimeout(async () => {
-          const { data: { session: retrySession } } = await supabase.auth.getSession()
-          if (!retrySession) {
-            setErrorMsg('El enlace de recuperación no es válido o ha expirado.')
-          }
-        }, 2000)
+        setErrorMsg('')
+        return
       }
-    })
 
-    return () => subscription.unsubscribe()
+      // 2. Si no hay sesión, buscamos manualmente en el HASH de la URL (el #access_token=...)
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hash = window.location.hash.substring(1) // Quitamos el #
+        const params = new URLSearchParams(hash)
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+
+        if (accessToken && refreshToken) {
+          console.log('Token detectado manualmente, forzando sesión...')
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+          
+          if (!error) {
+            setErrorMsg('')
+            return
+          }
+        }
+      }
+
+      // 3. Si después de todo esto no hay nada, esperamos un poco más antes de dar error
+      setTimeout(async () => {
+        const { data: { session: finalSession } } = await supabase.auth.getSession()
+        if (!finalSession) {
+          setErrorMsg('El enlace de recuperación no es válido o ha expirado. Si acabás de pedirlo, esperá unos segundos y recargá.')
+        }
+      }, 3000)
+    }
+
+    handleSession()
   }, [])
 
   async function handleUpdate(e: React.FormEvent) {
