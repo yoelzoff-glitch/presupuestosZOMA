@@ -16,9 +16,17 @@ export default function UpdatePassword() {
   useEffect(() => {
     // Verificar si venimos de un link de recuperación
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setErrorMsg('El enlace ha expirado o es inválido.')
+      // Damos un pequeño respiro para que el cliente de Supabase procese el hash de la URL
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error || !session) {
+        // Si después de un momento no hay sesión, mostramos el error
+        setTimeout(async () => {
+          const { data: { session: retrySession } } = await supabase.auth.getSession()
+          if (!retrySession) {
+            setErrorMsg('El enlace de recuperación no es válido o ha expirado. Por favor, solicitá uno nuevo.')
+          }
+        }, 500)
       }
     }
     checkSession()
