@@ -21,6 +21,15 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import FilterButton from '@/app/components/FilterButton'
+import { 
+  Trophy, 
+  TrendingUp, 
+  Target, 
+  BarChart3, 
+  DollarSign, 
+  FileText 
+} from 'lucide-react'
 
 export default function VendedoresPage() {
   const [vendedores, setVendedores] = useState<any[]>([])
@@ -28,6 +37,14 @@ export default function VendedoresPage() {
   const [showModal, setShowModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [planType, setPlanType] = useState<string | null>(null)
+  const [daysFilter, setDaysFilter] = useState('30')
+  const [stats, setStats] = useState({
+    topSeller: { name: 'Sin datos', value: 0 },
+    topProspector: { name: 'Sin datos', value: 0 },
+    bestConversion: { name: 'Sin datos', value: 0 },
+    totalBudgets: 0,
+    totalSales: 0
+  })
 
   // Form states
   const [fullName, setFullName] = useState('')
@@ -37,7 +54,7 @@ export default function VendedoresPage() {
 
   useEffect(() => {
     fetchVendedores()
-  }, [])
+  }, [daysFilter])
 
   async function fetchVendedores() {
     try {
@@ -68,6 +85,58 @@ export default function VendedoresPage() {
         .order('full_name')
 
       if (error) throw error
+      
+      // Fetch budgets to calculate stats
+      let budgetsQuery = supabase
+        .from('budgets')
+        .select('total_amount, status, seller_id, users_profiles!budgets_seller_id_fkey(full_name)')
+        .eq('company_id', profile.company_id)
+
+      if (daysFilter !== 'all') {
+        const dateLimit = new Date()
+        dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
+        budgetsQuery = budgetsQuery.gte('created_at', dateLimit.toISOString())
+      }
+
+      const { data: budgets } = await budgetsQuery
+      
+      if (budgets) {
+        const sellerStats: Record<string, any> = {}
+        
+        budgets.forEach((b: any) => {
+          const sellerId = b.seller_id || 'system'
+          const sellerName = (b.users_profiles as any)?.full_name || 'Sistema'
+          
+          if (!sellerStats[sellerId]) {
+            sellerStats[sellerId] = { name: sellerName, totalSales: 0, count: 0, approved: 0 }
+          }
+          
+          sellerStats[sellerId].count++
+          if (b.status === 'approved') {
+            sellerStats[sellerId].totalSales += Number(b.total_amount || 0)
+            sellerStats[sellerId].approved++
+          }
+        })
+
+        const sellersList = Object.values(sellerStats)
+        
+        const topSeller = sellersList.length > 0 ? sellersList.reduce((a, b) => (a.totalSales > b.totalSales ? a : b)) : { name: 'Sin datos', totalSales: 0 }
+        const topProspector = sellersList.length > 0 ? sellersList.reduce((a, b) => (a.count > b.count ? a : b)) : { name: 'Sin datos', count: 0 }
+        const bestConversion = sellersList.length > 0 
+          ? sellersList
+            .map(s => ({ ...s, rate: s.count > 0 ? (s.approved / s.count) * 100 : 0 }))
+            .reduce((a, b) => (a.rate > b.rate ? a : b))
+          : { name: 'Sin datos', rate: 0 }
+
+        setStats({
+          topSeller: { name: topSeller.name, value: topSeller.totalSales },
+          topProspector: { name: topProspector.name, value: topProspector.count },
+          bestConversion: { name: bestConversion.name, value: bestConversion.rate },
+          totalBudgets: budgets.length,
+          totalSales: budgets.filter(b => b.status === 'approved').reduce((acc, b) => acc + Number(b.total_amount), 0)
+        })
+      }
+
       setVendedores(data || [])
     } catch (error: any) {
       toast.error('Error cargando vendedores: ' + error.message)
@@ -175,36 +244,105 @@ export default function VendedoresPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-900">
             Equipo de Ventas
           </h2>
           <p className="mt-1 text-sm font-bold text-slate-500">
-            Administrá a tus vendedores y sus accesos al sistema.
+            Administrá a tus vendedores y visualizá su rendimiento en tiempo real.
           </p>
         </div>
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-95"
-        >
-          <Plus size={18} strokeWidth={3} />
-          Nuevo Vendedor
-        </button>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl mr-2">
+            <FilterButton active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
+            <FilterButton active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
+            <FilterButton active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
+            <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
+          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-95"
+          >
+            <Plus size={18} strokeWidth={3} />
+            Nuevo Vendedor
+          </button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Leaderboard */}
+      <div className="grid gap-5 md:grid-cols-3">
+        <div className="group relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
+          <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-amber-500/5 transition-transform group-hover:scale-150" />
+          <div className="relative z-10 flex items-center gap-5">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 shadow-inner">
+              <Trophy size={28} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Top Ventas ($)</p>
+              <h4 className="mt-0.5 truncate text-lg font-black text-slate-900">{stats.topSeller.name}</h4>
+              <p className="text-sm font-black text-amber-600">${stats.topSeller.value.toLocaleString('es-AR')}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
+          <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-blue-500/5 transition-transform group-hover:scale-150" />
+          <div className="relative z-10 flex items-center gap-5">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-inner">
+              <TrendingUp size={28} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Top Presupuestos</p>
+              <h4 className="mt-0.5 truncate text-lg font-black text-slate-900">{stats.topProspector.name}</h4>
+              <p className="text-sm font-black text-blue-600">{stats.topProspector.value} emitidos</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="group relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
+          <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-emerald-500/5 transition-transform group-hover:scale-150" />
+          <div className="relative z-10 flex items-center gap-5">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 shadow-inner">
+              <Target size={28} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Mejor Conversión</p>
+              <h4 className="mt-0.5 truncate text-lg font-black text-slate-900">{stats.bestConversion.name}</h4>
+              <p className="text-sm font-black text-emerald-600">{stats.bestConversion.value.toFixed(1)}% de cierre</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards - Global */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-              <Users size={22} />
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-slate-400 shadow-sm"><Users size={16} /></div>
+              <p className="text-xs font-bold text-slate-500">Equipo Total</p>
             </div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-slate-500">Total Vendedores</p>
-              <h4 className="text-2xl font-black text-slate-900">{vendedores.length}</h4>
+            <p className="text-lg font-black text-slate-900">{vendedores.length}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-slate-400 shadow-sm"><FileText size={16} /></div>
+              <p className="text-xs font-bold text-slate-500">Presupuestos (Periodo)</p>
             </div>
+            <p className="text-lg font-black text-slate-900">{stats.totalBudgets}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-slate-400 shadow-sm"><DollarSign size={16} /></div>
+              <p className="text-xs font-bold text-slate-500">Volumen Cerrado</p>
+            </div>
+            <p className="text-lg font-black text-slate-900">${stats.totalSales.toLocaleString('es-AR')}</p>
           </div>
         </div>
       </div>

@@ -34,6 +34,9 @@ type DashboardStats = {
   products: number
   budgets: number
   balance: number
+  totalBudgeted: number
+  totalConverted: number
+  conversionRate: number
   salesHistory: { month: string; total: number }[]
   topProducts: { name: string; quantity: number }[]
   paymentStatus: { name: string; value: number; color: string }[]
@@ -45,17 +48,30 @@ export default function DashboardPage() {
     products: 0,
     budgets: 0,
     balance: 0,
+    totalBudgeted: 0,
+    totalConverted: 0,
+    conversionRate: 0,
     salesHistory: [],
     topProducts: [],
     paymentStatus: [],
   })
 
+  const [heroType, setHeroType] = useState<'balance' | 'performance'>('balance')
+
   const [loading, setLoading] = useState(true)
   const [daysFilter, setDaysFilter] = useState('30')
 
   useEffect(() => {
+    const saved = localStorage.getItem('admin_dashboard_hero')
+    if (saved) setHeroType(saved as any)
     loadDashboard()
   }, [daysFilter])
+
+  const toggleHero = () => {
+    const next = heroType === 'balance' ? 'performance' : 'balance'
+    setHeroType(next)
+    localStorage.setItem('admin_dashboard_hero', next)
+  }
 
   async function loadDashboard() {
     setLoading(true)
@@ -80,7 +96,7 @@ export default function DashboardPage() {
     // Dashboard 100% Admin - Filtros de fecha dinámicos
     let budgetsQuery = supabase.from('budgets').select('id', { count: 'exact', head: true }).eq('company_id', companyId)
     let movementsQuery = supabase.from('account_movements').select('debit, credit').eq('company_id', companyId)
-    let historyQuery = supabase.from('budgets').select('created_at, total_amount, payment_status').eq('company_id', companyId).neq('status', 'cancelled')
+    let historyQuery = supabase.from('budgets').select('created_at, total_amount, payment_status, status').eq('company_id', companyId).neq('status', 'cancelled')
     let itemsQuery = supabase.from('budget_items').select('product_name, quantity, budgets!inner(company_id, created_at)').eq('budgets.company_id', companyId)
 
     if (daysFilter !== 'all') {
@@ -111,6 +127,9 @@ export default function DashboardPage() {
     ])
 
     const totalBalance = balanceRes.data?.reduce((acc, item: any) => acc + (Number(item.debit || 0) - Number(item.credit || 0)), 0) ?? 0
+    const totalBudgeted = historyRes.data?.reduce((acc, b) => acc + Number(b.total_amount || 0), 0) ?? 0
+    const totalConverted = historyRes.data?.filter(b => b.status === 'approved').reduce((acc, b) => acc + Number(b.total_amount || 0), 0) ?? 0
+    const conversionRate = totalBudgeted > 0 ? (totalConverted / totalBudgeted) * 100 : 0
 
     // Historial
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -150,6 +169,9 @@ export default function DashboardPage() {
       products: productsRes.count ?? 0,
       budgets: budgetsRes.count ?? 0,
       balance: totalBalance,
+      totalBudgeted,
+      totalConverted,
+      conversionRate,
       salesHistory,
       topProducts,
       paymentStatus,
@@ -181,24 +203,57 @@ export default function DashboardPage() {
               <FilterButton variant="blue" active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
               <FilterButton variant="blue" active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
             </div>
-            <Link href="/clientes/nuevo" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-xl shadow-blue-900/30 transition hover:bg-blue-500 active:scale-95"><Plus size={18} /> Nuevo cliente</Link>
+            <button 
+              onClick={toggleHero}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 text-sm font-bold text-white transition hover:bg-white/20"
+            >
+              <BarChart3 size={18} />
+              Personalizar
+            </button>
+            <Link href="/clientes/nuevo" className="ml-3 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-xl shadow-blue-900/30 transition hover:bg-blue-500 active:scale-95"><Plus size={18} /> Nuevo cliente</Link>
           </div>
         </div>
       </section>
 
-      <section className="relative overflow-hidden rounded-[2rem] bg-emerald-950 p-8 text-white shadow-2xl">
-        <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-5">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/20 text-emerald-400 shadow-inner"><Wallet size={32} /></div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400">Saldo Global Cuenta Corriente</p>
-              <h2 className="mt-1 text-4xl font-black tracking-tight lg:text-5xl">{loading ? '...' : `$${stats.balance.toLocaleString('es-AR')}`}</h2>
+      {heroType === 'balance' ? (
+        <section className="relative overflow-hidden rounded-[2rem] bg-emerald-950 p-8 text-white shadow-2xl">
+          <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
+          <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-5">
+              <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/20 text-emerald-400 shadow-inner"><Wallet size={32} /></div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400">Saldo Global Cuenta Corriente</p>
+                <h2 className="mt-1 text-4xl font-black tracking-tight lg:text-5xl">{loading ? '...' : `$${stats.balance.toLocaleString('es-AR')}`}</h2>
+              </div>
             </div>
+            <Link href="/cuenta-corriente" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-emerald-950 shadow-xl transition hover:bg-emerald-50 active:scale-95">Ver detalle completo <ArrowRight size={18} /></Link>
           </div>
-          <Link href="/cuenta-corriente" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-emerald-950 shadow-xl transition hover:bg-emerald-50 active:scale-95">Ver detalle completo <ArrowRight size={18} /></Link>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section className="relative overflow-hidden rounded-[2rem] bg-indigo-950 p-8 text-white shadow-2xl border border-white/10">
+          <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />
+          <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex-1 space-y-4">
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-indigo-400">Rendimiento de Ventas</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                  <p className="text-sm font-bold text-slate-400">Total Presupuestado</p>
+                  <h3 className="text-3xl font-black mt-1">${loading ? '...' : stats.totalBudgeted.toLocaleString('es-AR')}</h3>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-400">Total Convertido</p>
+                  <h3 className="text-3xl font-black mt-1 text-indigo-400">${loading ? '...' : stats.totalConverted.toLocaleString('es-AR')}</h3>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-400">Tasa de Cierre</p>
+                  <h3 className="text-3xl font-black mt-1 text-emerald-400">{loading ? '...' : stats.conversionRate.toFixed(1)}%</h3>
+                </div>
+              </div>
+            </div>
+            <Link href="/presupuestos" className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-8 text-sm font-black text-white shadow-xl shadow-indigo-900/40 transition hover:bg-indigo-500 active:scale-95">Ver presupuestos <ArrowRight size={18} /></Link>
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-5 md:grid-cols-3">
         {cards.map((card) => {
