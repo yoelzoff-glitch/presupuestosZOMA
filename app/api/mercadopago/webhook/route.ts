@@ -488,7 +488,7 @@ async function handleWebhook(req: NextRequest) {
           .from('payments')
           .select('*')
           .eq('company_id', companyId)
-          .or(`budget_id.eq.${extractedUuid},id.eq.${extractedUuid}`)
+          .or(`budget_id.eq.${extractedUuid},id.eq.${extractedUuid},mp_external_reference.ilike.%${extractedUuid}%`)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -507,7 +507,7 @@ async function handleWebhook(req: NextRequest) {
       const { data: globalRecord } = await supabaseAdmin
         .from('payments')
         .select('id, company_id, mp_preference_id, mp_external_reference')
-        .or(`mp_preference_id.eq."${preferenceId || 'null'}",mp_external_reference.eq."${externalRef || 'null'}"`)
+        .or(`mp_preference_id.eq.${preferenceId || 'no_pref'},mp_external_reference.eq.${externalRef || 'no_ref'}`)
         .maybeSingle();
       
       if (globalRecord) {
