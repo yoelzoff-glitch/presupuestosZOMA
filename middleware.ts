@@ -47,6 +47,7 @@ export async function middleware(request: NextRequest) {
   const isAuthPage = pathname.startsWith('/auth')
   const isApiPage = pathname.startsWith('/api')
   const isPortalPage = pathname.startsWith('/portal')
+  const isVendedorPage = pathname.startsWith('/vendedor')
   const isTermsPage = pathname === '/auth/terminos'
 
   if (isApiPage) return response
@@ -75,16 +76,26 @@ export async function middleware(request: NextRequest) {
       return response
     }
 
-    // Si los términos están vigentes e intenta entrar a auth/terms o login, redirigir al dashboard
+    // Redirección inicial basada en rol
     if (isAuthPage) {
       const url = request.nextUrl.clone()
-      url.pathname = role === 'customer' ? '/portal' : '/'
+      if (role === 'customer') url.pathname = '/portal'
+      else if (role === 'vendedor') url.pathname = '/vendedor'
+      else url.pathname = '/'
       return NextResponse.redirect(url)
     }
 
+    // Control de acceso por rol
     if (role === 'customer' && !isPortalPage) {
       const url = request.nextUrl.clone()
       url.pathname = '/portal'
+      return NextResponse.redirect(url)
+    }
+
+    const isAdminRoute = !isAuthPage && !isApiPage && !isPortalPage && !isVendedorPage
+    if (role === 'vendedor' && isAdminRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/vendedor'
       return NextResponse.redirect(url)
     }
 

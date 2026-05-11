@@ -42,7 +42,6 @@ export default async function DashboardPage(props: {
 
   if (error) {
     console.error('Error fetching dashboard stats:', error)
-    // Fallback stats en caso de error
     return (
       <div className="p-8 text-center">
         <h2 className="text-xl font-bold text-red-600">Error al cargar el dashboard</h2>
