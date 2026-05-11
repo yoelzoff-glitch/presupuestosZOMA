@@ -450,13 +450,38 @@ async function handleWebhook(req: NextRequest) {
     }
 
     if (localError || !localRecord) {
+      console.log('🔍 Iniciando MODO RESCATE (Búsqueda por UUID en referencia)...');
+      
+      // Intentamos extraer el UUID de externalRef (ej: budget:UUID)
+      const uuidMatch = externalRef?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      const extractedUuid = uuidMatch ? uuidMatch[0] : null;
+
+      if (extractedUuid) {
+        console.log('🎯 UUID extraído para rescate:', extractedUuid);
+        const { data: rescueRecord } = await supabaseAdmin
+          .from('payments')
+          .select('*')
+          .eq('company_id', companyId)
+          .or(`budget_id.eq.${extractedUuid},id.eq.${extractedUuid}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (rescueRecord) {
+          console.log('✅ ¡PAGO RESCATADO! Encontrado por ID de presupuesto/pago.');
+          localRecord = rescueRecord;
+        }
+      }
+    }
+
+    if (!localRecord) {
       console.error('❌ No se encontró el registro de pago en Supabase con el filtro de empresa:', { preferenceId, externalRef, companyId });
       
-      // Búsqueda GLOBAL (sin filtro de empresa) para diagnóstico
+      // Búsqueda GLOBAL (sin filtro de empresa) para diagnóstico final
       const { data: globalRecord } = await supabaseAdmin
         .from('payments')
         .select('id, company_id, mp_preference_id, mp_external_reference')
-        .or(`mp_preference_id.eq.${preferenceId || 'null'},mp_external_reference.eq.${externalRef || 'null'}`)
+        .or(`mp_preference_id.eq."${preferenceId || 'null'}",mp_external_reference.eq."${externalRef || 'null'}"`)
         .maybeSingle();
       
       if (globalRecord) {
