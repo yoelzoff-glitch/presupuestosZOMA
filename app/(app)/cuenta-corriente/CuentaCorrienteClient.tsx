@@ -82,6 +82,11 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
 
   const [paymentMethods] = useState<string[]>(initialPaymentMethods)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(initialPaymentMethods[0] || '')
+  const [showDebtForm, setShowDebtForm] = useState(false)
+  const [debtAmount, setDebtAmount] = useState('')
+  const [debtDescription, setDebtDescription] = useState('Saldo inicial')
+  const [debtDate, setDebtDate] = useState(new Date().toISOString().split('T')[0])
+  const [savingDebt, setSavingDebt] = useState(false)
 
   async function loadMovements(clientId: string) {
     if (!companyId) return
@@ -487,6 +492,43 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
     await loadMovements(selectedClientId)
   }
 
+  async function handleSaveDebt(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setErrorMsg(''); setSuccessMsg('')
+
+    if (!companyId || !selectedClientId) {
+      setErrorMsg('Seleccioná un cliente y asegurate de que la empresa esté cargada.')
+      return
+    }
+
+    const amount = Number(debtAmount)
+    if (!amount || isNaN(amount) || amount <= 0) {
+      setErrorMsg('Ingresá un monto de deuda válido.')
+      return
+    }
+
+    setSavingDebt(true)
+    const { error } = await supabase.from('account_movements').insert({
+      company_id: companyId,
+      client_id: selectedClientId,
+      movement_type: 'Venta',
+      description: debtDescription.trim() || 'Venta manual / Saldo inicial',
+      movement_date: debtDate,
+      debit: amount,
+      credit: 0,
+    })
+
+    setSavingDebt(false)
+    if (error) {
+      setErrorMsg('Error al registrar la deuda.')
+      return
+    }
+
+    setSuccessMsg('Deuda registrada correctamente.')
+    setDebtAmount(''); setDebtDescription('Saldo inicial'); setShowDebtForm(false)
+    await loadMovements(selectedClientId)
+  }
+
 
   async function handleDeleteMovement(movementId: string, budgetId: string | null) {
     if (!companyId) return
@@ -718,18 +760,33 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPaymentForm(!showPaymentForm)
-                      setErrorMsg('')
-                      setSuccessMsg('')
-                    }}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"
-                  >
-                    <Plus size={18} />
-                    Registrar pago
-                  </button>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDebtForm(!showDebtForm)
+                        setShowPaymentForm(false)
+                        setErrorMsg(''); setSuccessMsg('')
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <Plus size={18} />
+                      Registrar Deuda
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPaymentForm(!showPaymentForm)
+                        setShowDebtForm(false)
+                        setErrorMsg('')
+                        setSuccessMsg('')
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"
+                    >
+                      <Plus size={18} />
+                      Registrar pago
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -942,6 +999,74 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
                         <Loader2 size={18} className="animate-spin" />
                       )}
                       {savingPayment ? 'Guardando...' : 'Guardar pago'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {showDebtForm && (
+                <form
+                  onSubmit={handleSaveDebt}
+                  className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm space-y-4"
+                >
+                  <div className="flex flex-col gap-2">
+                    <h3 className="text-lg font-black text-slate-950">Registrar Deuda Manual / Saldo Inicial</h3>
+                    <p className="text-sm font-semibold text-slate-500">Esto cargará un saldo deudor al cliente sin necesidad de crear un presupuesto.</p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-slate-700">Monto de la deuda *</span>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={debtAmount}
+                          onChange={(e) => setDebtAmount(e.target.value)}
+                          placeholder="0.00"
+                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-8 pr-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-slate-700">Concepto / Descripción</span>
+                      <input
+                        type="text"
+                        value={debtDescription}
+                        onChange={(e) => setDebtDescription(e.target.value)}
+                        placeholder="Ej: Saldo inicial"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-slate-700">Fecha del movimiento</span>
+                      <input
+                        type="date"
+                        value={debtDate}
+                        onChange={(e) => setDebtDate(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDebtForm(false)}
+                      className="rounded-2xl px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingDebt}
+                      className="rounded-2xl bg-slate-950 px-8 py-3 text-sm font-black text-white shadow-xl transition hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {savingDebt ? 'Guardando...' : 'Confirmar Deuda'}
                     </button>
                   </div>
                 </form>
