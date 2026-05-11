@@ -102,7 +102,8 @@ export default function PortalPage() {
       .range(0, 4999)
 
     if (errorProductos) {
-      setMensajeError('Error al cargar la lista de precios.')
+      console.error('ERROR PRODUCTOS:', errorProductos)
+      setMensajeError(`Error al cargar la lista de precios: ${errorProductos.message} (${errorProductos.details || 'sin detalles'})`)
       setCargando(false)
       return
     }
