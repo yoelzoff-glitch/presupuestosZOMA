@@ -313,8 +313,6 @@ async function handleWebhook(req: NextRequest) {
 
     const mpUserId = body?.user_id || url.searchParams.get('user_id')
 
-    let query = supabaseAdmin
-      .from('mp_accounts')
     console.log(`📡 Webhook recibido - Topic: ${topic}, ID: ${paymentId}`);
 
     // 4. Buscar todas las cuentas de Mercado Pago conectadas
@@ -372,7 +370,14 @@ async function handleWebhook(req: NextRequest) {
       return NextResponse.json({ received: true, message: 'Payment not found' })
     }
 
-    console.log('✅ Pago recuperado de MP:', mpPayment.id, 'Status:', mpPayment.status, 'Preference:', mpPayment.preference_id);
+    console.log('✅ Pago recuperado de MP:', {
+      id: mpPayment.id,
+      status: mpPayment.status,
+      preference_id: mpPayment.preference_id,
+      external_reference: mpPayment.external_reference,
+      merchant_order_id: mpPayment.merchant_order_id,
+      order: mpPayment.order
+    });
 
     const mappedStatus =
       mpPayment.status === 'approved'
@@ -415,18 +420,37 @@ async function handleWebhook(req: NextRequest) {
     const preferenceId = mpPayment.preference_id || mpPayment.order?.id || mpPayment.merchant_order_id;
     const externalRef = mpPayment.external_reference;
 
-    console.log('🔍 Buscando pago local:', { preferenceId, externalRef, companyId });
+    console.log('🔍 Buscando pago local con:', { preferenceId, externalRef, companyId });
 
-    // Construimos la consulta de forma atómica para evitar errores de tipo
-    const { data: localRecord, error: localError } = await (preferenceId 
-      ? supabaseAdmin.from('payments').select('*').eq('company_id', companyId).eq('mp_preference_id', preferenceId).maybeSingle()
-      : externalRef 
-        ? supabaseAdmin.from('payments').select('*').eq('company_id', companyId).eq('mp_external_reference', externalRef).maybeSingle()
-        : { data: null, error: new Error('Faltan identificadores') }
-    );
+    // Búsqueda robusta: Intentamos por preference_id y si no, por external_reference
+    let localRecord = null;
+    let localError = null;
+
+    if (preferenceId) {
+      const { data, error } = await supabaseAdmin
+        .from('payments')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('mp_preference_id', preferenceId)
+        .maybeSingle();
+      localRecord = data;
+      localError = error;
+    }
+
+    if (!localRecord && externalRef) {
+      console.log(' buscando por externalRef...', externalRef);
+      const { data, error } = await supabaseAdmin
+        .from('payments')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('mp_external_reference', externalRef)
+        .maybeSingle();
+      localRecord = data;
+      localError = error;
+    }
 
     if (localError || !localRecord) {
-      console.error('❌ No se encontró el registro de pago en Supabase:', { preferenceId, externalRef, error: localError });
+      console.error('❌ No se encontró el registro de pago en Supabase después de agotar opciones:', { preferenceId, externalRef, error: localError });
       return NextResponse.json({ received: true, message: 'Local payment not found' })
     }
 
@@ -447,10 +471,8 @@ async function handleWebhook(req: NextRequest) {
     const { data: updatedPayments, error: updateError } = await supabaseAdmin
       .from('payments')
       .update(updatePayload)
-      .eq('company_id', companyId)
-      .eq('mp_preference_id', preferenceId) // Actualización exacta
+      .eq('id', previousPayment.id) // Actualización por ID interno, mucho más seguro
       .select('id, company_id, client_id, budget_id, amount, status, mp_external_reference')
-      .limit(1)
 
     if (updateError) {
       console.log('PAYMENT UPDATE ERROR:', updateError)
