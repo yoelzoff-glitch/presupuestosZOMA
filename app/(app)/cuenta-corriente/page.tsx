@@ -13,13 +13,13 @@ export default async function CuentaCorrientePage() {
     supabase
       .from('clients')
       .select('id, name, cuit')
-      .eq('company_id', context.companyId)
+      .eq('company_id', context.idEmpresa)
       .eq('active', true)
       .order('name', { ascending: true }),
     supabase
       .from('companies')
       .select('payment_methods')
-      .eq('id', context.companyId)
+      .eq('id', context.idEmpresa)
       .single(),
   ])
 
@@ -28,7 +28,7 @@ export default async function CuentaCorrientePage() {
   return (
     <CuentaCorrienteClient
       initialClients={clientsRes.data || []}
-      companyId={context.companyId}
+      companyId={context.idEmpresa}
       initialPaymentMethods={paymentMethods}
     />
   )

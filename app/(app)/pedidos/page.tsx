@@ -15,13 +15,13 @@ export default async function PedidosPage() {
     supabase
       .from('orders')
       .select(`id, order_number, order_code, order_date, status, source, total_amount, seller_id, clients ( name, cuit )`)
-      .eq('company_id', context.companyId)
+      .eq('company_id', context.idEmpresa)
       .gte('created_at', dateLimit.toISOString())
       .order('created_at', { ascending: false }),
     supabase
       .from('users_profiles')
       .select('id, full_name')
-      .eq('company_id', context.companyId)
+      .eq('company_id', context.idEmpresa)
       .order('full_name'),
   ])
 
@@ -34,7 +34,7 @@ export default async function PedidosPage() {
     <PedidosClient
       initialOrders={orders}
       initialSellers={sellersRes.data || []}
-      companyId={context.companyId}
+      companyId={context.idEmpresa}
     />
   )
 }
