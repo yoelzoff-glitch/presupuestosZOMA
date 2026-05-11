@@ -76,7 +76,7 @@ export default function NuevoProductoPage() {
       name: form.name.trim(),
       supplier: form.supplier.trim() || null,
       category: form.category.trim() || null,
-      price: Number(form.price),
+      cost_price: Number(form.price),
       last_price_update: new Date().toISOString(),
     })
 

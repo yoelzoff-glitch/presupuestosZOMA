@@ -141,7 +141,7 @@ export default function ImportarProductosPage() {
         supplier: row.proveedor || null,
         name: row.producto,
         category: row.categoria || null,
-        price: row.precio,
+        cost_price: row.precio,
         last_price_update: new Date().toISOString(),
       }))
 

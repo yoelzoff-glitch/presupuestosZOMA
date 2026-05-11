@@ -31,7 +31,7 @@ type Producto = {
   name: string
   supplier: string | null
   category: string | null
-  price: number | null
+  cost_price: number | null
   last_price_update: string | null
 }
 
@@ -53,7 +53,7 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
     setMensajeError('')
     const { data, error } = await supabase
       .from('products')
-      .select('id, internal_code, name, supplier, category, price, last_price_update')
+      .select('id, internal_code, name, supplier, category, cost_price, last_price_update')
       .eq('company_id', idEmpresa)
       .order('name', { ascending: true })
       .range(0, 4999)
@@ -102,11 +102,11 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
 
   const precioPromedio = useMemo(() => {
     if (productos.length === 0) return 0
-    const total = productos.reduce((acc, p) => acc + Number(p.price || 0), 0)
+    const total = productos.reduce((acc, p) => acc + Number(p.cost_price || 0), 0)
     return total / productos.length
   }, [productos])
 
-  const productosSinPrecio = productos.filter((p) => Number(p.price || 0) <= 0).length
+  const productosSinPrecio = productos.filter((p) => Number(p.cost_price || 0) <= 0).length
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden space-y-3 pb-6">
@@ -182,7 +182,7 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
                       <td className="min-w-0 px-4 py-2"><EtiquetaCodigo codigo={producto.internal_code} /></td>
                       <td className="min-w-0 px-4 py-2"><EtiquetaProveedor proveedor={producto.supplier} /></td>
                       <td className="min-w-0 px-4 py-2"><EtiquetaCategoria categoria={producto.category} /></td>
-                      <td className="min-w-0 px-4 py-2 text-right text-sm font-black text-blue-700"><span className="block truncate">{formatearMoneda(Number(producto.price || 0))}</span></td>
+                      <td className="min-w-0 px-4 py-2 text-right text-sm font-black text-blue-700"><span className="block truncate">{formatearMoneda(Number(producto.cost_price || 0))}</span></td>
                       <td className="min-w-0 px-4 py-2"><EtiquetaFecha fecha={producto.last_price_update} /></td>
                     </tr>
                   ))}
