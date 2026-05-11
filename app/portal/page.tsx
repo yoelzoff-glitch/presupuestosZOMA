@@ -19,7 +19,7 @@ type Producto = {
   internal_code: string | null
   name: string
   category: string | null
-  price: number | null
+  cost_price: number | null
   active?: boolean | null
 }
 
@@ -95,7 +95,7 @@ export default function PortalPage() {
 
     const { data: datosProductos, error: errorProductos } = await supabase
       .from('products')
-      .select('id, internal_code, name, category, price, active')
+      .select('id, internal_code, name, category, cost_price, active')
       .eq('company_id', datosCliente.company_id)
       .eq('active', true)
       .order('name', { ascending: true })
@@ -119,7 +119,7 @@ export default function PortalPage() {
       Código: p.internal_code || '',
       Producto: p.name || '',
       Categoría: p.category || '',
-      Precio: Number(p.price || 0),
+      Precio: Number(p.cost_price || 0),
     }))
 
     const hoja = XLSX.utils.json_to_sheet(filas)
@@ -233,7 +233,7 @@ export default function PortalPage() {
 
       // Calcular totales
       const montoTotal = carrito.reduce((acc, item) => {
-        return acc + Number(item.producto.price || 0) * item.cantidad
+        return acc + Number(item.producto.cost_price || 0) * item.cantidad
       }, 0)
 
       // 1. Insertar Pedido como pendiente
@@ -266,7 +266,7 @@ export default function PortalPage() {
         product_name: item.producto.name,
         category: item.producto.category,
         quantity: item.cantidad,
-        unit_price: Number(item.producto.price || 0),
+        unit_price: Number(item.producto.cost_price || 0),
       }))
 
       const { error: errorItems } = await supabase

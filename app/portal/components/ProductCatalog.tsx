@@ -15,7 +15,7 @@ type Producto = {
   internal_code: string | null
   name: string
   category: string | null
-  price: number | null
+  cost_price: number | null
 }
 
 type Props = {
@@ -92,7 +92,7 @@ export default function ProductCatalog({ productos, alAgregarAlCarrito }: Props)
                 Precio de referencia
               </p>
               <p className="mt-1 text-2xl font-black text-blue-700">
-                {formatCurrency(Number(producto.price || 0))}
+                {formatCurrency(Number(producto.cost_price || 0))}
               </p>
               <p className="mt-1 text-xs font-semibold text-slate-500">
                 {producto.category || 'Sin categoría'}
