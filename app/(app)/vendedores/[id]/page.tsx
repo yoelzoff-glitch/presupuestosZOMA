@@ -38,11 +38,12 @@ export default function VendedorDetallePage() {
   })
   const [recentBudgets, setRecentBudgets] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])
+  const [daysFilter, setDaysFilter] = useState('30')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (sellerId) loadSellerData()
-  }, [sellerId])
+  }, [sellerId, daysFilter])
 
   async function loadSellerData() {
     setLoading(true)
@@ -57,21 +58,36 @@ export default function VendedorDetallePage() {
       if (pError) throw pError
       setSeller(profile)
 
-      // 2. Stats de Presupuestos
-      const { data: budgets, error: bError } = await supabase
+      // 2. Stats de Presupuestos (con filtro de fecha)
+      let budgetsQuery = supabase
         .from('budgets')
         .select('id, total_amount, status, created_at, clients(name)')
         .eq('seller_id', sellerId)
         .order('created_at', { ascending: false })
 
+      if (daysFilter !== 'all') {
+        const dateLimit = new Date()
+        dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
+        budgetsQuery = budgetsQuery.gte('created_at', dateLimit.toISOString())
+      }
+
+      const { data: budgets, error: bError } = await budgetsQuery
+
       if (bError) throw bError
 
-      // 3. Stats de Pedidos (usualmente los pedidos vienen de budgets que pasaron a status 'approved')
-      // Pero si hay una tabla orders, la consultamos
-      const { data: orders, error: oError } = await supabase
+      // 3. Stats de Pedidos
+      let ordersQuery = supabase
         .from('orders')
         .select('id, total_amount, status')
         .eq('seller_id', sellerId)
+
+      if (daysFilter !== 'all') {
+        const dateLimit = new Date()
+        dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
+        ordersQuery = ordersQuery.gte('created_at', dateLimit.toISOString())
+      }
+
+      const { data: orders, error: oError } = await ordersQuery
 
       // 4. Clientes asignados
       const { data: sellerClients, error: cError } = await supabase
@@ -138,14 +154,18 @@ export default function VendedorDetallePage() {
               <ArrowLeft size={14} /> Volver al equipo
             </Link>
             <h1 className="text-4xl font-black tracking-tight text-slate-900">{seller.full_name}</h1>
-            <div className="mt-2 flex flex-wrap gap-4">
+            <div className="mt-2 flex flex-wrap gap-4 items-center">
                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 border border-emerald-100">
                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                  Vendedor Activo
                </span>
-               <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                 <CalendarDays size={14} /> Miembro desde {new Date(seller.created_at).toLocaleDateString()}
-               </span>
+               
+               <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+                 <FilterButton active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
+                 <FilterButton active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
+                 <FilterButton active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
+                 <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
+               </div>
             </div>
           </div>
         </div>
@@ -291,6 +311,21 @@ function SummaryCard({ icon: Icon, label, value, detail, tone = 'blue' }: any) {
          <p className="text-[10px] font-bold opacity-60 text-slate-500">{detail}</p>
       </div>
    )
+}
+
+function FilterButton({ children, active, onClick }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${
+        active 
+          ? 'bg-white text-slate-900 shadow-sm' 
+          : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      {children}
+    </button>
+  )
 }
 
 function StatusBadge({ status }: { status: string }) {

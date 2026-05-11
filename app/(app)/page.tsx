@@ -27,6 +27,7 @@ import {
   PieChart,
   Pie,
 } from 'recharts'
+import FilterButton from '@/app/components/FilterButton'
 
 type DashboardStats = {
   clients: number
@@ -175,10 +176,10 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row items-center">
             <div className="flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10 backdrop-blur-md mr-4">
-              <FilterButton active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
-              <FilterButton active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
-              <FilterButton active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
-              <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
+              <FilterButton variant="blue" active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
+              <FilterButton variant="blue" active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
+              <FilterButton variant="blue" active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
+              <FilterButton variant="blue" active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
             </div>
             <Link href="/clientes/nuevo" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-xl shadow-blue-900/30 transition hover:bg-blue-500 active:scale-95"><Plus size={18} /> Nuevo cliente</Link>
           </div>

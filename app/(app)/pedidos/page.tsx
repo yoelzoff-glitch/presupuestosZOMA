@@ -1,4 +1,5 @@
 'use client'
+import FilterButton from '@/app/components/FilterButton'
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -185,14 +186,4 @@ function StatusBadge({ status }: { status: string }) {
 
 function LoadingState() {
   return <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600 mb-4" size={32} /><p className="font-black text-slate-900">Cargando pedidos...</p></div>
-}
-function FilterButton({ children, active, onClick }: any) {
-  return (
-    <button 
-      onClick={onClick}
-      className={px-3 py-1.5 rounded-lg text-[10px] font-black transition-all }
-    >
-      {children}
-    </button>
-  )
 }

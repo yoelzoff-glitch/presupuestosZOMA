@@ -1,4 +1,5 @@
 'use client'
+import FilterButton from '@/app/components/FilterButton'
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
@@ -1193,14 +1194,3 @@ function formatCurrency(value: number) {
     maximumFractionDigits: 2,
   })
 }
-function FilterButton({ children, active, onClick }: any) {
-  return (
-    <button 
-      onClick={onClick}
-      className={px-3 py-1.5 rounded-lg text-[10px] font-black transition-all }
-    >
-      {children}
-    </button>
-  )
-}
-
