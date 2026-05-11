@@ -245,7 +245,7 @@ export default function DashboardPage() {
                   <h3 className="text-3xl font-black mt-1 text-indigo-400">${loading ? '...' : stats.totalConverted.toLocaleString('es-AR')}</h3>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-400">Tasa de Cierre</p>
+                  <p className="text-sm font-bold text-slate-400">Tasa de Cierre </p>
                   <h3 className="text-3xl font-black mt-1 text-emerald-400">{loading ? '...' : stats.conversionRate.toFixed(1)}%</h3>
                 </div>
               </div>
