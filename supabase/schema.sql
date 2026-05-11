@@ -63,6 +63,46 @@ create table public.clients (
   created_at timestamp with time zone default now()
 );
 
+-- ─── USUARIOS CLIENTE (CUSTOMER USERS) ─────────────────────────────────────
+-- Usuarios finales (clientes) que acceden al portal para ver precios y comprar.
+create table public.customer_users (
+  id uuid default uuid_generate_v4() primary key,
+  company_id uuid references public.companies on delete cascade not null,
+  client_id uuid references public.clients on delete set null,
+  auth_user_id uuid references auth.users on delete cascade not null,
+  name text not null,
+  email text not null,
+  phone text,
+  active boolean default true,
+  created_at timestamp with time zone default now()
+);
+
+-- ─── PEDIDOS DE PORTAL (CUSTOMER ORDERS) ───────────────────────────────────
+-- Pedidos iniciados por clientes desde el portal.
+create table public.customer_orders (
+  id uuid default uuid_generate_v4() primary key,
+  company_id uuid references public.companies on delete cascade not null,
+  customer_user_id uuid references public.customer_users on delete cascade not null,
+  total_amount numeric(15,2) default 0,
+  status text default 'pending',
+  notes text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+-- ─── ITEMS DE PEDIDO PORTAL (CUSTOMER ORDER ITEMS) ────────────────────────
+create table public.customer_order_items (
+  id uuid default uuid_generate_v4() primary key,
+  order_id uuid references public.customer_orders on delete cascade not null,
+  product_id uuid references public.products on delete cascade not null,
+  product_name text not null,
+  internal_code text,
+  quantity numeric(15,3) not null,
+  unit_price numeric(15,2) not null,
+  total_price numeric(15,2) generated always as (quantity * unit_price) stored,
+  created_at timestamp with time zone default now()
+);
+
 -- ─── PRESUPUESTOS (BUDGETS) ────────────────────────────────────────────────
 -- Cotizaciones generadas por vendedores o administradores.
 create table public.budgets (
@@ -174,6 +214,9 @@ alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.account_movements enable row level security;
 alter table public.notifications enable row level security;
+alter table public.customer_users enable row level security;
+alter table public.customer_orders enable row level security;
+alter table public.customer_order_items enable row level security;
 
 -- FUNCIÓN AUXILIAR PARA RLS
 -- Comprueba si un usuario pertenece a una empresa específica.
@@ -183,6 +226,9 @@ begin
   return exists (
     select 1 from public.users_profiles
     where id = auth.uid() and company_id = company_uuid
+  ) or exists (
+    select 1 from public.customer_users
+    where auth_user_id = auth.uid() and company_id = company_uuid
   );
 end;
 $$ language plpgsql security definer;
@@ -196,6 +242,17 @@ create policy "Aislamiento por Empresa" on public.orders for all using (is_membe
 create policy "Aislamiento por Empresa" on public.order_items for all using (is_member_of(company_id));
 create policy "Aislamiento por Empresa" on public.account_movements for all using (is_member_of(company_id));
 create policy "Aislamiento por Empresa" on public.notifications for all using (is_member_of(company_id));
+create policy "Aislamiento por Empresa" on public.customer_users for all using (is_member_of(company_id));
+create policy "Aislamiento por Empresa" on public.customer_orders for all using (is_member_of(company_id));
+
+-- Items de pedidos portal: acceso si el pedido es de la empresa
+create policy "Aislamiento por Empresa" on public.customer_order_items for all 
+using (
+  exists (
+    select 1 from public.customer_orders
+    where id = public.customer_order_items.order_id and is_member_of(company_id)
+  )
+);
 
 -- Los usuarios solo pueden ver su propio perfil
 create policy "Los usuarios pueden ver su propio perfil" 
