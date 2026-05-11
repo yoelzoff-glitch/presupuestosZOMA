@@ -17,6 +17,7 @@ import {
   Bell,
   LifeBuoy,
   Loader2,
+  ShieldCheck,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
@@ -82,7 +83,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           .select('role, company:companies(plan_type)')
           .eq('id', user.id)
           .single()
-        setProfile(data)
+        setProfile({ ...data, email: user.email })
       }
       setLoading(false)
     }
@@ -90,13 +91,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   }, [])
 
   const isAdmin = profile?.role === 'admin'
+  const isSuperAdmin = profile?.email === 'yoel.zoff@gmail.com'
   const planType = profile?.company?.plan_type || 'base'
   const isPro = planType === 'pro' || planType === 'pro_plus'
 
   // Admin sees all. We show Vendedores even if not PRO to encourage upgrade.
-  const finalNavItems = isAdmin 
+  let finalNavItems = isAdmin 
     ? [...navItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users, isProFeature: true }, ...navItems.slice(2)]
     : navItems
+
+  // Only Yoel sees Super Admin
+  if (isSuperAdmin) {
+    finalNavItems = [...finalNavItems, { href: '/superadmin', label: 'Super Admin', icon: ShieldCheck }]
+  }
 
   return (
     <div className="flex h-full flex-col">

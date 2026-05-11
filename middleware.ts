@@ -51,12 +51,22 @@ export async function middleware(request: NextRequest) {
   const esPaginaApi = rutaActual.startsWith('/api')
   const esPaginaPortal = rutaActual.startsWith('/portal')
   const esPaginaVendedor = rutaActual.startsWith('/vendedor')
+  const esPaginaSuperAdmin = rutaActual.startsWith('/superadmin')
 
-  // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal o vendedor
-  const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor
+  // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal, vendedor o superadmin
+  const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor && !esPaginaSuperAdmin
 
   // Permitir API routes sin middleware (manejan su propia seguridad)
   if (esPaginaApi) return respuesta
+
+  // 0. Protección de Super Admin (Solo Yoel)
+  if (esPaginaSuperAdmin) {
+    if (!usuario || usuario.email !== 'yoel.zoff@gmail.com') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+  }
 
   // 1. Redirigir a login si no hay usuario y no es página de auth
   if (!usuario && !esPaginaAuth) {
