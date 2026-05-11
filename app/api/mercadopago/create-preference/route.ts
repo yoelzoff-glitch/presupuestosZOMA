@@ -275,7 +275,8 @@ export async function POST(req: NextRequest) {
       .insert({
         company_id: paymentData.company_id,
         client_id: paymentData.client_id,
-        budget_id: budget_id || null,
+        // Solo guardamos budget_id si la referencia empieza con 'budget:'
+        budget_id: externalReference.startsWith('budget:') ? paymentData.id : null,
         amount: Number(paymentData.balance),
         status: 'pending',
         mp_preference_id: preferenceData.id,
