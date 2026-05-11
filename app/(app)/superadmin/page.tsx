@@ -3,20 +3,16 @@
 import { useState, useEffect } from 'react'
 import { 
   getCompanies, 
-  updateCompanyPlan, 
-  createNewCompany 
+  updateCompanyPlan
 } from './actions'
 import { 
   LayoutDashboard, 
   Building2, 
   ShieldCheck, 
-  Plus, 
   Zap, 
   Crown, 
   Search,
-  Loader2,
-  CheckCircle2,
-  AlertCircle
+  Loader2
 } from 'lucide-react'
 
 type Company = {
@@ -31,12 +27,6 @@ export default function SuperAdminPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   
-  // Form state
-  const [newCompanyName, setNewCompanyName] = useState('')
-  const [newAdminEmail, setNewAdminEmail] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [msg, setMsg] = useState({ text: '', type: '' })
-
   useEffect(() => {
     loadCompanies()
   }, [])
@@ -61,31 +51,6 @@ export default function SuperAdminPage() {
       ))
     } catch (err) {
       alert('No se pudo actualizar el plan')
-    }
-  }
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newCompanyName || !newAdminEmail) return
-    
-    setCreating(true)
-    setMsg({ text: '', type: '' })
-    
-    try {
-      const result = await createNewCompany(newCompanyName, newAdminEmail)
-      
-      if (result?.error) {
-        setMsg({ text: result.error, type: 'error' })
-      } else {
-        setMsg({ text: '¡Empresa creada con éxito! Se envió el acceso al cliente.', type: 'success' })
-        setNewCompanyName('')
-        setNewAdminEmail('')
-        loadCompanies()
-      }
-    } catch (err: any) {
-      setMsg({ text: 'Error de comunicación con el servidor.', type: 'error' })
-    } finally {
-      setCreating(false)
     }
   }
 
@@ -114,62 +79,7 @@ export default function SuperAdminPage() {
         </div>
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[400px_1fr]">
-        {/* Sidebar: New Company */}
-        <aside className="space-y-6">
-          <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50">
-            <div className="mb-6 flex items-center gap-3 text-slate-900">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/30">
-                <Plus size={20} />
-              </div>
-              <h2 className="text-xl font-black">Dar de alta empresa</h2>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-4">
-              {msg.text && (
-                <div className={`flex items-center gap-2 rounded-2xl p-4 text-sm font-bold ${
-                  msg.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'
-                }`}>
-                  {msg.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                  {msg.text}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Nombre Comercial</label>
-                <input 
-                  type="text" 
-                  required
-                  value={newCompanyName}
-                  onChange={e => setNewCompanyName(e.target.value)}
-                  placeholder="Ej: Distribuidora Alvear"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Email Dueño / Admin</label>
-                <input 
-                  type="email" 
-                  required
-                  value={newAdminEmail}
-                  onChange={e => setNewAdminEmail(e.target.value)}
-                  placeholder="admin@ejemplo.com"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                />
-              </div>
-
-              <button 
-                type="submit"
-                disabled={creating}
-                className="w-full rounded-2xl bg-slate-950 py-4 text-sm font-black text-white shadow-xl transition-all hover:bg-blue-600 active:scale-[0.98] disabled:opacity-50"
-              >
-                {creating ? 'Creando...' : 'Crear Empresa y Enviar Acceso'}
-              </button>
-            </form>
-          </section>
-        </aside>
-
+      <div className="space-y-8">
         {/* Main: Companies List */}
         <main className="space-y-6">
           <section className="rounded-[2.5rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/50">

@@ -9,9 +9,6 @@ import { Eye, EyeOff, Loader2, Lock, Mail, Building2, ChevronRight, CheckCircle2
 export default function Register() {
   const router = useRouter()
 
-  useEffect(() => {
-    router.replace('/auth/login')
-  }, [router])
 
   const [companyName, setCompanyName] = useState('')
   const [email, setEmail] = useState('')
