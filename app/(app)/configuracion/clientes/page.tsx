@@ -18,8 +18,9 @@ import {
   IdCard,
   Link2,
   Search,
+  Trash2,
+  type LucideIcon,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 
 type Client = {
   id: string
@@ -245,6 +246,31 @@ export default function ClientesConfigPage() {
     setUpdatingId(null)
   }
 
+  async function handleDelete(id: string) {
+    if (!confirm('¿Estás seguro de que querés eliminar este acceso? El usuario ya no podrá ingresar al portal.')) {
+      return
+    }
+
+    setUpdatingId(id)
+    setErrorMsg('')
+    setSuccessMsg('')
+
+    const res = await fetch(`/api/customer-users?id=${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!res.ok) {
+      const data = await res.json()
+      setErrorMsg(data.error || 'Error al eliminar usuario cliente.')
+      setUpdatingId(null)
+      return
+    }
+
+    setCustomers((prev) => prev.filter((item) => item.id !== id))
+    setSuccessMsg('Usuario cliente eliminado correctamente.')
+    setUpdatingId(null)
+  }
+
   function openCreateModal() {
     setErrorMsg('')
     setSuccessMsg('')
@@ -457,6 +483,20 @@ export default function ClientesConfigPage() {
                           )}
                           {customer.active ? 'Desactivar' : 'Activar'}
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(customer.id)}
+                          disabled={updatingId === customer.id}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 ml-2"
+                        >
+                          {updatingId === customer.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                          Eliminar
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -494,6 +534,20 @@ export default function ClientesConfigPage() {
                       <Loader2 size={14} className="animate-spin" />
                     )}
                     {customer.active ? 'Desactivar' : 'Activar'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(customer.id)}
+                    disabled={updatingId === customer.id}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {updatingId === customer.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                    Eliminar acceso
                   </button>
                 </article>
               ))}

@@ -166,3 +166,45 @@ export async function POST(req: Request) {
     )
   }
 }
+
+export async function DELETE(req: Request) {
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  )
+
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID de usuario requerido.' }, { status: 400 })
+    }
+
+    const { data: customer, error: fetchError } = await supabaseAdmin
+      .from('customer_users')
+      .select('auth_user_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !customer) {
+      return NextResponse.json({ error: 'Usuario no encontrado.' }, { status: 404 })
+    }
+
+    const authUserId = customer.auth_user_id
+    await supabaseAdmin.from('customer_users').delete().eq('id', id)
+    await supabaseAdmin.from('users_profiles').delete().eq('id', authUserId)
+    await supabaseAdmin.auth.admin.deleteUser(authUserId)
+
+    return NextResponse.json({ ok: true })
+  } catch (error: any) {
+    console.error('Error en DELETE customer-users:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
