@@ -96,15 +96,31 @@ export default function NuevoCliente() {
       const workbook = XLSX.read(buffer, { type: 'array' })
       const rows = XLSX.utils.sheet_to_json<any>(workbook.Sheets[workbook.SheetNames[0]])
 
-      const payload = rows.filter(r => r.nombre || r.name).map(r => ({
-        company_id: companyId,
-        cuit: String(r.cuit || r.dni || '').replace(/\D/g, '') || null,
-        name: String(r.nombre || r.name || r.razon_social || ''),
-        address: String(r.direccion || r.address || ''),
-        email: String(r.email || r.mail || ''),
-        phone: String(r.telefono || r.phone || ''),
-        seller_id: selectedSellerId || null
-      }))
+      const payload = rows.map(r => {
+        // Normalizar las llaves del objeto a minúsculas y sin espacios/guiones
+        const normalizedRow: any = {}
+        Object.keys(r).forEach(key => {
+          const normalizedKey = key.toLowerCase().trim().replace(/[\s_]/g, '')
+          normalizedRow[normalizedKey] = r[key]
+        })
+
+        const name = normalizedRow.nombre || normalizedRow.name || normalizedRow.razonsocial || normalizedRow.cliente || ''
+        if (!name) return null
+
+        return {
+          company_id: companyId,
+          cuit: String(normalizedRow.cuit || normalizedRow.dni || '').replace(/\D/g, '') || null,
+          name: String(name).trim(),
+          address: String(normalizedRow.direccion || normalizedRow.address || normalizedRow.domicilio || ''),
+          email: String(normalizedRow.email || normalizedRow.mail || ''),
+          phone: String(normalizedRow.telefono || normalizedRow.phone || normalizedRow.celular || ''),
+          seller_id: selectedSellerId || null
+        }
+      }).filter(Boolean) as any[]
+
+      if (payload.length === 0) {
+        throw new Error('No se encontraron clientes válidos. Asegúrate de que la columna se llame "Nombre" o "Razon Social".')
+      }
 
       const { error } = await supabase.from('clients').insert(payload)
       if (error) throw error
@@ -192,7 +208,7 @@ export default function NuevoCliente() {
                 </div>
                 <div className="bg-slate-100/50 p-5 rounded-2xl">
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Formato sugerido:</p>
-                   <p className="text-xs font-bold text-slate-500 leading-relaxed italic">"El Excel debe contener una columna 'Nombre' o 'Razon Social'. El resto es opcional."</p>
+                   <p className="text-xs font-bold text-slate-500 leading-relaxed italic">"El Excel puede contener columnas como 'Nombre', 'Razon Social', 'CUIT', 'Email', 'Telefono', 'Direccion'. El sistema reconocerá automáticamente las variaciones."</p>
                 </div>
              </div>
           </div>
