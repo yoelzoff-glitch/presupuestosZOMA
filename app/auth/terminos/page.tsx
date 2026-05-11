@@ -95,42 +95,84 @@ export default function TerminosPage() {
             <FileText size={14} /> Última actualización: {fecha}
           </div>
 
-          <h2 className="text-xl font-black text-slate-900 mb-4">1. Objeto del Servicio</h2>
-          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
-            Presupuestos ZOMA es una plataforma de gestión comercial diseñada para facilitar la administración de ventas, incluyendo de manera enunciativa pero no limitativa:
-            la creación y envío de presupuestos, el seguimiento de pedidos, el control de cuentas corrientes de clientes, la gestión de catálogos de precios y el procesamiento de cobros en línea.
-          </p>
-
-          <h2 className="text-xl font-black text-slate-900 mb-4">2. Registro y Seguridad</h2>
-          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
-            El Usuario se compromete a mantener la confidencialidad de sus credenciales. Toda actividad realizada bajo su cuenta es responsabilidad exclusiva del titular. Debe proporcionar información veraz durante el uso del sistema.
-          </p>
-
-          <h2 className="text-xl font-black text-slate-900 mb-4">3. Pagos en Línea e Intermediación</h2>
-          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 mb-6">
-            <p className="text-sm font-bold text-blue-800 leading-relaxed mb-3">
-              La Plataforma actúa únicamente como un conector tecnológico con pasarelas de pago de terceros (como Mercado Pago).
+          <div className="mb-6 text-sm font-medium text-slate-600 leading-relaxed">
+            <p className="mb-4">
+              Bienvenido a <strong>presupuestosZOMA</strong> (en adelante, la "Plataforma"), producto desarrollado y operado por <strong>ZOMAsolutions</strong> (en adelante, la "Empresa"). Al acceder o utilizar la aplicación web, sus servicios y herramientas, usted (en adelante, el "Usuario") acepta estar sujeto a los siguientes Términos y Condiciones. Si no está de acuerdo con alguno de estos términos, le solicitamos que no utilice la Plataforma.
             </p>
-            <ul className="list-disc list-inside text-xs text-blue-700 space-y-2 font-medium">
-              <li>No almacenamos datos de tarjetas de crédito sensibles.</li>
-              <li>Cualquier falla en el procesamiento de fondos es responsabilidad exclusiva del proveedor externo de pagos.</li>
-              <li>El registro del cobro en el sistema depende 100% de la confirmación exitosa vía API de la pasarela externa.</li>
+          </div>
+
+          <h2 className="text-xl font-black text-slate-900 mb-4">1. Objeto del Servicio</h2>
+          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-2">
+            presupuestosZOMA es una plataforma de gestión comercial diseñada para facilitar la administración de ventas, incluyendo de manera enunciativa pero no limitativa:
+          </p>
+          <ul className="list-disc list-inside text-sm text-slate-600 space-y-1 font-medium mb-6">
+            <li>La creación, envío y gestión de presupuestos.</li>
+            <li>La generación y seguimiento de pedidos.</li>
+            <li>El control de cuentas corrientes y deudas de clientes.</li>
+            <li>La gestión de catálogos de productos y precios.</li>
+            <li>El procesamiento de pagos a través de integraciones con terceros (pasarelas de pago).</li>
+          </ul>
+
+          <h2 className="text-xl font-black text-slate-900 mb-4">2. Registro y Cuentas</h2>
+          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-2">
+            Para utilizar ciertas funciones, el Usuario debe registrarse y crear una cuenta, ya sea como Empresa, Vendedor o Cliente. 
+          </p>
+          <ul className="list-disc list-inside text-sm text-slate-600 space-y-1 font-medium mb-6">
+            <li>Usted es responsable de mantener la confidencialidad de sus credenciales de acceso.</li>
+            <li>Toda actividad realizada bajo su cuenta es su exclusiva responsabilidad.</li>
+            <li>Se compromete a proporcionar información veraz, exacta y actualizada durante el registro y el uso del sistema.</li>
+          </ul>
+
+          <h2 className="text-xl font-black text-slate-900 mb-4">3. Sistema de Pagos en Línea</h2>
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 mb-6">
+            <p className="text-sm font-medium text-blue-900 leading-relaxed mb-4">
+              La Plataforma permite a los Usuarios realizar pagos de facturas, deudas u órdenes a través de integraciones con proveedores de servicios de pago externos (por ejemplo, Mercado Pago).
+            </p>
+            <ul className="list-disc list-inside text-xs text-blue-800 space-y-3 font-bold">
+              <li><span className="font-black underline">Pasarelas de Terceros:</span> ZOMAsolutions actúa únicamente como intermediario tecnológico que facilita la conexión entre el Usuario y la pasarela de pagos a través de presupuestosZOMA. El procesamiento del pago se rige por los términos y condiciones del proveedor de pago correspondiente.</li>
+              <li><span className="font-black underline">Exención de Responsabilidad:</span> La Plataforma no almacena datos de tarjetas de crédito ni credenciales bancarias sensibles. ZOMAsolutions no es responsable por fallas, interrupciones, demoras o denegaciones de transacciones realizadas a través de los proveedores externos.</li>
+              <li><span className="font-black underline">Confirmación de Pago:</span> El reflejo del pago en la cuenta corriente del sistema depende de la confirmación enviada por la API de la pasarela de pagos. Cualquier reclamo sobre el procesamiento de los fondos deberá ser dirigido al emisor de la tarjeta o al proveedor de la pasarela de pagos.</li>
             </ul>
           </div>
 
-          <h2 className="text-xl font-black text-slate-900 mb-4">4. Privacidad y Propiedad de Datos</h2>
+          <h2 className="text-xl font-black text-slate-900 mb-4">4. Gestión de Datos y Privacidad</h2>
+          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-2">
+            El uso de la Plataforma implica el tratamiento de datos comerciales, de productos y de clientes.
+          </p>
+          <ul className="list-disc list-inside text-sm text-slate-600 space-y-1 font-medium mb-6">
+            <li><strong>Propiedad de los Datos:</strong> Los datos ingresados por las empresas y vendedores pertenecen a los mismos. ZOMAsolutions se reserva el derecho de utilizar datos anónimos y agregados para mejorar el servicio.</li>
+            <li><strong>Seguridad:</strong> ZOMAsolutions aplica medidas de seguridad estándar de la industria para proteger la información, aunque el Usuario reconoce que ningún sistema de transmisión de datos por Internet es 100% seguro.</li>
+          </ul>
+
+          <h2 className="text-xl font-black text-slate-900 mb-4">5. Responsabilidad sobre Presupuestos y Pedidos</h2>
+          <ul className="list-disc list-inside text-sm text-slate-600 space-y-1 font-medium mb-6">
+            <li>La generación de un presupuesto no constituye necesariamente un contrato de venta final hasta que no sea debidamente confirmado por las partes según sus propias políticas comerciales.</li>
+            <li>La exactitud de los precios, stock y descripciones de productos es responsabilidad exclusiva de la Empresa o Vendedor que carga dicha información en el sistema.</li>
+          </ul>
+
+          <h2 className="text-xl font-black text-slate-900 mb-4">6. Usos Prohibidos</h2>
+          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-2">
+            El Usuario se compromete a no:
+          </p>
+          <ul className="list-disc list-inside text-sm text-slate-600 space-y-1 font-medium mb-6">
+            <li>Utilizar la Plataforma para fines ilícitos o fraudulentos.</li>
+            <li>Interferir o intentar vulnerar la seguridad, servidores o redes de la Plataforma.</li>
+            <li>Realizar ingeniería inversa o copiar el código fuente de la aplicación.</li>
+          </ul>
+
+          <h2 className="text-xl font-black text-slate-900 mb-4">7. Modificaciones del Servicio y de los Términos</h2>
           <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
-            Los datos ingresados pertenecen a sus respectivos propietarios (Empresas o Clientes). Presupuestos ZOMA aplica estándares de cifrado modernos para protegerlos, pero el Usuario entiende los riesgos inherentes a Internet.
+            ZOMAsolutions se reserva el derecho de modificar, suspender o interrumpir el servicio (o cualquier parte del mismo) en cualquier momento con o sin previo aviso. Asimismo, ZOMAsolutions puede actualizar estos Términos y Condiciones. El uso continuado de la Plataforma después de dichas modificaciones constituirá la aceptación de los nuevos términos.
           </p>
 
-          <h2 className="text-xl font-black text-slate-900 mb-4">5. Responsabilidad de Transacciones</h2>
+          <h2 className="text-xl font-black text-slate-900 mb-4">8. Limitación de Responsabilidad</h2>
           <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
-            Un presupuesto generado no constituye obligatoriedad contractual de entrega hasta ser formalmente aprobado. La veracidad de los stocks, precios y descripciones corre por cuenta del Vendedor o Administrador que los cargó.
+            En la medida máxima permitida por la ley, ZOMAsolutions no será responsable por daños indirectos, incidentales, especiales o consecuentes, incluyendo lucro cesante, pérdida de datos o interrupciones de negocios derivados del uso o la imposibilidad de usar la Plataforma.
           </p>
 
-          <h2 className="text-xl font-black text-slate-900 mb-4">6. Limitaciones</h2>
-          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
-            Nos reservamos el derecho a discontinuar el servicio por mantenimiento con aviso previo y a actualizar los Términos y Condiciones. En la máxima medida posible por ley, se exime de responsabilidad por lucros cesantes o pérdidas derivadas de cortes no programados.
+          <h2 className="text-xl font-black text-slate-900 mb-4">9. Jurisdicción y Ley Aplicable</h2>
+          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-8 border-b pb-4">
+            Estos Términos y Condiciones se rigen por las leyes locales aplicables. Cualquier controversia derivada del presente será sometida a los tribunales competentes.
           </p>
         </div>
 
