@@ -62,13 +62,8 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user) {
-    const { data: profile } = await supabase
-      .from('users_profiles')
-      .select('role, accepted_terms_version')
-      .eq('id', user.id)
-      .single()
-
-    const acceptedVersion = profile?.accepted_terms_version ?? 0
+    const role = user.app_metadata?.role as string | undefined
+    const acceptedVersion = (user.app_metadata?.accepted_terms_version as number) ?? 0
 
     // Si los términos no han sido aceptados para la versión vigente, forzar la vista legal
     if (acceptedVersion < CURRENT_TERMS_VERSION) {
@@ -83,17 +78,17 @@ export async function middleware(request: NextRequest) {
     // Si los términos están vigentes e intenta entrar a auth/terms o login, redirigir al dashboard
     if (isAuthPage) {
       const url = request.nextUrl.clone()
-      url.pathname = profile?.role === 'customer' ? '/portal' : '/'
+      url.pathname = role === 'customer' ? '/portal' : '/'
       return NextResponse.redirect(url)
     }
 
-    if (profile?.role === 'customer' && !isPortalPage) {
+    if (role === 'customer' && !isPortalPage) {
       const url = request.nextUrl.clone()
       url.pathname = '/portal'
       return NextResponse.redirect(url)
     }
 
-    if (profile?.role !== 'customer' && isPortalPage) {
+    if (role !== 'customer' && isPortalPage) {
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)
