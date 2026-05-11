@@ -319,11 +319,12 @@ async function handleWebhook(req: NextRequest) {
 
     // 4. Buscar todas las cuentas de Mercado Pago conectadas
     const { data: mpAccounts } = await supabaseAdmin
-      .from('mercadopago_accounts')
+      .from('mp_accounts')
       .select('*')
+      .eq('connected', true)
 
     if (!mpAccounts || mpAccounts.length === 0) {
-      console.error('❌ No hay cuentas de Mercado Pago conectadas en la base de datos');
+      console.error('❌ No hay cuentas de Mercado Pago conectadas (mp_accounts) en la base de datos');
       return NextResponse.json({ received: true, message: 'No accounts connected' })
     }
 
