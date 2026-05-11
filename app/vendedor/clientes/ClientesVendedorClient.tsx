@@ -31,20 +31,20 @@ type Client = {
 }
 
 type Props = {
-  initialClients: Client[]
-  role: string
-  userId: string
+  clientesIniciales: Client[]
+  rol: string
+  idUsuario: string
 }
 
-export default function ClientesVendedorClient({ initialClients, role, userId }: Props) {
-  const [clients, setClients] = useState<Client[]>(initialClients)
+export default function ClientesVendedorClient({ clientesIniciales, rol, idUsuario }: Props) {
+  const [clients, setClients] = useState<Client[]>(clientesIniciales)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   async function refreshClients() {
     setRefreshing(true)
-    const isAdmin = role === 'admin'
+    const isAdmin = rol === 'admin'
 
     let query = supabase
       .from('clients')
@@ -55,7 +55,7 @@ export default function ClientesVendedorClient({ initialClients, role, userId }:
 
     // Solo filtrar si NO es admin
     if (!isAdmin) {
-      query = query.eq('seller_id', userId)
+      query = query.eq('seller_id', idUsuario)
     }
 
     const { data, error } = await query
@@ -67,6 +67,14 @@ export default function ClientesVendedorClient({ initialClients, role, userId }:
     setRefreshing(false)
   }
 
+  const filteredClients = useMemo(() => {
+    return clients.filter(c => 
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.cuit || '').includes(search) ||
+      (c.email || '').toLowerCase().includes(search.toLowerCase())
+    )
+  }, [clients, search])
+
   return (
     <div className="space-y-6">
       {/* Encabezado */}
@@ -74,14 +82,14 @@ export default function ClientesVendedorClient({ initialClients, role, userId }:
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-2xl font-black text-slate-900">Clientes</h1>
-            {role === 'admin' && (
+            {rol === 'admin' && (
               <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
                 <ShieldCheck size={10} /> Admin
               </span>
             )}
           </div>
           <p className="text-sm text-slate-500 font-medium">
-            {role === 'admin' ? 'Visualizando todos los clientes del sistema.' : 'Gestiona tu cartera de contactos y prospectos.'}
+            {rol === 'admin' ? 'Visualizando todos los clientes del sistema.' : 'Gestiona tu cartera de contactos y prospectos.'}
           </p>
         </div>
         <Link

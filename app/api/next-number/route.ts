@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
     }
 
     const inicioPorDefecto = tipo === 'budget' ? 1950 : 1
-    const siguienteNumero = (data?.[columna] ?? inicioPorDefecto - 1) + 1
+    const currentNumber = data ? (data as any)[columna] : null
+    const siguienteNumero = (currentNumber ?? inicioPorDefecto - 1) + 1
 
     return NextResponse.json({ 
       ok: true, 

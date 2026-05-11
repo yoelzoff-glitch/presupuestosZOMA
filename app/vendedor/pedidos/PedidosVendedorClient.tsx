@@ -31,20 +31,20 @@ type Order = {
 }
 
 type Props = {
-  initialOrders: Order[]
-  role: string
-  userId: string
+  pedidosIniciales: Order[]
+  rol: string
+  idUsuario: string
 }
 
-export default function PedidosVendedorClient({ initialOrders, role, userId }: Props) {
-  const [orders, setOrders] = useState<Order[]>(initialOrders)
+export default function PedidosVendedorClient({ pedidosIniciales, rol, idUsuario }: Props) {
+  const [orders, setOrders] = useState<Order[]>(pedidosIniciales)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   async function refreshOrders() {
     setRefreshing(true)
-    const isAdmin = role === 'admin'
+    const isAdmin = rol === 'admin'
 
     let query = supabase
       .from('orders')
@@ -55,7 +55,7 @@ export default function PedidosVendedorClient({ initialOrders, role, userId }: P
       .order('order_number', { ascending: false })
 
     if (!isAdmin) {
-      query = query.eq('seller_id', userId)
+      query = query.eq('seller_id', idUsuario)
     }
 
     const { data, error } = await query
@@ -91,14 +91,14 @@ export default function PedidosVendedorClient({ initialOrders, role, userId }: P
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-2xl font-black text-slate-900">Pedidos</h1>
-            {role === 'admin' && (
+            {rol === 'admin' && (
               <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1">
                 <ShieldCheck size={10} /> Admin
               </span>
             )}
           </div>
           <p className="text-sm text-emerald-600 font-black uppercase tracking-widest flex items-center gap-1.5 mt-1">
-            <PackageCheck size={16} /> {role === 'admin' ? 'Ventas totales confirmadas' : 'Mis ventas confirmadas'}: ${confirmedTotal.toLocaleString('es-AR')}
+            <PackageCheck size={16} /> {rol === 'admin' ? 'Ventas totales confirmadas' : 'Mis ventas confirmadas'}: ${confirmedTotal.toLocaleString('es-AR')}
           </p>
         </div>
         <button
