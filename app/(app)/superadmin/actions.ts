@@ -29,24 +29,61 @@ export async function updateCompanyPlan(companyId: string, planType: 'base' | 'p
 }
 
 export async function createNewCompany(name: string, adminEmail: string) {
-  // Aquí usamos la lógica similar a la de register-company pero simplificada para el superadmin
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/register-company`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        company_name: name,
-        email: adminEmail,
-      }),
-    }
-  )
+  try {
+    // 1. Crear el usuario en Supabase Auth usando admin privileges
+    // Generamos una contraseña temporal que el usuario cambiará
+    const tempPassword = Math.random().toString(36).slice(-12)
+    
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: adminEmail,
+      password: tempPassword,
+      email_confirm: true // Confirmamos el mail de una vez
+    })
 
-  const data = await response.json()
-  if (!response.ok) throw new Error(data.error || 'Error al crear empresa')
-  
-  revalidatePath('/superadmin')
-  return data
+    if (authError) {
+      if (authError.message.includes('already registered')) {
+        throw new Error('Ese email ya está registrado en el sistema.')
+      }
+      throw new Error(authError.message)
+    }
+
+    // 2. Crear la Empresa
+    const { data: company, error: companyError } = await supabaseAdmin
+      .from('companies')
+      .insert({ name })
+      .select('id')
+      .single()
+
+    if (companyError) {
+      // Cleanup auth user if company creation fails
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
+      throw new Error('No se pudo crear la empresa: ' + companyError.message)
+    }
+
+    // 3. Crear el Perfil
+    const { error: profileError } = await supabaseAdmin
+      .from('users_profiles')
+      .insert({
+        id: authUser.user.id,
+        company_id: company.id,
+        full_name: adminEmail.split('@')[0],
+        role: 'admin'
+      })
+
+    if (profileError) {
+      throw new Error('Se creó el usuario y la empresa, pero falló el perfil: ' + profileError.message)
+    }
+
+    // 4. Enviar mail de recuperación para que el usuario elija su contraseña
+    await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email: adminEmail,
+    })
+
+    revalidatePath('/superadmin')
+    return { success: true }
+  } catch (err: any) {
+    console.error('Error en onboarding:', err)
+    throw err
+  }
 }

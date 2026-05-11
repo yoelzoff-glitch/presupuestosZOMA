@@ -61,7 +61,7 @@ export async function middleware(request: NextRequest) {
 
   // 0. Protección de Super Admin (Solo Yoel)
   if (esPaginaSuperAdmin) {
-    if (!usuario || usuario.email !== 'yoel.zoff@gmail.com') {
+    if (!usuario || usuario.email?.toLowerCase() !== 'yoel.zoff@gmail.com') {
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)

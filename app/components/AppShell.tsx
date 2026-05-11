@@ -76,22 +76,27 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   useEffect(() => {
     async function getProfile() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data } = await supabase
-          .from('users_profiles')
-          .select('role, company:companies(plan_type)')
-          .eq('id', user.id)
-          .single()
-        setProfile({ ...data, email: user.email })
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data } = await supabase
+            .from('users_profiles')
+            .select('role, company:companies(plan_type)')
+            .eq('id', user.id)
+            .single()
+          setProfile({ ...data, email: user.email })
+        }
+      } catch (err) {
+        console.error('Error al cargar perfil:', err)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     getProfile()
   }, [])
 
   const isAdmin = profile?.role === 'admin'
-  const isSuperAdmin = profile?.email === 'yoel.zoff@gmail.com'
+  const isSuperAdmin = profile?.email?.toLowerCase() === 'yoel.zoff@gmail.com'
   const planType = profile?.company?.plan_type || 'base'
   const isPro = planType === 'pro' || planType === 'pro_plus'
 
