@@ -19,6 +19,7 @@ import {
   Package,
   Globe2,
   UserRoundCog,
+  Lock,
 } from 'lucide-react'
 
 type Order = {
@@ -39,9 +40,10 @@ type Props = {
   initialOrders: Order[]
   initialSellers: SellerProfile[]
   companyId: string
+  planType: string
 }
 
-export default function PedidosClient({ initialOrders, initialSellers, companyId }: Props) {
+export default function PedidosClient({ initialOrders, initialSellers, companyId, planType }: Props) {
   const [orders, setOrders] = useState<Order[]>(initialOrders)
   const [sellers] = useState<SellerProfile[]>(initialSellers)
   const [loading, setLoading] = useState(false)
@@ -118,10 +120,25 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
                  <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
               </div>
 
-              <select value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500">
-                <option value="all">Todos los vendedores</option>
-                {sellers.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-              </select>
+              <div className="relative group">
+                <select 
+                  value={sellerFilter} 
+                  disabled={planType === 'base'}
+                  onChange={(e) => setSellerFilter(e.target.value)} 
+                  className={`rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 ${
+                    planType === 'base' ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <option value="all">Todos los vendedores</option>
+                  {sellers.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                </select>
+
+                {planType === 'base' && (
+                  <div className="absolute -top-3 -right-3 flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow-xl ring-2 ring-white animate-bounce">
+                    <Lock size={10} /> PRO
+                  </div>
+                )}
+              </div>
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500"><option value="all">Todos los estados</option><option value="pending">Pendientes</option><option value="confirmed">Convertidos</option><option value="cancelled">Anulados</option></select>
             </div>
           </div>

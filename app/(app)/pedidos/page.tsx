@@ -35,6 +35,7 @@ export default async function PedidosPage() {
       initialOrders={orders}
       initialSellers={sellersRes.data || []}
       companyId={context.idEmpresa}
+      planType={context.tipoPlan}
     />
   )
 }
