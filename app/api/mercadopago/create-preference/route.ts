@@ -82,30 +82,52 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (budgetError || !budget) {
-        return NextResponse.json({ error: 'Presupuesto no encontrado' }, { status: 404 })
-      }
+        // 3a. If not found in budgets, check if it's a manual movement (like "Saldo Inicial")
+        const { data: movement, error: movementError } = await supabaseAdmin
+          .from('account_movements')
+          .select('id, company_id, client_id, description, debit, credit')
+          .eq('id', budget_id)
+          .single()
 
-      if (budget.status === 'cancelled') {
-        return NextResponse.json({ error: 'No se puede pagar un presupuesto anulado' }, { status: 400 })
-      }
+        if (movementError || !movement) {
+          return NextResponse.json({ error: 'Presupuesto o movimiento no encontrado' }, { status: 404 })
+        }
 
-      // Calculamos el saldo real desde los movimientos de cuenta
-      const { data: movements } = await supabaseAdmin
-        .from('account_movements')
-        .select('debit, credit')
-        .eq('budget_id', budget_id)
+        // Calculate balance for this specific movement
+        // (For manual debts, usually credit is 0 at start, but we check anyway)
+        const realBalance = Number(movement.debit || 0) - Number(movement.credit || 0)
 
-      const totalCargo = (movements || []).reduce((acc, m) => acc + Number(m.debit || 0), 0)
-      const totalAbono = (movements || []).reduce((acc, m) => acc + Number(m.credit || 0), 0)
-      const realBalance = totalCargo - totalAbono
+        paymentData = {
+          id: movement.id,
+          company_id: movement.company_id,
+          client_id: movement.client_id,
+          title: movement.description || 'Saldo pendiente',
+          balance: realBalance,
+          external_reference: `movement:${movement.id}`,
+        }
+      } else {
+        if (budget.status === 'cancelled') {
+          return NextResponse.json({ error: 'No se puede pagar un presupuesto anulado' }, { status: 400 })
+        }
 
-      paymentData = {
-        id: budget.id,
-        company_id: budget.company_id,
-        client_id: budget.client_id,
-        title: `Presupuesto ${budget.budget_code || budget.budget_number}`,
-        balance: realBalance,
-        external_reference: `budget:${budget.id}`,
+        // Calculamos el saldo real desde los movimientos de cuenta
+        const { data: movements } = await supabaseAdmin
+          .from('account_movements')
+          .select('debit, credit')
+          .eq('budget_id', budget_id)
+
+        const totalCargo = (movements || []).reduce((acc, m) => acc + Number(m.debit || 0), 0)
+        const totalAbono = (movements || []).reduce((acc, m) => acc + Number(m.credit || 0), 0)
+        const realBalance = totalCargo - totalAbono
+
+        paymentData = {
+          id: budget.id,
+          company_id: budget.company_id,
+          client_id: budget.client_id,
+          title: `Presupuesto ${budget.budget_code || budget.budget_number}`,
+          balance: realBalance,
+          external_reference: `budget:${budget.id}`,
+        }
       }
     } else {
       // 3b. Fetch order

@@ -65,6 +65,17 @@ async function createPaymentNotification(localPayment: LocalPayment) {
       documentLabel = `Pedido ${order.order_code}`
       link = `/pedidos/${orderId}`
     }
+  } else if (localPayment.mp_external_reference?.startsWith('movement:')) {
+    const movementId = localPayment.mp_external_reference.replace('movement:', '')
+    const { data: movement } = await supabaseAdmin
+      .from('account_movements')
+      .select('description')
+      .eq('id', movementId)
+      .maybeSingle()
+    
+    if (movement) {
+      documentLabel = movement.description || 'Saldo pendiente'
+    }
   }
 
   const clientName = client?.name || 'Un cliente'
@@ -557,6 +568,16 @@ async function handleWebhook(req: NextRequest) {
           if (order) {
             movementDescription = `Pago Pedido ${order.order_code} - MP: ${mpPayment.id}`
           }
+        } else if (localPayment.mp_external_reference?.startsWith('movement:')) {
+          const movementId = localPayment.mp_external_reference.replace('movement:', '')
+          const { data: movement } = await supabaseAdmin
+            .from('account_movements')
+            .select('description')
+            .eq('id', movementId)
+            .maybeSingle()
+          if (movement) {
+            movementDescription = `Pago ${movement.description || 'Saldo'} - MP: ${mpPayment.id}`
+          }
         }
 
         // Determinamos el tipo de pago (Total o Parcial) comparando el saldo
@@ -587,6 +608,17 @@ async function handleWebhook(req: NextRequest) {
           totalPaidSoFar = previousCredits + amountToRecord
 
           if (budget && totalPaidSoFar >= Number(budget.total_amount)) {
+            paymentType = 'Pago total'
+          }
+        } else if (localPayment.mp_external_reference?.startsWith('movement:')) {
+          const movementId = localPayment.mp_external_reference.replace('movement:', '')
+          const { data: movement } = await supabaseAdmin
+            .from('account_movements')
+            .select('debit')
+            .eq('id', movementId)
+            .maybeSingle()
+          
+          if (movement && amountToRecord >= Number(movement.debit)) {
             paymentType = 'Pago total'
           }
         }
