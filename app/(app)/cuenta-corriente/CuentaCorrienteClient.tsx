@@ -96,11 +96,38 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       previousBalance = (prevData || []).reduce((acc, m) => acc + (Number(m.debit || 0) - Number(m.credit || 0)), 0)
     }
     const { data, error } = await query
-    if (error) { setErrorMsg("Error al cargar movimientos: " + error.message); setMovementsLoading(false); return }
-    const normalized = (data || []).map((item: any) => ({ ...item, budgets: Array.isArray(item.budgets) ? item.budgets[0] || null : item.budgets || null }))
-    setPrevBalance(previousBalance); setMovements(normalized.filter((item: any) => item.budgets?.status !== "cancelled")); setMovementsLoading(false)
+    if (error) { 
+      setErrorMsg("Error al cargar movimientos: " + error.message)
+      setMovementsLoading(false)
+      return 
+    }
+    
+    const normalized = (data || []).map((item: any) => ({ 
+      ...item, 
+      budgets: Array.isArray(item.budgets) ? item.budgets[0] || null : item.budgets || null 
+    }))
+
+    // Solo filtramos si hay un presupuesto y su estado es cancelado. 
+    // Si no hay presupuesto (null), mostramos el movimiento igual.
+    const finalMovements = normalized.filter((item: any) => {
+      if (!item.budgets) return true
+      return item.budgets.status !== "cancelled"
+    })
+
+    setPrevBalance(previousBalance)
+    setMovements(finalMovements)
+    setMovementsLoading(false)
   }
 
+
+  useEffect(() => {
+    if (selectedClientId) {
+      loadMovements(selectedClientId)
+    } else {
+      setMovements([])
+      setPrevBalance(0)
+    }
+  }, [selectedClientId, daysFilter])
 
   const selectedClient = clients.find((c) => c.id === selectedClientId)
 

@@ -28,6 +28,7 @@ async function createPaymentNotification(localPayment: LocalPayment) {
     .maybeSingle()
 
   if (existingNotification) {
+    console.log('NOTIFICATION ALREADY EXISTS, SKIPPING...');
     return
   }
 
@@ -73,6 +74,17 @@ async function createPaymentNotification(localPayment: LocalPayment) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+
+  // Re-verificar justo antes de insertar (doble chequeo para concurrencia)
+  const { data: doubleCheck } = await supabaseAdmin
+    .from('notifications')
+    .select('id')
+    .eq('company_id', localPayment.company_id)
+    .eq('type', 'payment')
+    .ilike('message', `%${localPayment.id}%`)
+    .maybeSingle()
+
+  if (doubleCheck) return
 
   const { error } = await supabaseAdmin.from('notifications').insert({
     company_id: localPayment.company_id,
@@ -249,16 +261,19 @@ async function handleCascadePayment(
     .ilike('message', `%${mpPaymentId}%`)
     .maybeSingle()
 
-  if (!existingNotif) {
-    await supabaseAdmin.from('notifications').insert({
-      company_id: companyId,
-      title: 'Pago en cascada recibido',
-      message: `${clientName} realizó un pago de ${amountFormatted} distribuido en: ${affectedBudgets}. MP ID: ${mpPaymentId}`,
-      type: 'payment',
-      link: '/cuenta-corriente',
-      read: false,
-    })
+  if (existingNotif) {
+    console.log('CASCADE NOTIFICATION ALREADY EXISTS, SKIPPING...');
+    return
   }
+
+  await supabaseAdmin.from('notifications').insert({
+    company_id: companyId,
+    title: 'Pago en cascada recibido',
+    message: `${clientName} realizó un pago de ${amountFormatted} distribuido en: ${affectedBudgets}. MP ID: ${mpPaymentId}`,
+    type: 'payment',
+    link: '/cuenta-corriente',
+    read: false,
+  })
 }
 
 // ---------------------------------------------------------------------------

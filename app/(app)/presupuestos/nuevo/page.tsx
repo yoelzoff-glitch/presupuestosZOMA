@@ -33,7 +33,7 @@ type Product = {
   internal_code: string | null
   name: string
   category: string | null
-  price: number
+  cost_price: number
 }
 
 type BudgetItem = {
@@ -131,7 +131,7 @@ export default function NuevoPresupuestoPage() {
 
       supabase
         .from('products')
-        .select('id, internal_code, name, category, price')
+        .select('id, internal_code, name, category, cost_price')
         .eq('company_id', currentCompanyId)
         .order('name', { ascending: true })
         .range(0, 4999),
@@ -168,7 +168,7 @@ export default function NuevoPresupuestoPage() {
   // Efecto para actualizar el precio del producto seleccionado cuando cambia el descuento
   useEffect(() => {
     if (selectedProduct && cascadingEnabled) {
-      const discounted = calculateCascadingPrice(selectedProduct.price, productDiscount)
+      const discounted = calculateCascadingPrice(selectedProduct.cost_price, productDiscount)
       setProductPrice(discounted.toFixed(2))
     }
   }, [productDiscount, selectedProduct, cascadingEnabled])
@@ -209,7 +209,7 @@ export default function NuevoPresupuestoPage() {
   function selectProduct(product: Product) {
     setSelectedProduct(product)
     setProductQty('1')
-    setProductPrice(String(product.price || 0))
+    setProductPrice(String(product.cost_price || 0))
     setProductDiscount('')
   }
 
@@ -558,7 +558,7 @@ export default function NuevoPresupuestoPage() {
                     </div>
 
                     <p className="shrink-0 font-black text-blue-700">
-                      ${Number(product.price || 0).toLocaleString('es-AR')}
+                      ${Number(product.cost_price || 0).toLocaleString('es-AR')}
                     </p>
                   </button>
                 ))}
@@ -598,7 +598,7 @@ export default function NuevoPresupuestoPage() {
                     icon={DollarSign}
                     label="Precio lista"
                     value={`$${Number(
-                      selectedProduct.price || 0
+                      selectedProduct.cost_price || 0
                     ).toLocaleString('es-AR')}`}
                   />
                 </div>

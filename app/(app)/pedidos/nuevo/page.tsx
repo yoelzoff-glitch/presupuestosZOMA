@@ -41,7 +41,7 @@ type Product = {
   category: string | null
   supplier: string | null
   active: boolean
-  price: number | null
+  cost_price: number | null
 }
 
 type CartItem = {
@@ -86,7 +86,7 @@ export default function NuevoPedidoPage() {
   useEffect(() => {
     const p = products.find((prod) => prod.id === selectedProductId)
     if (p) {
-      setUnitPrice(String(p.price || 0))
+      setUnitPrice(String(p.cost_price || 0))
     }
   }, [selectedProductId, products])
 
@@ -125,7 +125,7 @@ export default function NuevoPedidoPage() {
 
       supabase
         .from('products')
-        .select('id, internal_code, name, category, supplier, active, price')
+        .select('id, internal_code, name, category, supplier, active, cost_price')
         .eq('company_id', currentCompanyId)
         .eq('active', true)
         .order('name', { ascending: true })
