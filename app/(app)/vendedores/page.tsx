@@ -15,7 +15,11 @@ import {
   MoreVertical,
   Sparkles,
   ChevronRight,
+  IdCard,
+  Phone,
+  MapPin,
 } from 'lucide-react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 
 export default function VendedoresPage() {
@@ -205,81 +209,73 @@ export default function VendedoresPage() {
         </div>
       </div>
 
-      {/* Search & Table */}
-      <div className="rounded-[2.5rem] border border-slate-200 bg-white p-2 shadow-sm overflow-hidden">
-        <div className="p-6">
-          <div className="relative group max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
-            <input
-              type="text"
-              placeholder="Buscar por nombre o email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-12 pr-4 text-sm font-bold text-slate-900 outline-none transition-all focus:border-blue-500/50 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-            />
+      {/* Grid de Tarjetas */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-[320px] animate-pulse rounded-[2rem] bg-slate-100" />
+          ))
+        ) : filteredVendedores.length === 0 ? (
+          <div className="col-span-full py-20 text-center">
+            <Users size={48} className="mx-auto mb-4 text-slate-200" />
+            <p className="font-black text-slate-400 text-lg">No se encontraron vendedores.</p>
           </div>
-        </div>
+        ) : (
+          filteredVendedores.map((v) => (
+            <article key={v.id} className="group relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.2rem] bg-slate-950 text-white font-black text-xl shadow-lg shadow-slate-950/20 group-hover:scale-110 transition-transform">
+                  {v.full_name?.charAt(0).toUpperCase() || 'V'}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h3 className="truncate text-lg font-black text-slate-900 tracking-tight">{v.full_name}</h3>
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                    <IdCard size={12} className="text-blue-500" /> {v.dni || v.id.slice(0, 8)}
+                  </p>
+                </div>
+              </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
-                <th className="px-8 py-5 text-left text-xs font-black uppercase tracking-widest text-slate-500">Vendedor</th>
-                <th className="px-8 py-5 text-left text-xs font-black uppercase tracking-widest text-slate-500">Estado</th>
-                <th className="px-8 py-5 text-left text-xs font-black uppercase tracking-widest text-slate-500">Rol</th>
-                <th className="px-8 py-5 text-right text-xs font-black uppercase tracking-widest text-slate-500">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="p-20 text-center">
-                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-500" />
-                  </td>
-                </tr>
-              ) : filteredVendedores.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="p-20 text-center text-sm font-bold text-slate-400">
-                    No se encontraron vendedores.
-                  </td>
-                </tr>
-              ) : (
-                filteredVendedores.map((v) => (
-                  <tr key={v.id} className="group transition-colors hover:bg-slate-50/50">
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 text-slate-600 font-black">
-                          {v.full_name?.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-900">{v.full_name}</p>
-                          <p className="text-xs font-bold text-slate-500">{v.email || 'vendedor@sistema.com'}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-8 py-6">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">
-                        <span className="h-1 w-1 rounded-full bg-emerald-700" />
-                        Activo
-                      </span>
-                    </td>
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
-                        <ShieldCheck size={16} className="text-blue-500" />
-                        Vendedor
-                      </div>
-                    </td>
-                    <td className="px-8 py-6 text-right">
-                      <button className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-                        <MoreVertical size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              <div className="space-y-3 mb-8">
+                <div className="flex items-center gap-3 text-slate-500">
+                  <div className="h-8 w-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
+                    <Mail size={14} />
+                  </div>
+                  <span className="text-sm font-bold truncate">{v.email || 'vendedor@sistema.com'}</span>
+                </div>
+                <div className="flex items-center gap-3 text-slate-500">
+                  <div className="h-8 w-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
+                    <Phone size={14} />
+                  </div>
+                  <span className="text-sm font-bold">{v.phone || 'Sin teléfono'}</span>
+                </div>
+                <div className="flex items-center gap-3 text-slate-500">
+                  <div className="h-8 w-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-colors">
+                    <MapPin size={14} />
+                  </div>
+                  <span className="text-sm font-bold truncate">{v.address || 'Sin dirección'}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-5 border-t border-slate-100">
+                <div className="bg-slate-50 px-3 py-1.5 rounded-lg">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Alta</p>
+                  <p className="text-[10px] font-black text-slate-600">{new Date(v.created_at || Date.now()).toLocaleDateString()}</p>
+                </div>
+                
+                <Link 
+                  href={`/vendedores/${v.id}`}
+                  className="inline-flex items-center gap-2 text-sm font-black text-blue-600 hover:gap-3 transition-all"
+                >
+                  Ver Ficha
+                  <ChevronRight size={18} strokeWidth={3} />
+                </Link>
+              </div>
+            </article>
+          ))
+        )}
       </div>
 
       {/* Modal Nueva Vendedor */}
