@@ -41,8 +41,9 @@ export default function PedidosPage() {
   const [search, setSearch] = useState('')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all')
+  const [daysFilter, setDaysFilter] = useState('30')
 
-  useEffect(() => { loadInitialData() }, [])
+  useEffect(() => { loadInitialData() }, [daysFilter])
 
   async function loadInitialData() {
     setLoading(true)
@@ -59,11 +60,19 @@ export default function PedidosPage() {
   }
 
   async function fetchOrders(cid: string) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('orders')
       .select(`id, order_number, order_code, order_date, status, source, total_amount, seller_id, clients ( name, cuit )`)
       .eq('company_id', cid)
       .order('created_at', { ascending: false })
+
+    if (daysFilter !== 'all') {
+      const dateLimit = new Date()
+      dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
+      query = query.gte('created_at', dateLimit.toISOString())
+    }
+
+    const { data, error } = await query
 
     if (!error) {
       const normalized = (data || []).map((item: any) => ({ ...item, clients: Array.isArray(item.clients) ? item.clients[0] || null : item.clients || null }))
@@ -108,8 +117,16 @@ export default function PedidosPage() {
         <div className="space-y-4 border-b border-slate-200 p-5 bg-slate-50/30">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div><h2 className="text-xl font-black text-slate-950">Listado Maestro</h2><p className="text-sm text-slate-500">Filtrá por estado, origen o vendedor.</p></div>
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3 sm:flex-row items-center">
               <div className="relative"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar pedido..." className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4 text-sm font-semibold outline-none focus:border-blue-500 sm:w-64" /></div>
+              
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                 <FilterButton active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
+                 <FilterButton active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
+                 <FilterButton active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
+                 <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
+              </div>
+
               <select value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500">
                 <option value="all">Todos los vendedores</option>
                 {sellers.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
@@ -168,4 +185,14 @@ function StatusBadge({ status }: { status: string }) {
 
 function LoadingState() {
   return <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600 mb-4" size={32} /><p className="font-black text-slate-900">Cargando pedidos...</p></div>
+}
+function FilterButton({ children, active, onClick }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className={px-3 py-1.5 rounded-lg text-[10px] font-black transition-all }
+    >
+      {children}
+    </button>
+  )
 }

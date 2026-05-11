@@ -50,10 +50,11 @@ export default function DashboardPage() {
   })
 
   const [loading, setLoading] = useState(true)
+  const [daysFilter, setDaysFilter] = useState('30')
 
   useEffect(() => {
     loadDashboard()
-  }, [])
+  }, [daysFilter])
 
   async function loadDashboard() {
     setLoading(true)
@@ -75,7 +76,23 @@ export default function DashboardPage() {
 
     const companyId = profile.company_id
 
-    // Dashboard 100% Admin - Sin filtros de vendedor
+    // Dashboard 100% Admin - Filtros de fecha dinámicos
+    let budgetsQuery = supabase.from('budgets').select('id', { count: 'exact', head: true }).eq('company_id', companyId)
+    let movementsQuery = supabase.from('account_movements').select('debit, credit').eq('company_id', companyId)
+    let historyQuery = supabase.from('budgets').select('created_at, total_amount, payment_status').eq('company_id', companyId).neq('status', 'cancelled')
+    let itemsQuery = supabase.from('budget_items').select('product_name, quantity, budgets!inner(company_id, created_at)').eq('budgets.company_id', companyId)
+
+    if (daysFilter !== 'all') {
+      const dateLimit = new Date()
+      dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
+      const isoDate = dateLimit.toISOString()
+      
+      budgetsQuery = budgetsQuery.gte('created_at', isoDate)
+      movementsQuery = movementsQuery.gte('created_at', isoDate)
+      historyQuery = historyQuery.gte('created_at', isoDate)
+      itemsQuery = itemsQuery.gte('budgets.created_at', isoDate)
+    }
+
     const [
       clientsRes,
       productsRes,
@@ -86,10 +103,10 @@ export default function DashboardPage() {
     ] = await Promise.all([
       supabase.from('clients').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
       supabase.from('products').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
-      supabase.from('budgets').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
-      supabase.from('account_movements').select('debit, credit').eq('company_id', companyId),
-      supabase.from('budgets').select('created_at, total_amount, payment_status').eq('company_id', companyId).neq('status', 'cancelled'),
-      supabase.from('budget_items').select('product_name, quantity, budgets!inner(company_id)').eq('budgets.company_id', companyId),
+      budgetsQuery,
+      movementsQuery,
+      historyQuery,
+      itemsQuery,
     ])
 
     const totalBalance = balanceRes.data?.reduce((acc, item: any) => acc + (Number(item.debit || 0) - Number(item.credit || 0)), 0) ?? 0
@@ -156,7 +173,13 @@ export default function DashboardPage() {
             <h1 className="max-w-3xl text-4xl font-black tracking-tight lg:text-5xl">Gestión comercial unificada.</h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">Bienvenido al centro de mando. Aquí tienes el panorama completo de tu empresa.</p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row items-center">
+            <div className="flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10 backdrop-blur-md mr-4">
+              <FilterButton active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
+              <FilterButton active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
+              <FilterButton active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
+              <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
+            </div>
             <Link href="/clientes/nuevo" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-xl shadow-blue-900/30 transition hover:bg-blue-500 active:scale-95"><Plus size={18} /> Nuevo cliente</Link>
           </div>
         </div>
@@ -187,7 +210,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-sm font-bold text-slate-500">{card.title}</p>
               <h2 className="mt-2 text-3xl font-black text-slate-950">{loading ? '...' : card.value}</h2>
-              <p className="mt-2 text-sm text-slate-500">{card.detail}</p>
+              <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">{daysFilter === 'all' ? 'Histórico total' : `Últimos ${daysFilter} días`}</p>
             </Link>
           )
         })}

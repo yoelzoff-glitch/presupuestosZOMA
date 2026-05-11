@@ -61,6 +61,8 @@ export default function CuentaCorrientePage() {
   const [movementsLoading, setMovementsLoading] = useState(false)
   const [savingPayment, setSavingPayment] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [daysFilter, setDaysFilter] = useState('30')
+  const [prevBalance, setPrevBalance] = useState(0)
 
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState('')
@@ -88,12 +90,13 @@ export default function CuentaCorrientePage() {
       setPaymentDescription('Pago recibido')
     } else {
       setMovements([])
+      setPrevBalance(0)
       setSelectedPaymentBudgetId('')
       setPaymentAmount('')
       setPaymentType('Pago parcial')
       setPaymentDescription('Pago recibido')
     }
-  }, [selectedClientId])
+  }, [selectedClientId, daysFilter])
 
   async function initPage() {
     setLoading(true)
@@ -154,56 +157,22 @@ export default function CuentaCorrientePage() {
 
   async function loadMovements(clientId: string) {
     if (!companyId) return
-
     setMovementsLoading(true)
-    setErrorMsg('')
-
-    const { data, error } = await supabase
-      .from('account_movements')
-      .select(`
-        id,
-        client_id,
-        budget_id,
-        movement_date,
-        movement_type,
-        payment_type,
-        payment_method,
-        description,
-        debit,
-        credit,
-        created_at,
-        budgets (
-          budget_code,
-          budget_number,
-          status
-        )
-      `)
-      .eq('company_id', companyId)
-      .eq('client_id', clientId)
-      .order('movement_date', { ascending: false })
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Error loading movements:', error)
-      setErrorMsg(`Error al cargar movimientos: ${error.message}`)
-      setMovementsLoading(false)
-      return
+    setErrorMsg("")
+    let query = supabase.from("account_movements").select("id, client_id, budget_id, movement_date, movement_type, payment_type, payment_method, description, debit, credit, created_at, budgets ( budget_code, budget_number, status )").eq("company_id", companyId).eq("client_id", clientId).order("movement_date", { ascending: false }).order("created_at", { ascending: false })
+    let previousBalance = 0
+    if (daysFilter !== "all") {
+      const dateLimit = new Date(); dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
+      const isoDate = dateLimit.toISOString(); query = query.gte("created_at", isoDate)
+      const { data: prevData } = await supabase.from("account_movements").select("debit, credit").eq("company_id", companyId).eq("client_id", clientId).lt("created_at", isoDate)
+      previousBalance = (prevData || []).reduce((acc, m) => acc + (Number(m.debit || 0) - Number(m.credit || 0)), 0)
     }
-
-    const normalized = (data || []).map((item: any) => ({
-      ...item,
-      budgets: Array.isArray(item.budgets)
-        ? item.budgets[0] || null
-        : item.budgets || null,
-    }))
-
-    const filtered = normalized.filter(
-      (item: any) => item.budgets?.status !== 'cancelled'
-    )
-
-    setMovements(filtered)
-    setMovementsLoading(false)
+    const { data, error } = await query
+    if (error) { setErrorMsg("Error al cargar movimientos: " + error.message); setMovementsLoading(false); return }
+    const normalized = (data || []).map((item: any) => ({ ...item, budgets: Array.isArray(item.budgets) ? item.budgets[0] || null : item.budgets || null }))
+    setPrevBalance(previousBalance); setMovements(normalized.filter((item: any) => item.budgets?.status !== "cancelled")); setMovementsLoading(false)
   }
+
 
   const selectedClient = clients.find((c) => c.id === selectedClientId)
 
@@ -232,7 +201,7 @@ export default function CuentaCorrientePage() {
     return {
       debit,
       credit,
-      balance: debit - credit,
+      balance: prevBalance + debit - credit,
     }
   }, [movements])
 
@@ -781,9 +750,17 @@ export default function CuentaCorrientePage() {
                     <h2 className="text-2xl font-black text-slate-950">
                       {selectedClient.name}
                     </h2>
-                    <p className="mt-1 text-sm font-bold text-slate-400">
-                      CUIT: {selectedClient.cuit}
-                    </p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                         <FilterButton active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
+                         <FilterButton active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
+                         <FilterButton active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
+                         <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
+                      </div>
+                      <p className="text-xs font-bold text-slate-400">
+                        CUIT: {selectedClient.cuit}
+                      </p>
+                    </div>
                   </div>
 
                   <button
@@ -1216,3 +1193,14 @@ function formatCurrency(value: number) {
     maximumFractionDigits: 2,
   })
 }
+function FilterButton({ children, active, onClick }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className={px-3 py-1.5 rounded-lg text-[10px] font-black transition-all }
+    >
+      {children}
+    </button>
+  )
+}
+

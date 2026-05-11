@@ -54,8 +54,9 @@ export default function PresupuestosPage() {
   const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [daysFilter, setDaysFilter] = useState('30')
 
-  useEffect(() => { loadInitialData() }, [])
+  useEffect(() => { loadInitialData() }, [daysFilter])
 
   async function loadInitialData() {
     setLoading(true)
@@ -78,11 +79,19 @@ export default function PresupuestosPage() {
     if (!currentCid) return
     setLoading(true)
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('budgets')
       .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, seller_id, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
       .eq('company_id', currentCid)
       .order('budget_number', { ascending: false })
+
+    if (daysFilter !== 'all') {
+      const dateLimit = new Date()
+      dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
+      query = query.gte('created_at', dateLimit.toISOString())
+    }
+
+    const { data, error } = await query
 
     if (error) toast.error(error.message)
     else {
@@ -142,8 +151,17 @@ export default function PresupuestosPage() {
               <button onClick={() => loadBudgets()} className="p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition"><RefreshCw size={17} className={loading ? 'animate-spin' : ''} /></button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             {statusFilters.map(f => <button key={f.value} onClick={() => setStatusFilter(f.value)} className={`px-4 py-2 rounded-full text-xs font-black transition ${statusFilter === f.value ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{f.label}</button>)}
+            
+            <div className="h-6 w-px bg-slate-200 mx-2" />
+            
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+               <FilterButton active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
+               <FilterButton active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
+               <FilterButton active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
+               <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
+            </div>
           </div>
         </div>
 
@@ -210,4 +228,14 @@ function StatusBadge({ status }: { status: string }) {
 
 function LoadingState() {
   return <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600 mb-4" size={32} /><p className="font-black text-slate-900">Cargando presupuestos...</p></div>
+}
+function FilterButton({ children, active, onClick }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className={px-3 py-1.5 rounded-lg text-[10px] font-black transition-all }
+    >
+      {children}
+    </button>
+  )
 }
