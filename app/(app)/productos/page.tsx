@@ -13,6 +13,7 @@ export default async function ProductosPage() {
     .from('products')
     .select('id, internal_code, name, supplier, category, cost_price, last_price_update')
     .eq('company_id', contexto.idEmpresa)
+    .eq('active', true)
     .order('name', { ascending: true })
     .range(0, 4999)
 

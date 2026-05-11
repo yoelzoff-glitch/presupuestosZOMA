@@ -123,15 +123,15 @@ export default function ImportarProductosPage() {
         (code) => !newCodes.includes(code)
       )
 
-      // 🗑️ 3. BORRAR SOLO LOS QUE SOBRAN
+      // 🗑️ 3. DESACTIVAR LOS QUE SOBRAN (En lugar de borrar)
       if (codesToDelete.length > 0) {
-        const { error: deleteError } = await supabase
+        const { error: deactivateError } = await supabase
           .from('products')
-          .delete()
+          .update({ active: false })
           .eq('company_id', companyId)
           .in('internal_code', codesToDelete)
 
-        if (deleteError) throw deleteError
+        if (deactivateError) throw deactivateError
       }
 
       // 📦 4. UPSERT (INSERT / UPDATE)
@@ -142,6 +142,7 @@ export default function ImportarProductosPage() {
         name: row.producto,
         category: row.categoria || null,
         cost_price: row.precio,
+        active: true,
         last_price_update: new Date().toISOString(),
       }))
 

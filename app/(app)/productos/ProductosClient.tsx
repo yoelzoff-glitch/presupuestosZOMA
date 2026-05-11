@@ -55,6 +55,7 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
       .from('products')
       .select('id, internal_code, name, supplier, category, cost_price, last_price_update')
       .eq('company_id', idEmpresa)
+      .eq('active', true)
       .order('name', { ascending: true })
       .range(0, 4999)
     
