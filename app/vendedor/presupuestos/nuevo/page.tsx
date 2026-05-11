@@ -186,6 +186,22 @@ export default function VendedorNuevoPresupuesto() {
       )
       if (iError) throw iError
 
+      // Enviar notificación al administrador
+      try {
+        const selectedClient = clients.find(c => c.id === clientId)
+        await fetch('/api/notifications/seller-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            budgetId: budget.id,
+            budgetCode: `000-${nextNumber}`,
+            clientName: selectedClient?.name || 'Cliente'
+          })
+        })
+      } catch (notifErr) {
+        console.error('Error enviando notificación al admin:', notifErr)
+      }
+
       toast.success('Presupuesto creado!')
       router.push(`/vendedor/presupuestos/${budget.id}`)
     } catch (err: any) {
