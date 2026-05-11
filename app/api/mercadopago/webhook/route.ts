@@ -405,6 +405,8 @@ async function handleWebhook(req: NextRequest) {
       order: mpPayment.order
     });
 
+    console.log(`🔍 Intentando matchear con Supabase usando: pref_id=${mpPayment.preference_id || 'null'}, ext_ref=${mpPayment.external_reference || 'null'}`);
+
     const mappedStatus =
       mpPayment.status === 'approved'
         ? 'approved'
