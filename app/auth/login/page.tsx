@@ -210,17 +210,6 @@ export default function Login() {
                 )}
               </button>
 
-              <div className="pt-4 text-center">
-                <p className="text-sm font-bold text-slate-500">
-                  ¿No tenés cuenta?{' '}
-                  <Link
-                    href="/auth/register"
-                    className="text-blue-400 transition-colors hover:text-blue-300"
-                  >
-                    Registrá tu empresa
-                  </Link>
-                </p>
-              </div>
             </form>
 
             <p className="mt-12 text-center text-xs font-bold uppercase tracking-widest text-slate-600">

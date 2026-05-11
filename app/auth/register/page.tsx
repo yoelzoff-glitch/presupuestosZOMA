@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -8,6 +8,10 @@ import { Eye, EyeOff, Loader2, Lock, Mail, Building2, ChevronRight, CheckCircle2
 
 export default function Register() {
   const router = useRouter()
+
+  useEffect(() => {
+    router.replace('/auth/login')
+  }, [router])
 
   const [companyName, setCompanyName] = useState('')
   const [email, setEmail] = useState('')
