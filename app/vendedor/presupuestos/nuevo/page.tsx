@@ -131,9 +131,10 @@ export default function VendedorNuevoPresupuesto() {
     const discounts = discountStr.split(/[+\-\s]+/).map(d => parseFloat(d.replace(',', '.'))).filter(d => !isNaN(d) && d !== 0)
     let finalPrice = basePrice
     for (const d of discounts) {
-      finalPrice = finalPrice * (1 - d / 100)
+      const clampedD = Math.min(Math.max(d, 0), 100)
+      finalPrice = finalPrice * (1 - clampedD / 100)
     }
-    return finalPrice
+    return Math.max(0, finalPrice)
   }
 
   useEffect(() => {
@@ -304,6 +305,13 @@ export default function VendedorNuevoPresupuesto() {
 
                 <button 
                   onClick={() => {
+                    if (cascadingEnabled && productDiscount.trim()) {
+                      const discounts = productDiscount.split(/[+\-\s]+/).map(d => parseFloat(d.replace(',', '.'))).filter(d => !isNaN(d))
+                      if (discounts.some(d => d > 100)) {
+                        toast.error('El descuento no puede ser mayor al 100%.')
+                        return
+                      }
+                    }
                     setItems([...items, { product_id: selectedProduct.id, code: selectedProduct.internal_code || '', name: selectedProduct.name, category: selectedProduct.category || '', price: Number(productPrice), quantity: Number(productQty), discount_str: productDiscount }]);
                     setSelectedProduct(null); setSearch('');
                   }}

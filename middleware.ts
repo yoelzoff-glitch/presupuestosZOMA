@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { CURRENT_TERMS_VERSION } from './lib/constants'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -46,6 +47,7 @@ export async function middleware(request: NextRequest) {
   const isAuthPage = pathname.startsWith('/auth')
   const isApiPage = pathname.startsWith('/api')
   const isPortalPage = pathname.startsWith('/portal')
+  const isTermsPage = pathname === '/auth/terminos'
 
   if (isApiPage) return response
 
@@ -62,10 +64,23 @@ export async function middleware(request: NextRequest) {
   if (user) {
     const { data: profile } = await supabase
       .from('users_profiles')
-      .select('role')
+      .select('role, accepted_terms_version')
       .eq('id', user.id)
       .single()
 
+    const acceptedVersion = profile?.accepted_terms_version ?? 0
+
+    // Si los términos no han sido aceptados para la versión vigente, forzar la vista legal
+    if (acceptedVersion < CURRENT_TERMS_VERSION) {
+      if (!isTermsPage) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/auth/terminos'
+        return NextResponse.redirect(url)
+      }
+      return response
+    }
+
+    // Si los términos están vigentes e intenta entrar a auth/terms o login, redirigir al dashboard
     if (isAuthPage) {
       const url = request.nextUrl.clone()
       url.pathname = profile?.role === 'customer' ? '/portal' : '/'

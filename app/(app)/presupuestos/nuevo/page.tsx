@@ -157,10 +157,11 @@ export default function NuevoPresupuestoPage() {
 
     let finalPrice = basePrice
     for (const d of discounts) {
-      // Aplicamos descuento sucesivo
-      finalPrice = finalPrice * (1 - d / 100)
+      // Aplicamos descuento sucesivo y limitamos a 100% para evitar valores negativos
+      const clampedD = Math.min(Math.max(d, 0), 100)
+      finalPrice = finalPrice * (1 - clampedD / 100)
     }
-    return finalPrice
+    return Math.max(0, finalPrice)
   }
 
   // Efecto para actualizar el precio del producto seleccionado cuando cambia el descuento
@@ -230,6 +231,14 @@ export default function NuevoPresupuestoPage() {
       return
     }
 
+    if (cascadingEnabled && productDiscount.trim()) {
+      const discounts = productDiscount.split(/[+\-\s]+/).map(d => parseFloat(d.replace(',', '.'))).filter(d => !isNaN(d))
+      if (discounts.some(d => d > 100)) {
+        toast.error('Ningún descuento individual puede ser mayor al 100%.')
+        return
+      }
+    }
+
     setItems((prev) => [
       ...prev,
       {
@@ -266,6 +275,11 @@ export default function NuevoPresupuestoPage() {
 
     // Si hay descuento manual en cascada, lo aplicamos al precio manual antes de guardar
     if (cascadingEnabled && manual.discount.trim()) {
+      const discounts = manual.discount.split(/[+\-\s]+/).map(d => parseFloat(d.replace(',', '.'))).filter(d => !isNaN(d))
+      if (discounts.some(d => d > 100)) {
+        toast.error('Ningún descuento individual puede ser mayor al 100%.')
+        return
+      }
       price = calculateCascadingPrice(price, manual.discount)
     }
 
