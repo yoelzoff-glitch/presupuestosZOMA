@@ -34,7 +34,7 @@ type Product = {
   internal_code: string | null
   name: string
   category: string | null
-  cost_price: number
+  price: number
 }
 
 type BudgetItem = {
@@ -138,7 +138,7 @@ export default function VendedorNuevoPresupuesto() {
 
   useEffect(() => {
     if (selectedProduct && cascadingEnabled) {
-      const discounted = calculateCascadingPrice(selectedProduct.cost_price, productDiscount)
+      const discounted = calculateCascadingPrice(selectedProduct.price, productDiscount)
       setProductPrice(discounted.toFixed(2))
     }
   }, [productDiscount, selectedProduct, cascadingEnabled])
@@ -263,14 +263,14 @@ export default function VendedorNuevoPresupuesto() {
                 {filteredProducts.map(p => (
                   <button 
                     key={p.id}
-                    onClick={() => { setSelectedProduct(p); setProductPrice(String(p.cost_price)); setProductDiscount(''); }}
+                    onClick={() => { setSelectedProduct(p); setProductPrice(String(p.price)); setProductDiscount(''); }}
                     className="w-full flex items-center justify-between p-4 hover:bg-blue-50 text-left border-b last:border-0 transition"
                   >
                     <div>
                       <p className="font-black text-slate-900">{p.name}</p>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{p.internal_code || 'S/C'}</p>
                     </div>
-                    <p className="font-black text-blue-600">${p.cost_price.toLocaleString('es-AR')}</p>
+                    <p className="font-black text-blue-600">${p.price.toLocaleString('es-AR')}</p>
                   </button>
                 ))}
               </div>

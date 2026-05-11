@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
+import { fetchNextNumber } from '@/lib/fetchNextNumber'
 import { getUserCompanyId } from '@/lib/getUserCompany'
 import { toast } from 'sonner'
 import {
@@ -40,7 +41,7 @@ type Product = {
   category: string | null
   supplier: string | null
   active: boolean
-  cost_price: number | null
+  price: number | null
 }
 
 type CartItem = {
@@ -85,7 +86,7 @@ export default function NuevoPedidoPage() {
   useEffect(() => {
     const p = products.find((prod) => prod.id === selectedProductId)
     if (p) {
-      setUnitPrice(String(p.cost_price || 0))
+      setUnitPrice(String(p.price || 0))
     }
   }, [selectedProductId, products])
 
@@ -124,7 +125,7 @@ export default function NuevoPedidoPage() {
 
       supabase
         .from('products')
-        .select('id, internal_code, name, category, supplier, active, cost_price')
+        .select('id, internal_code, name, category, supplier, active, price')
         .eq('company_id', currentCompanyId)
         .eq('active', true)
         .order('name', { ascending: true })
@@ -297,33 +298,6 @@ export default function NuevoPedidoPage() {
     setItems((prev) => prev.filter((_, i) => i !== index))
   }
 
-  async function getNextOrderNumber(currentCompanyId: string) {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('order_number')
-      .eq('company_id', currentCompanyId)
-      .order('order_number', { ascending: false })
-      .limit(1)
-
-    if (error) throw error
-
-    const lastNumber = data?.[0]?.order_number || 0
-    return lastNumber + 1
-  }
-
-  async function getNextBudgetNumber(currentCompanyId: string) {
-    const { data, error } = await supabase
-      .from('budgets')
-      .select('budget_number')
-      .eq('company_id', currentCompanyId)
-      .order('budget_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (error) throw error
-
-    return (data?.budget_number ?? 1949) + 1
-  }
 
   async function saveOrder() {
     if (!companyId) {
@@ -351,7 +325,7 @@ export default function NuevoPedidoPage() {
     setSaving(true)
 
     try {
-      const nextNumber = await getNextOrderNumber(companyId)
+      const nextNumber = await fetchNextNumber('order')
       const orderCode = `PED-${String(nextNumber).padStart(6, '0')}`
 
       const { data: userData } = await supabase.auth.getUser()
@@ -362,7 +336,7 @@ export default function NuevoPedidoPage() {
         .single()
 
       // 1. Crear Presupuesto Espejo (Auditoría)
-      const nextBudgetNumber = await getNextBudgetNumber(companyId)
+      const nextBudgetNumber = await fetchNextNumber('budget')
       const { data: budgetData, error: budgetError } = await supabase
         .from('budgets')
         .insert({

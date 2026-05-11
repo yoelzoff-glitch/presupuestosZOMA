@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
+import { fetchNextNumber } from '@/lib/fetchNextNumber'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -153,22 +154,12 @@ export default function PresupuestoDetallePage() {
     setLoading(false)
   }
 
-  async function getNextOrderNumber(currentCompanyId: string) {
-    const { data } = await supabase
-      .from('orders')
-      .select('order_number')
-      .eq('company_id', currentCompanyId)
-      .order('order_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    return (data?.order_number ?? 0) + 1
-  }
 
   async function convertToOrder() {
     if (!budget || !role || associatedOrderId) return
     try {
       setConvertingToOrder(true)
-      const nextOrderNumber = await getNextOrderNumber(budget.company_id)
+      const nextOrderNumber = await fetchNextNumber('order')
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({

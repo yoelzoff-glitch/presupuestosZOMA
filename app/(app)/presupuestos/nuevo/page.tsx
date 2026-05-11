@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
+import { fetchNextNumber } from '@/lib/fetchNextNumber'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -32,7 +33,7 @@ type Product = {
   internal_code: string | null
   name: string
   category: string | null
-  cost_price: number
+  price: number
 }
 
 type BudgetItem = {
@@ -130,7 +131,7 @@ export default function NuevoPresupuestoPage() {
 
       supabase
         .from('products')
-        .select('id, internal_code, name, category, cost_price')
+        .select('id, internal_code, name, category, price')
         .eq('company_id', currentCompanyId)
         .order('name', { ascending: true })
         .range(0, 4999),
@@ -166,7 +167,7 @@ export default function NuevoPresupuestoPage() {
   // Efecto para actualizar el precio del producto seleccionado cuando cambia el descuento
   useEffect(() => {
     if (selectedProduct && cascadingEnabled) {
-      const discounted = calculateCascadingPrice(selectedProduct.cost_price, productDiscount)
+      const discounted = calculateCascadingPrice(selectedProduct.price, productDiscount)
       setProductPrice(discounted.toFixed(2))
     }
   }, [productDiscount, selectedProduct, cascadingEnabled])
@@ -207,7 +208,7 @@ export default function NuevoPresupuestoPage() {
   function selectProduct(product: Product) {
     setSelectedProduct(product)
     setProductQty('1')
-    setProductPrice(String(product.cost_price || 0))
+    setProductPrice(String(product.price || 0))
     setProductDiscount('')
   }
 
@@ -316,19 +317,6 @@ export default function NuevoPresupuestoPage() {
     )
   }
 
-  async function getNextBudgetNumber(currentCompanyId: string) {
-    const { data, error } = await supabase
-      .from('budgets')
-      .select('budget_number')
-      .eq('company_id', currentCompanyId)
-      .order('budget_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (error) throw error
-
-    return (data?.budget_number ?? 1949) + 1
-  }
 
   async function saveBudget() {
     if (!companyId) {
@@ -352,7 +340,7 @@ export default function NuevoPresupuestoPage() {
       const context = await getUserContext()
       if (!context?.companyId) throw new Error('Empresa no encontrada')
 
-      const nextNumber = await getNextBudgetNumber(context.companyId)
+      const nextNumber = await fetchNextNumber('budget')
 
       // 1. Create Budget
       const { data: budget, error: budgetError } = await supabase
@@ -556,7 +544,7 @@ export default function NuevoPresupuestoPage() {
                     </div>
 
                     <p className="shrink-0 font-black text-blue-700">
-                      ${Number(product.cost_price || 0).toLocaleString('es-AR')}
+                      ${Number(product.price || 0).toLocaleString('es-AR')}
                     </p>
                   </button>
                 ))}
@@ -596,7 +584,7 @@ export default function NuevoPresupuestoPage() {
                     icon={DollarSign}
                     label="Precio lista"
                     value={`$${Number(
-                      selectedProduct.cost_price || 0
+                      selectedProduct.price || 0
                     ).toLocaleString('es-AR')}`}
                   />
                 </div>

@@ -1,232 +1,43 @@
-'use client'
-import FilterButton from '@/app/components/FilterButton'
+import { redirect } from 'next/navigation'
+import { createServerComponentClient, getServerUserContext } from '@/lib/supabase/server'
+import PresupuestosClient from './PresupuestosClient'
 
-import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { supabase } from '@/lib/supabase/client'
-import { toast } from 'sonner'
-import {
-  FileText,
-  Plus,
-  Search,
-  RefreshCw,
-  Eye,
-  User,
-  CalendarDays,
-  DollarSign,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Clock3,
-  Filter,
-} from 'lucide-react'
+export default async function PresupuestosPage() {
+  const contexto = await getServerUserContext()
+  if (!contexto) redirect('/auth/login')
 
-type BudgetStatus = 'all' | 'issued' | 'approved' | 'draft' | 'cancelled'
+  const supabase = await createServerComponentClient()
 
-type Budget = {
-  id: string
-  budget_number: number
-  budget_code: string
-  budget_date: string
-  total_amount: number
-  status: string
-  payment_status: 'unpaid' | 'partial' | 'paid'
-  paid_amount: number
-  created_at: string
-  seller_id?: string
-  seller?: { full_name: string } | null
-  client: { name: string; cuit: string } | null
-}
+  // Obtener presupuestos de los últimos 30 días y vendedores en paralelo — en el servidor
+  const limiteFecha = new Date()
+  limiteFecha.setDate(limiteFecha.getDate() - 30)
 
-type SellerProfile = { id: string; full_name: string }
-
-const statusFilters: { label: string; value: BudgetStatus }[] = [
-  { label: 'Todos', value: 'all' },
-  { label: 'Emitidos', value: 'issued' },
-  { label: 'Aprobados', value: 'approved' },
-  { label: 'Cancelados', value: 'cancelled' },
-]
-
-export default function PresupuestosPage() {
-  const [budgets, setBudgets] = useState<Budget[]>([])
-  const [sellers, setSellers] = useState<SellerProfile[]>([])
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<BudgetStatus>('all')
-  const [sellerFilter, setSellerFilter] = useState<string>('all')
-  const [loading, setLoading] = useState(true)
-  const [companyId, setCompanyId] = useState<string | null>(null)
-  const [daysFilter, setDaysFilter] = useState('30')
-
-  useEffect(() => { loadInitialData() }, [daysFilter])
-
-  async function loadInitialData() {
-    setLoading(true)
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) { setLoading(false); return }
-
-    const { data: profile } = await supabase.from('users_profiles').select('company_id').eq('id', userData.user.id).single()
-    if (!profile?.company_id) { setLoading(false); return }
-
-    setCompanyId(profile.company_id)
-
-    const { data: sellersData } = await supabase.from('users_profiles').select('id, full_name').eq('company_id', profile.company_id).order('full_name')
-    setSellers(sellersData || [])
-
-    await loadBudgets(profile.company_id)
-  }
-
-  async function loadBudgets(cid?: string) {
-    const currentCid = cid || companyId
-    if (!currentCid) return
-    setLoading(true)
-
-    let query = supabase
+  const [resPresupuestos, resVendedores] = await Promise.all([
+    supabase
       .from('budgets')
       .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, seller_id, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
-      .eq('company_id', currentCid)
-      .order('budget_number', { ascending: false })
+      .eq('company_id', contexto.idEmpresa)
+      .gte('created_at', limiteFecha.toISOString())
+      .order('budget_number', { ascending: false }),
+    supabase
+      .from('users_profiles')
+      .select('id, full_name')
+      .eq('company_id', contexto.idEmpresa)
+      .order('full_name'),
+  ])
 
-    if (daysFilter !== 'all') {
-      const dateLimit = new Date()
-      dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
-      query = query.gte('created_at', dateLimit.toISOString())
-    }
-
-    const { data, error } = await query
-
-    if (error) toast.error(error.message)
-    else {
-      const normalized = data.map((b: any) => ({
-        ...b,
-        client: Array.isArray(b.clients) ? b.clients[0] || null : b.clients || null,
-        seller: Array.isArray(b.seller) ? b.seller[0] || null : b.seller || null
-      }))
-      setBudgets(normalized)
-    }
-    setLoading(false)
-  }
-
-  const filteredBudgets = useMemo(() => {
-    const q = search.toLowerCase().trim()
-    return budgets.filter((budget: any) => {
-      const matchesSearch = !q || budget.budget_code?.toLowerCase().includes(q) || String(budget.budget_number).includes(q) || budget.client?.name?.toLowerCase().includes(q)
-      const matchesStatus = statusFilter === 'all' || budget.status === statusFilter
-      const matchesSeller = sellerFilter === 'all' || budget.seller_id === sellerFilter
-      return matchesSearch && matchesStatus && matchesSeller
-    })
-  }, [budgets, search, statusFilter, sellerFilter])
-
-  const totalAmount = budgets.filter(b => b.status !== 'cancelled').reduce((acc, b) => acc + Number(b.total_amount || 0), 0)
+  // Normalizar datos de relaciones
+  const presupuestos = (resPresupuestos.data || []).map((p: any) => ({
+    ...p,
+    client: Array.isArray(p.clients) ? p.clients[0] || null : p.clients || null,
+    seller: Array.isArray(p.seller) ? p.seller[0] || null : p.seller || null,
+  }))
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl">
-        <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-200"><FileText size={14} /> Presupuestos</div>
-            <h1 className="text-3xl font-black tracking-tight">Ventas y Presupuestos</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Control total de las cotizaciones emitidas por toda la fuerza de ventas.</p>
-          </div>
-          <Link href="/presupuestos/nuevo" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-blue-500 active:scale-95"><Plus size={18} /> Nuevo presupuesto</Link>
-        </div>
-      </section>
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat title="Total" value={budgets.length} icon={FileText} loading={loading} />
-        <Stat title="Emitidos" value={budgets.filter(b => b.status === 'issued').length} icon={Clock3} loading={loading} />
-        <Stat title="Aprobados" value={budgets.filter(b => b.status === 'approved').length} icon={CheckCircle2} loading={loading} />
-        <Stat title="Monto Vigente" value={`$${totalAmount.toLocaleString('es-AR')}`} icon={DollarSign} loading={loading} />
-      </section>
-
-      <section className="rounded-[1.5rem] border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="space-y-4 border-b border-slate-200 p-5 bg-slate-50/30">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div><h2 className="text-xl font-black text-slate-950">Listado General</h2><p className="text-sm text-slate-500">Filtrá por número, cliente o vendedor.</p></div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="relative"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4 text-sm font-semibold outline-none focus:border-blue-500 sm:w-64" /></div>
-              <select value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500">
-                <option value="all">Todos los vendedores</option>
-                {sellers.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-              </select>
-              <button onClick={() => loadBudgets()} className="p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition"><RefreshCw size={17} className={loading ? 'animate-spin' : ''} /></button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {statusFilters.map(f => <button key={f.value} onClick={() => setStatusFilter(f.value)} className={`px-4 py-2 rounded-full text-xs font-black transition ${statusFilter === f.value ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{f.label}</button>)}
-            
-            <div className="h-6 w-px bg-slate-200 mx-2" />
-            
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-               <FilterButton active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
-               <FilterButton active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
-               <FilterButton active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
-               <FilterButton active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
-            </div>
-          </div>
-        </div>
-
-        {loading ? <LoadingState /> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
-                <tr>
-                  <th className="px-6 py-4">Presupuesto</th>
-                  <th className="px-6 py-4">Cliente</th>
-                  <th className="px-6 py-4">Vendedor</th>
-                  <th className="px-6 py-4 text-right">Total</th>
-                  <th className="px-6 py-4">Estado</th>
-                  <th className="px-6 py-4 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredBudgets.map(b => (
-                  <tr key={b.id} className="hover:bg-blue-50/30 transition">
-                    <td className="px-6 py-4"><p className="font-black text-slate-900">{b.budget_code || `000-${b.budget_number}`}</p><p className="text-[10px] font-bold text-slate-400">{new Date(b.budget_date).toLocaleDateString()}</p></td>
-                    <td className="px-6 py-4 text-sm font-bold text-slate-700">{b.client?.name}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                          <User size={14} />
-                        </div>
-                        <span className="text-xs font-bold text-slate-600 truncate max-w-[120px]">
-                          {b.seller?.full_name || 'Sistema'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right font-black text-blue-700">${b.total_amount.toLocaleString('es-AR')}</td>
-                    <td className="px-6 py-4"><StatusBadge status={b.status} /></td>
-                    <td className="px-6 py-4 text-right"><Link href={`/presupuestos/${b.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
+    <PresupuestosClient
+      presupuestosIniciales={presupuestos}
+      vendedoresIniciales={resVendedores.data || []}
+      idEmpresa={contexto.idEmpresa}
+    />
   )
-}
-
-function Stat({ title, value, icon: Icon, loading }: any) {
-  return (
-    <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-      <div className="h-11 w-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><Icon size={22} /></div>
-      <div className="min-w-0"><p className="text-xs font-bold text-slate-400 truncate">{title}</p><h2 className="text-xl font-black text-slate-950 truncate">{loading ? '...' : value}</h2></div>
-    </div>
-  )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const configs: any = {
-    cancelled: { label: 'Cancelado', icon: XCircle, className: 'bg-red-50 text-red-600' },
-    approved: { label: 'Aprobado', icon: CheckCircle2, className: 'bg-blue-50 text-blue-600' },
-    issued: { label: 'Emitido', icon: Clock3, className: 'bg-emerald-50 text-emerald-600' },
-  }
-  const config = configs[status] || configs.issued
-  return <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ${config.className}`}><config.icon size={12} /> {config.label}</span>
-}
-
-function LoadingState() {
-  return <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600 mb-4" size={32} /><p className="font-black text-slate-900">Cargando presupuestos...</p></div>
 }
