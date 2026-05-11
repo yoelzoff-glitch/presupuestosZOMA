@@ -14,22 +14,26 @@ export default function UpdatePassword() {
   const [successMsg, setSuccessMsg] = useState('')
 
   useEffect(() => {
-    // Verificar si venimos de un link de recuperación
-    const checkSession = async () => {
-      // Damos un pequeño respiro para que el cliente de Supabase procese el hash de la URL
-      const { data: { session }, error } = await supabase.auth.getSession()
+    // Escuchador de estado de autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('Evento de recuperación detectado')
+      }
       
-      if (error || !session) {
-        // Si después de un momento no hay sesión, mostramos el error
+      if (session) {
+        setErrorMsg('') // Limpiamos errores si hay sesión
+      } else {
+        // Si después de 2 segundos no hay sesión, asumimos link inválido
         setTimeout(async () => {
           const { data: { session: retrySession } } = await supabase.auth.getSession()
           if (!retrySession) {
-            setErrorMsg('El enlace de recuperación no es válido o ha expirado. Por favor, solicitá uno nuevo.')
+            setErrorMsg('El enlace de recuperación no es válido o ha expirado.')
           }
-        }, 500)
+        }, 2000)
       }
-    }
-    checkSession()
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   async function handleUpdate(e: React.FormEvent) {
