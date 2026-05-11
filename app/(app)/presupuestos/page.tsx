@@ -33,6 +33,7 @@ type Budget = {
   paid_amount: number
   created_at: string
   seller_id?: string
+  seller?: { full_name: string } | null
   client: { name: string; cuit: string } | null
 }
 
@@ -79,13 +80,17 @@ export default function PresupuestosPage() {
 
     const { data, error } = await supabase
       .from('budgets')
-      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, seller_id, clients ( name, cuit )`)
+      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, seller_id, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
       .eq('company_id', currentCid)
       .order('budget_number', { ascending: false })
 
     if (error) toast.error(error.message)
     else {
-      const normalized = data.map((b: any) => ({ ...b, client: Array.isArray(b.clients) ? b.clients[0] || null : b.clients || null }))
+      const normalized = data.map((b: any) => ({
+        ...b,
+        client: Array.isArray(b.clients) ? b.clients[0] || null : b.clients || null,
+        seller: Array.isArray(b.seller) ? b.seller[0] || null : b.seller || null
+      }))
       setBudgets(normalized)
     }
     setLoading(false)
@@ -146,13 +151,30 @@ export default function PresupuestosPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
-                <tr><th className="px-6 py-4">Presupuesto</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4 text-right">Total</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Acción</th></tr>
+                <tr>
+                  <th className="px-6 py-4">Presupuesto</th>
+                  <th className="px-6 py-4">Cliente</th>
+                  <th className="px-6 py-4">Vendedor</th>
+                  <th className="px-6 py-4 text-right">Total</th>
+                  <th className="px-6 py-4">Estado</th>
+                  <th className="px-6 py-4 text-right">Acción</th>
+                </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredBudgets.map(b => (
                   <tr key={b.id} className="hover:bg-blue-50/30 transition">
                     <td className="px-6 py-4"><p className="font-black text-slate-900">{b.budget_code || `000-${b.budget_number}`}</p><p className="text-[10px] font-bold text-slate-400">{new Date(b.budget_date).toLocaleDateString()}</p></td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-700">{b.client?.name}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                          <User size={14} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-600 truncate max-w-[120px]">
+                          {b.seller?.full_name || 'Sistema'}
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-right font-black text-blue-700">${b.total_amount.toLocaleString('es-AR')}</td>
                     <td className="px-6 py-4"><StatusBadge status={b.status} /></td>
                     <td className="px-6 py-4 text-right"><Link href={`/presupuestos/${b.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link></td>
