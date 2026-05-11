@@ -72,13 +72,18 @@ export default function SuperAdminPage() {
     setMsg({ text: '', type: '' })
     
     try {
-      await createNewCompany(newCompanyName, newAdminEmail)
-      setMsg({ text: '¡Empresa creada con éxito! Se envió el acceso al cliente.', type: 'success' })
-      setNewCompanyName('')
-      setNewAdminEmail('')
-      loadCompanies()
+      const result = await createNewCompany(newCompanyName, newAdminEmail)
+      
+      if (result?.error) {
+        setMsg({ text: result.error, type: 'error' })
+      } else {
+        setMsg({ text: '¡Empresa creada con éxito! Se envió el acceso al cliente.', type: 'success' })
+        setNewCompanyName('')
+        setNewAdminEmail('')
+        loadCompanies()
+      }
     } catch (err: any) {
-      setMsg({ text: err.message || 'Error al crear empresa', type: 'error' })
+      setMsg({ text: 'Error de comunicación con el servidor.', type: 'error' })
     } finally {
       setCreating(false)
     }
