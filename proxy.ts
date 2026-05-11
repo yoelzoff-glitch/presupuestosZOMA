@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request,
   })
@@ -46,6 +46,10 @@ export async function middleware(request: NextRequest) {
   const isAuthPage = pathname.startsWith('/auth')
   const isApiPage = pathname.startsWith('/api')
   const isPortalPage = pathname.startsWith('/portal')
+  const isVendedorPage = pathname.startsWith('/vendedor')
+
+  // Admin-only routes: everything under (app) group that isn't portal or vendedor
+  const isAdminRoute = !isAuthPage && !isApiPage && !isPortalPage && !isVendedorPage
 
   if (isApiPage) return response
 
@@ -68,16 +72,25 @@ export async function middleware(request: NextRequest) {
 
     if (isAuthPage) {
       const url = request.nextUrl.clone()
-      url.pathname = profile?.role === 'customer' ? '/portal' : '/'
+      url.pathname = profile?.role === 'customer' ? '/portal' : profile?.role === 'vendedor' ? '/vendedor' : '/'
       return NextResponse.redirect(url)
     }
 
+    // Customer can only access /portal
     if (profile?.role === 'customer' && !isPortalPage) {
       const url = request.nextUrl.clone()
       url.pathname = '/portal'
       return NextResponse.redirect(url)
     }
 
+    // Vendedor can only access /vendedor (not admin routes)
+    if (profile?.role === 'vendedor' && isAdminRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/vendedor'
+      return NextResponse.redirect(url)
+    }
+
+    // Admin/non-customer shouldn't access portal
     if (profile?.role !== 'customer' && isPortalPage) {
       const url = request.nextUrl.clone()
       url.pathname = '/'

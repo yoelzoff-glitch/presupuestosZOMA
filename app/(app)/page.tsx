@@ -15,6 +15,7 @@ import {
   ShoppingCart,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
+import type { DashboardStats } from '@/types/database'
 import {
   BarChart,
   Bar,
@@ -29,18 +30,6 @@ import {
 } from 'recharts'
 import FilterButton from '@/app/components/FilterButton'
 
-type DashboardStats = {
-  clients: number
-  products: number
-  budgets: number
-  balance: number
-  totalBudgeted: number
-  totalConverted: number
-  conversionRate: number
-  salesHistory: { month: string; total: number }[]
-  topProducts: { name: string; quantity: number }[]
-  paymentStatus: { name: string; value: number; color: string }[]
-}
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
@@ -126,7 +115,7 @@ export default function DashboardPage() {
       itemsQuery,
     ])
 
-    const totalBalance = balanceRes.data?.reduce((acc, item: any) => acc + (Number(item.debit || 0) - Number(item.credit || 0)), 0) ?? 0
+    const totalBalance = balanceRes.data?.reduce((acc: number, item: { debit: number; credit: number }) => acc + (Number(item.debit || 0) - Number(item.credit || 0)), 0) ?? 0
     const totalBudgeted = historyRes.data?.reduce((acc, b) => acc + Number(b.total_amount || 0), 0) ?? 0
     const totalConverted = historyRes.data?.filter(b => b.status === 'approved').reduce((acc, b) => acc + Number(b.total_amount || 0), 0) ?? 0
     const conversionRate = totalBudgeted > 0 ? (totalConverted / totalBudgeted) * 100 : 0
@@ -278,8 +267,8 @@ export default function DashboardPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><BarChart3 size={20} /></div>
             <div><h3 className="text-lg font-black text-slate-950">Ventas históricas</h3><p className="text-sm font-medium text-slate-500">Volumen facturado global</p></div>
           </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 w-full" style={{ minHeight: '288px' }}>
+            <ResponsiveContainer width="100%" height={288}>
               <BarChart data={stats.salesHistory}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} />
@@ -299,8 +288,8 @@ export default function DashboardPage() {
             </div>
             <div className="flex h-44 items-center justify-center">
               <div className="flex w-full items-center">
-                <div className="h-full w-1/2">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="w-1/2" style={{ minHeight: '160px' }}>
+                  <ResponsiveContainer width="100%" height={160}>
                     <PieChart>
                       <Pie data={stats.paymentStatus} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={5} dataKey="value">
                         {stats.paymentStatus.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Loader2, Lock, Mail, ChevronRight } from 'lucide-react'
 
@@ -81,10 +81,11 @@ export default function Login() {
         {/* Left Side: Visual/Branding */}
         <section className="relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
           <div className="absolute inset-0 z-0 opacity-40">
-            <img
-              src="/auth_bg_abstract_1778228532764.png"
-              alt="Background"
-              className="h-full w-full object-cover"
+            <div
+              className="h-full w-full"
+              style={{
+                background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 40%, #1e1b4b 70%, #0f172a 100%)',
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-[#020617]/40" />
           </div>

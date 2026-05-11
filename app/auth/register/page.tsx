@@ -56,7 +56,6 @@ export default function Register() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            user_id: userId,
             company_name: companyName.trim(),
             email: email.trim(),
           }),
@@ -220,10 +219,11 @@ export default function Register() {
         {/* Right Side: Visual/Branding */}
         <section className="relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
           <div className="absolute inset-0 z-0 opacity-40">
-            <img
-              src="/register_bg_abstract_1778228604959.png"
-              alt="Background"
-              className="h-full w-full object-cover"
+            <div
+              className="h-full w-full"
+              style={{
+                background: 'linear-gradient(135deg, #064e3b 0%, #0f172a 40%, #1e1b4b 70%, #0f172a 100%)',
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-[#020617]/40" />
           </div>

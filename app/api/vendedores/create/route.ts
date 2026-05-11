@@ -40,6 +40,21 @@ export async function POST(req: NextRequest) {
       }, { status: 403 })
     }
 
+    // Validate PRO plan server-side — BASE plan cannot create vendedores
+    const { data: company } = await supabase
+      .from('companies')
+      .select('plan_type')
+      .eq('id', profile.company_id)
+      .single()
+
+    const planType = company?.plan_type || 'base'
+    if (planType !== 'pro' && planType !== 'pro_plus') {
+      return NextResponse.json({ 
+        error: 'Función no disponible', 
+        detail: 'La creación de vendedores requiere un plan PRO o superior. Actualizá tu plan desde Configuración.' 
+      }, { status: 403 })
+    }
+
     const body = await req.json()
     const { email, password, full_name } = body
 
