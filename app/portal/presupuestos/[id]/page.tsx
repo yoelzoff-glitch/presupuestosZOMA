@@ -115,7 +115,8 @@ export default function PortalPresupuestoDetallePage() {
       .single()
 
     if (budgetError || !budgetData) {
-      setErrorMsg('Presupuesto no encontrado.')
+      console.error('❌ Error cargando presupuesto:', budgetError);
+      setErrorMsg(`Presupuesto no encontrado. ID buscado: ${budgetId}. ${budgetError ? 'Error: ' + budgetError.message : ''}`);
       setLoading(false)
       return
     }
