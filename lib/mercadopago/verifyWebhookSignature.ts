@@ -52,27 +52,39 @@ export function verifyMercadoPagoWebhookSignature(req: NextRequest) {
     url.searchParams.get('id') ||
     ''
 
-  let manifest = ''
+  // Intento 1: Formato estándar (con request-id si existe)
+  let manifest1 = `id:${dataId};`
+  if (xRequestId) manifest1 += `request-id:${xRequestId};`
+  manifest1 += `ts:${ts};`
 
-  if (dataId) {
-    manifest += `id:${dataId};`
-  }
-
-  if (xRequestId) {
-    manifest += `request-id:${xRequestId};`
-  }
-
-  manifest += `ts:${ts};`
-
-  const generatedHash = crypto
+  const generatedHash1 = crypto
     .createHmac('sha256', secret)
-    .update(manifest)
+    .update(manifest1)
     .digest('hex')
 
+  if (safeCompare(generatedHash1, receivedHash)) {
+    console.log('✅ Firma válida (Formato estándar)');
+    return true
+  }
+
+  // Intento 2: Formato sin request-id (algunas implementaciones de MP lo omiten)
+  const manifest2 = `id:${dataId};ts:${ts};`
+  const generatedHash2 = crypto
+    .createHmac('sha256', secret)
+    .update(manifest2)
+    .digest('hex')
+
+  if (safeCompare(generatedHash2, receivedHash)) {
+    console.log('✅ Firma válida (Formato sin request-id)');
+    return true
+  }
+
   console.log('🔍 Debug Signature - Secret (last 4):', secret.slice(-4));
-  console.log('🔍 Debug Signature - Manifest:', manifest);
-  console.log('🔍 Debug Signature - Generated Hash:', generatedHash);
-  console.log('🔍 Debug Signature - Received Hash:', receivedHash);
+  console.log('🔍 Debug Signature - Manifest 1:', manifest1);
+  console.log('🔍 Debug Signature - Generated 1:', generatedHash1);
+  console.log('🔍 Debug Signature - Manifest 2:', manifest2);
+  console.log('🔍 Debug Signature - Generated 2:', generatedHash2);
+  console.log('🔍 Debug Signature - Received:', receivedHash);
 
   const timestamp = Number(ts)
   const timestampMs =
@@ -89,5 +101,5 @@ export function verifyMercadoPagoWebhookSignature(req: NextRequest) {
     return false
   }
 
-  return safeCompare(generatedHash, receivedHash)
+  return false
 }
