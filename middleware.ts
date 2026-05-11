@@ -67,13 +67,18 @@ export async function middleware(request: NextRequest) {
 
   // 2. Si hay usuario, validar permisos según rol
   if (usuario) {
-    const { data: perfil } = await supabase
-      .from('users_profiles')
-      .select('role')
-      .eq('id', usuario.id)
-      .single()
+    // Intentar obtener el rol de la metadata (mucho más rápido)
+    let rol = usuario.app_metadata?.role
 
-    const rol = perfil?.role
+    // Si no está en metadata, fallback a la base de datos (solo una vez)
+    if (!rol) {
+      const { data: perfil } = await supabase
+        .from('users_profiles')
+        .select('role')
+        .eq('id', usuario.id)
+        .single()
+      rol = perfil?.role
+    }
 
     // Redirigir si intenta entrar a /auth estando logueado
     if (esPaginaAuth) {

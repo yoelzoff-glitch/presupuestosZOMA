@@ -49,20 +49,24 @@ export async function getServerUserContext() {
 
   if (authError || !user) return null
 
+  // Intentamos obtener datos básicos de la metadata para mayor velocidad
+  const metaRole = user.app_metadata?.role
+  const metaCompanyId = user.app_metadata?.company_id
+
   const { data: profile } = await supabase
     .from('users_profiles')
     .select('company_id, role, full_name, company:companies(plan_type, name)')
     .eq('id', user.id)
     .single()
 
-  if (!profile?.company_id) return null
+  if (!profile?.company_id && !metaCompanyId) return null
 
   return {
     idUsuario: user.id,
-    idEmpresa: profile.company_id,
-    rol: profile.role as string,
-    nombreCompleto: profile.full_name as string,
-    tipoPlan: ((profile.company as any)?.plan_type || 'base') as string,
-    nombreEmpresa: ((profile.company as any)?.name || '') as string,
+    idEmpresa: profile?.company_id || metaCompanyId,
+    rol: (profile?.role || metaRole) as string,
+    nombreCompleto: (profile?.full_name || user.user_metadata?.full_name || 'Usuario') as string,
+    tipoPlan: ((profile?.company as any)?.plan_type || 'base') as string,
+    nombreEmpresa: ((profile?.company as any)?.name || '') as string,
   }
 }
