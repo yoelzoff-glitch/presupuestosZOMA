@@ -1,72 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server'
+import { createServerClient } from '@supabase/ssr'
+import { createSupabaseAdminClient } from '@/lib/supabase/server'
 
 /**
- * Generates the next sequential number for budgets or orders in a thread-safe manner.
- * Uses SELECT ... FOR UPDATE (via advisory lock) to prevent race conditions.
+ * Genera el siguiente número secuencial para presupuestos o pedidos de forma segura.
+ * Utiliza SELECT ... FOR UPDATE (o el ordenamiento por número) para prevenir condiciones de carrera.
  * 
  * POST /api/next-number
- * Body: { type: 'budget' | 'order' }
+ * Cuerpo: { tipo: 'budget' | 'order' }
  */
 export async function POST(req: NextRequest) {
   try {
-    // 1. Authenticate
-    const supabase = createSupabaseServerClient(req)
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    // 1. Autenticar
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll() { return req.cookies.getAll() } } }
+    )
+    const { data: { user }, error: errorAuth } = await supabase.auth.getUser()
+    if (errorAuth || !user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // 2. Get user's company
-    const { data: profile } = await supabase
+    // 2. Obtener empresa del usuario
+    const { data: perfil } = await supabase
       .from('users_profiles')
       .select('company_id')
       .eq('id', user.id)
       .single()
 
-    if (!profile?.company_id) {
+    if (!perfil?.company_id) {
       return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
     }
 
-    const body = await req.json()
-    const { type } = body
+    const cuerpo = await req.json()
+    const { tipo } = cuerpo
 
-    if (type !== 'budget' && type !== 'order') {
+    if (tipo !== 'budget' && tipo !== 'order') {
       return NextResponse.json({ error: 'Tipo inválido. Usar "budget" o "order".' }, { status: 400 })
     }
 
     const supabaseAdmin = createSupabaseAdminClient()
 
-    // 3. Atomic number generation using a single query with subselect
-    // This approach uses Supabase's built-in locking to prevent duplicates
-    const table = type === 'budget' ? 'budgets' : 'orders'
-    const column = type === 'budget' ? 'budget_number' : 'order_number'
+    // 3. Generación atómica del número
+    const tabla = tipo === 'budget' ? 'budgets' : 'orders'
+    const columna = tipo === 'budget' ? 'budget_number' : 'order_number'
 
-    // Use RPC or direct query to get next number atomically
-    // We use the admin client to ensure we get an accurate count across all rows
     const { data, error } = await supabaseAdmin
-      .from(table)
-      .select(column)
-      .eq('company_id', profile.company_id)
-      .order(column, { ascending: false })
+      .from(tabla)
+      .select(columna)
+      .eq('company_id', perfil.company_id)
+      .order(columna, { ascending: false })
       .limit(1)
       .maybeSingle()
 
     if (error) {
-      console.error('Error fetching next number:', error)
+      console.error('Error al obtener el siguiente número:', error)
       return NextResponse.json({ error: 'Error generando número' }, { status: 500 })
     }
 
-    const defaultStart = type === 'budget' ? 1950 : 1
-    const nextNumber = (data?.[column] ?? defaultStart - 1) + 1
+    const inicioPorDefecto = tipo === 'budget' ? 1950 : 1
+    const siguienteNumero = (data?.[columna] ?? inicioPorDefecto - 1) + 1
 
     return NextResponse.json({ 
       ok: true, 
-      next_number: nextNumber,
-      company_id: profile.company_id 
+      proximo_numero: siguienteNumero,
+      id_empresa: perfil.company_id 
     })
   } catch (error) {
-    console.error('next-number error:', error)
+    console.error('Error en next-number:', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }

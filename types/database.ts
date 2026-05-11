@@ -1,11 +1,11 @@
 /**
- * Shared TypeScript types for the ZOMA ERP application.
+ * Tipos de TypeScript compartidos para la aplicación ZOMA ERP.
  * 
- * TODO: Generate these automatically with `npx supabase gen types typescript`
- * once supabase/schema.sql is populated.
+ * TODO: Generar estos automáticamente con `npx supabase gen types typescript`
+ * una vez que supabase/schema.sql esté poblado en el proyecto remoto.
  */
 
-// ─── Auth & Profiles ────────────────────────────────────────────────────────
+// ─── Autenticación y Perfiles ───────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'vendedor' | 'customer'
 
@@ -16,6 +16,7 @@ export type UserProfile = {
   company_id: string
   full_name: string
   role: UserRole
+  accepted_terms_version?: number
   company?: Company
 }
 
@@ -29,7 +30,7 @@ export type Company = {
   logo_url?: string | null
 }
 
-// ─── Products ───────────────────────────────────────────────────────────────
+// ─── Productos ──────────────────────────────────────────────────────────────
 
 export type Product = {
   id: string
@@ -38,12 +39,12 @@ export type Product = {
   name: string
   category: string | null
   supplier: string | null
-  cost_price: number
+  price: number
   active: boolean
   last_price_update?: string | null
 }
 
-// ─── Clients ────────────────────────────────────────────────────────────────
+// ─── Clientes ───────────────────────────────────────────────────────────────
 
 export type Client = {
   id: string
@@ -55,7 +56,7 @@ export type Client = {
   address: string | null
 }
 
-// ─── Budgets ────────────────────────────────────────────────────────────────
+// ─── Presupuestos ──────────────────────────────────────────────────────────
 
 export type BudgetStatus = 'draft' | 'issued' | 'approved' | 'cancelled'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
@@ -86,7 +87,7 @@ export type BudgetItem = {
   discount_str: string | null
 }
 
-// ─── Orders ─────────────────────────────────────────────────────────────────
+// ─── Pedidos ────────────────────────────────────────────────────────────────
 
 export type OrderStatus = 'pending' | 'confirmed' | 'converted' | 'cancelled'
 export type OrderSource = 'manual' | 'budget' | 'portal'
@@ -117,7 +118,7 @@ export type OrderItem = {
   unit_price: number
 }
 
-// ─── Account Movements ──────────────────────────────────────────────────────
+// ─── Movimientos de Cuenta (Cuenta Corriente) ────────────────────────────────
 
 export type AccountMovement = {
   id: string
@@ -132,7 +133,7 @@ export type AccountMovement = {
   client?: Client
 }
 
-// ─── Notifications ──────────────────────────────────────────────────────────
+// ─── Notificaciones ─────────────────────────────────────────────────────────
 
 export type Notification = {
   id: string
@@ -146,7 +147,7 @@ export type Notification = {
   created_at: string
 }
 
-// ─── Portal / Customer ──────────────────────────────────────────────────────
+// ─── Portal / Cliente ───────────────────────────────────────────────────────
 
 export type CustomerUser = {
   id: string
@@ -156,7 +157,7 @@ export type CustomerUser = {
   client?: Client
 }
 
-// ─── Dashboard ──────────────────────────────────────────────────────────────
+// ─── Estadísticas de Dashboard ──────────────────────────────────────────────
 
 export type DashboardStats = {
   clients: number

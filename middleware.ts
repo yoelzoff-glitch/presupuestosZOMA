@@ -1,9 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { CURRENT_TERMS_VERSION } from './lib/constants'
 
+/**
+ * Middleware central de autenticación y autorización.
+ * Protege las rutas según el rol del usuario (admin, vendedor, cliente).
+ */
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
+  let respuesta = NextResponse.next({
     request,
   })
 
@@ -16,22 +19,22 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(
-          cookiesToSet: {
+          cookiesParaEstablecer: {
             name: string
             value: string
             options: CookieOptions
           }[]
         ) {
-          cookiesToSet.forEach(({ name, value, options }) => {
+          cookiesParaEstablecer.forEach(({ name, value }) => {
             request.cookies.set(name, value)
           })
 
-          response = NextResponse.next({
+          respuesta = NextResponse.next({
             request,
           })
 
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options)
+          cookiesParaEstablecer.forEach(({ name, value, options }) => {
+            respuesta.cookies.set(name, value, options)
           })
         },
       },
@@ -39,74 +42,69 @@ export async function middleware(request: NextRequest) {
   )
 
   const {
-    data: { user },
+    data: { user: usuario },
   } = await supabase.auth.getUser()
 
-  const pathname = request.nextUrl.pathname
+  const rutaActual = request.nextUrl.pathname
 
-  const isAuthPage = pathname.startsWith('/auth')
-  const isApiPage = pathname.startsWith('/api')
-  const isPortalPage = pathname.startsWith('/portal')
-  const isVendedorPage = pathname.startsWith('/vendedor')
-  const isTermsPage = pathname === '/auth/terminos'
+  const esPaginaAuth = rutaActual.startsWith('/auth')
+  const esPaginaApi = rutaActual.startsWith('/api')
+  const esPaginaPortal = rutaActual.startsWith('/portal')
+  const esPaginaVendedor = rutaActual.startsWith('/vendedor')
 
-  if (isApiPage) return response
+  // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal o vendedor
+  const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor
 
-  if (!user && !isAuthPage) {
+  // Permitir API routes sin middleware (manejan su propia seguridad)
+  if (esPaginaApi) return respuesta
+
+  // 1. Redirigir a login si no hay usuario y no es página de auth
+  if (!usuario && !esPaginaAuth) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
   }
 
-  if (!user && isAuthPage) {
-    return response
-  }
+  // 2. Si hay usuario, validar permisos según rol
+  if (usuario) {
+    const { data: perfil } = await supabase
+      .from('users_profiles')
+      .select('role')
+      .eq('id', usuario.id)
+      .single()
 
-  if (user) {
-    const role = user.app_metadata?.role as string | undefined
-    const acceptedVersion = (user.app_metadata?.accepted_terms_version as number) ?? 0
+    const rol = perfil?.role
 
-    // Si los términos no han sido aceptados para la versión vigente, forzar la vista legal
-    if (acceptedVersion < CURRENT_TERMS_VERSION) {
-      if (!isTermsPage) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/auth/terminos'
-        return NextResponse.redirect(url)
-      }
-      return response
-    }
-
-    // Redirección inicial basada en rol
-    if (isAuthPage) {
+    // Redirigir si intenta entrar a /auth estando logueado
+    if (esPaginaAuth) {
       const url = request.nextUrl.clone()
-      if (role === 'customer') url.pathname = '/portal'
-      else if (role === 'vendedor') url.pathname = '/vendedor'
-      else url.pathname = '/'
+      url.pathname = rol === 'customer' ? '/portal' : rol === 'vendedor' ? '/vendedor' : '/'
       return NextResponse.redirect(url)
     }
 
-    // Control de acceso por rol
-    if (role === 'customer' && !isPortalPage) {
+    // El Cliente (customer) solo puede entrar a /portal
+    if (rol === 'customer' && !esPaginaPortal) {
       const url = request.nextUrl.clone()
       url.pathname = '/portal'
       return NextResponse.redirect(url)
     }
 
-    const isAdminRoute = !isAuthPage && !isApiPage && !isPortalPage && !isVendedorPage
-    if (role === 'vendedor' && isAdminRoute) {
+    // El Vendedor solo puede entrar a /vendedor (no rutas de admin)
+    if (rol === 'vendedor' && esRutaAdmin) {
       const url = request.nextUrl.clone()
       url.pathname = '/vendedor'
       return NextResponse.redirect(url)
     }
 
-    if (role !== 'customer' && isPortalPage) {
+    // Admin/Vendedor no deben entrar al portal de clientes
+    if (rol !== 'customer' && esPaginaPortal) {
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)
     }
   }
 
-  return response
+  return respuesta
 }
 
 export const config = {

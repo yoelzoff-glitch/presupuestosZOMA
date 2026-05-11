@@ -20,7 +20,7 @@ type Product = {
   company_id: string
   name: string
   supplier: string | null
-  cost_price: number
+  price: number
   last_price_update: string | null
 }
 
@@ -97,7 +97,7 @@ export default function AumentoPrecios() {
 
   const preview = selectedProducts.map((p) => ({
     ...p,
-    newPrice: Number(p.cost_price || 0) * multiplier,
+    newPrice: Number(p.price || 0) * multiplier,
   }))
 
   async function applyIncrease() {
@@ -136,12 +136,12 @@ export default function AumentoPrecios() {
     setSaving(true)
 
     for (const p of selectedProducts) {
-      const newPrice = Number(p.cost_price || 0) * (1 + value / 100)
+      const newPrice = Number(p.price || 0) * (1 + value / 100)
 
       const { error } = await supabase
         .from('products')
         .update({
-          cost_price: newPrice,
+          price: newPrice,
           last_price_update: new Date().toISOString(),
         })
         .eq('id', p.id)
@@ -159,7 +159,7 @@ export default function AumentoPrecios() {
         supplier: p.supplier,
         update_type: mode === 'proveedor' ? 'Proveedor' : 'Producto',
         percentage: value,
-        old_price: p.cost_price,
+        old_price: p.price,
         new_price: newPrice,
       })
     }
@@ -381,7 +381,7 @@ export default function AumentoPrecios() {
                       </td>
 
                       <td className="px-5 py-4 text-sm font-bold text-slate-600">
-                        ${Number(p.cost_price || 0).toLocaleString('es-AR')}
+                        ${Number(p.price || 0).toLocaleString('es-AR')}
                       </td>
 
                       <td className="px-5 py-4 text-sm font-black text-blue-700">

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
+import { fetchNextNumber } from '@/lib/fetchNextNumber'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -108,8 +109,7 @@ export default function VendedorPresupuestoDetalle() {
     if (!budget || !role || associatedOrderId) return
     setConvertingToOrder(true)
     try {
-      const { data: lastOrder } = await supabase.from('orders').select('order_number').eq('company_id', budget.company_id).order('order_number', { ascending: false }).limit(1).maybeSingle()
-      const nextNumber = (lastOrder?.order_number ?? 0) + 1
+      const nextNumber = await fetchNextNumber('order')
 
       const { data: orderData, error: oError } = await supabase.from('orders').insert({
         company_id: budget.company_id,

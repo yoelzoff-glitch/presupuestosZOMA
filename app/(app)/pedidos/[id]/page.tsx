@@ -64,7 +64,7 @@ type Product = {
   internal_code: string | null
   name: string
   category: string | null
-  cost_price: number | null
+  price: number | null
 }
 
 type BudgetItemPreview = {
@@ -351,7 +351,7 @@ export default function PedidoDetallePage(): any {
     if (productIds.length > 0) {
       const { data, error } = await supabase
         .from('products')
-        .select('id, internal_code, name, category, cost_price')
+        .select('id, internal_code, name, category, price')
         .eq('company_id', currentCompanyId)
         .in('id', productIds)
 
@@ -382,7 +382,7 @@ export default function PedidoDetallePage(): any {
             initialPrices[item.id] = String(item.unit_price)
           } else {
             const product = productsData.find((p) => p.id === item.product_id)
-            initialPrices[item.id] = String(product?.cost_price || 0)
+            initialPrices[item.id] = String(product?.price || 0)
           }
         }
       })
@@ -393,7 +393,7 @@ export default function PedidoDetallePage(): any {
           initialPrices[item.id] = String(item.unit_price)
         } else {
           const product = productsData.find((p) => p.id === item.product_id)
-          const price = Number(product?.cost_price || 0)
+          const price = Number(product?.price || 0)
           initialPrices[item.id] = String(price)
         }
       })

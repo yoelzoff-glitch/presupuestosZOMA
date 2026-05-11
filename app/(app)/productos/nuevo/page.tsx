@@ -23,7 +23,7 @@ export default function NuevoProductoPage() {
     name: '',
     supplier: '',
     category: '',
-    cost_price: '',
+    price: '',
   })
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -55,7 +55,7 @@ export default function NuevoProductoPage() {
       return
     }
 
-    if (!form.cost_price.trim() || Number(form.cost_price) < 0) {
+    if (!form.price.trim() || Number(form.price) < 0) {
       toast.error('Ingresá un precio válido.')
       return
     }
@@ -76,7 +76,7 @@ export default function NuevoProductoPage() {
       name: form.name.trim(),
       supplier: form.supplier.trim() || null,
       category: form.category.trim() || null,
-      cost_price: Number(form.cost_price),
+      price: Number(form.price),
       last_price_update: new Date().toISOString(),
     })
 
@@ -94,7 +94,7 @@ export default function NuevoProductoPage() {
       name: '',
       supplier: '',
       category: '',
-      cost_price: '',
+      price: '',
     })
   }
 
@@ -183,8 +183,8 @@ export default function NuevoProductoPage() {
             <Field
               icon={DollarSign}
               label="Precio costo"
-              name="cost_price"
-              value={form.cost_price}
+              name="price"
+              value={form.price}
               onChange={handleChange}
               placeholder="Ej: 2500"
               type="number"
@@ -238,7 +238,7 @@ export default function NuevoProductoPage() {
                 Precio costo
               </p>
               <p className="mt-1 text-2xl font-black text-blue-700">
-                ${Number(form.cost_price || 0).toLocaleString('es-AR')}
+                ${Number(form.price || 0).toLocaleString('es-AR')}
               </p>
             </div>
           </div>
