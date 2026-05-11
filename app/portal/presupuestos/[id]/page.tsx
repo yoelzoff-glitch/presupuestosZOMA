@@ -112,7 +112,6 @@ export default function PortalPresupuestoDetallePage() {
         )
       `)
       .eq('id', budgetId)
-      .eq('client_id', customerData.client_id)
       .single()
 
     if (budgetError || !budgetData) {
