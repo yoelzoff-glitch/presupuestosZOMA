@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServerComponentClient } from '@/lib/supabase/server'
 import DashboardClient from './DashboardClient'
 
 export default async function DashboardPage(props: {
@@ -8,7 +8,7 @@ export default async function DashboardPage(props: {
   const days = (searchParams.days as string) || '30'
   const daysInt = days === 'all' ? 0 : parseInt(days)
 
-  const supabase = await createClient()
+  const supabase = await createServerComponentClient()
 
   const { data: userData } = await supabase.auth.getUser()
   if (!userData?.user) return null
