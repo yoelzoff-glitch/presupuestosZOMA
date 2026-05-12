@@ -22,6 +22,7 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  Edit2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -33,6 +34,9 @@ type Producto = {
   category: string | null
   cost_price: number | null
   last_price_update: string | null
+  stock_quantity: number | null
+  track_stock: boolean | null
+  sale_price: number | null
 }
 
 type Props = {
@@ -53,7 +57,7 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
     setMensajeError('')
     const { data, error } = await supabase
       .from('products')
-      .select('id, internal_code, name, supplier, category, cost_price, last_price_update')
+      .select('id, internal_code, name, supplier, category, cost_price, sale_price, last_price_update, stock_quantity, track_stock')
       .eq('company_id', idEmpresa)
       .eq('active', true)
       .order('name', { ascending: true })
@@ -172,8 +176,11 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
                     <CabeceraTabla>Código</CabeceraTabla>
                     <CabeceraTabla>Proveedor</CabeceraTabla>
                     <CabeceraTabla>Categoría</CabeceraTabla>
-                    <CabeceraTabla alineacion="right">Precio</CabeceraTabla>
+                    <CabeceraTabla alineacion="right">Stock</CabeceraTabla>
+                    <CabeceraTabla alineacion="right">P. Venta</CabeceraTabla>
+                    <CabeceraTabla alineacion="right">P. Costo</CabeceraTabla>
                     <CabeceraTabla>Actualizado</CabeceraTabla>
+                    <CabeceraTabla alineacion="center">Acciones</CabeceraTabla>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -183,8 +190,26 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
                       <td className="min-w-0 px-4 py-2"><EtiquetaCodigo codigo={producto.internal_code} /></td>
                       <td className="min-w-0 px-4 py-2"><EtiquetaProveedor proveedor={producto.supplier} /></td>
                       <td className="min-w-0 px-4 py-2"><EtiquetaCategoria categoria={producto.category} /></td>
-                      <td className="min-w-0 px-4 py-2 text-right text-sm font-black text-blue-700"><span className="block truncate">{formatearMoneda(Number(producto.cost_price || 0))}</span></td>
+                      <td className="min-w-0 px-4 py-2 text-right">
+                        <span className={`text-xs font-black ${Number(producto.stock_quantity || 0) <= 0 ? 'text-red-500' : 'text-slate-700'}`}>
+                          {producto.track_stock ? producto.stock_quantity : '∞'}
+                        </span>
+                      </td>
+                      <td className="min-w-0 px-4 py-2 text-right text-sm font-black text-blue-700">
+                        <span className="block truncate">{formatearMoneda(Number(producto.sale_price || producto.cost_price || 0))}</span>
+                      </td>
+                      <td className="min-w-0 px-4 py-2 text-right text-sm font-bold text-slate-500">
+                        <span className="block truncate">{formatearMoneda(Number(producto.cost_price || 0))}</span>
+                      </td>
                       <td className="min-w-0 px-4 py-2"><EtiquetaFecha fecha={producto.last_price_update} /></td>
+                      <td className="min-w-0 px-4 py-2 text-center">
+                        <Link 
+                          href={`/productos/${producto.id}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition hover:bg-blue-600 hover:text-white"
+                        >
+                          <Edit2 size={14} />
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -258,8 +283,9 @@ function TarjetaEstado({ titulo, valor, icon: Icon, cargando, tono }: { titulo: 
   )
 }
 
-function CabeceraTabla({ children, alineacion = 'left' }: { children: ReactNode; alineacion?: 'left' | 'right' }) {
-  return <th className={`min-w-0 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-500 ${alineacion === 'right' ? 'text-right' : 'text-left'}`}><span className="block truncate">{children}</span></th>
+function CabeceraTabla({ children, alineacion = 'left' }: { children: ReactNode; alineacion?: 'left' | 'right' | 'center' }) {
+  const alignClass = alineacion === 'right' ? 'text-right' : alineacion === 'center' ? 'text-center' : 'text-left';
+  return <th className={`min-w-0 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-500 ${alignClass}`}><span className="block truncate">{children}</span></th>
 }
 
 function EstadoCargando() {

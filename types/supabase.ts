@@ -388,6 +388,7 @@ export type Database = {
           plan_type: string | null
           tax_rate: number | null
           website: string | null
+          enable_stock_module: boolean | null
         }
         Insert: {
           address?: string | null
@@ -404,6 +405,7 @@ export type Database = {
           plan_type?: string | null
           tax_rate?: number | null
           website?: string | null
+          enable_stock_module?: boolean | null
         }
         Update: {
           address?: string | null
@@ -1114,6 +1116,112 @@ export type Database = {
           },
         ]
       }
+      product_recipes: {
+        Row: {
+          id: string
+          company_id: string
+          parent_id: string
+          component_id: string
+          quantity: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          parent_id: string
+          component_id: string
+          quantity?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          parent_id?: string
+          component_id?: string
+          quantity?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_recipes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_recipes_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_recipes_component_id_fkey"
+            columns: ["component_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      stock_movements: {
+        Row: {
+          id: string
+          company_id: string
+          product_id: string
+          user_id: string | null
+          type: string
+          quantity: number
+          reason: string
+          reference_id: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          product_id: string
+          user_id?: string | null
+          type: string
+          quantity: number
+          reason: string
+          reference_id?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          product_id?: string
+          user_id?: string | null
+          type?: string
+          quantity?: number
+          reason?: string
+          reference_id?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       products: {
         Row: {
           active: boolean
@@ -1127,6 +1235,11 @@ export type Database = {
           name: string
           supplier: string | null
           updated_at: string
+          stock_quantity: number | null
+          min_stock_level: number | null
+          track_stock: boolean | null
+          is_bundle: boolean | null
+          sale_price: number | null
         }
         Insert: {
           active?: boolean
@@ -1140,6 +1253,10 @@ export type Database = {
           name: string
           supplier?: string | null
           updated_at?: string
+          stock_quantity?: number | null
+          min_stock_level?: number | null
+          track_stock?: boolean | null
+          is_bundle?: boolean | null
         }
         Update: {
           active?: boolean
@@ -1153,6 +1270,10 @@ export type Database = {
           name?: string
           supplier?: string | null
           updated_at?: string
+          stock_quantity?: number | null
+          min_stock_level?: number | null
+          track_stock?: boolean | null
+          is_bundle?: boolean | null
         }
         Relationships: [
           {

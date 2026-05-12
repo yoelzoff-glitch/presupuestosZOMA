@@ -13,17 +13,22 @@ import {
   DollarSign,
   Layers,
   Hash,
+  Boxes,
 } from 'lucide-react'
 
 export default function NuevoProductoPage() {
   const [loading, setLoading] = useState(false)
+  const [enableStockModule, setEnableStockModule] = useState(false)
 
   const [form, setForm] = useState({
     internal_code: '',
     name: '',
     supplier: '',
     category: '',
-    price: '',
+    sale_price: '',
+    cost_price: '',
+    stock_quantity: '0',
+    track_stock: false,
   })
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -47,6 +52,16 @@ export default function NuevoProductoPage() {
     return profile?.company_id ?? null
   }
 
+  useState(() => {
+    async function checkStockModule() {
+      const companyId = await getCompanyId()
+      if (!companyId) return
+      const { data } = await supabase.from('companies').select('enable_stock_module').eq('id', companyId).single()
+      setEnableStockModule(data?.enable_stock_module || false)
+    }
+    checkStockModule()
+  })
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
@@ -55,8 +70,13 @@ export default function NuevoProductoPage() {
       return
     }
 
-    if (!form.price.trim() || Number(form.price) < 0) {
-      toast.error('Ingresá un precio válido.')
+    if (!form.sale_price.trim() || Number(form.sale_price) < 0) {
+      toast.error('Ingresá un precio de venta válido.')
+      return
+    }
+
+    if (enableStockModule && (!form.cost_price.trim() || Number(form.cost_price) < 0)) {
+      toast.error('Ingresá un precio de costo válido.')
       return
     }
 
@@ -76,9 +96,12 @@ export default function NuevoProductoPage() {
       name: form.name.trim(),
       supplier: form.supplier.trim() || null,
       category: form.category.trim() || null,
-      cost_price: Number(form.price),
+      sale_price: Number(form.sale_price),
+      cost_price: Number(form.cost_price) || 0,
+      stock_quantity: Number(form.stock_quantity),
+      track_stock: form.track_stock,
       last_price_update: new Date().toISOString(),
-    })
+    } as any)
 
     setLoading(false)
 
@@ -94,7 +117,10 @@ export default function NuevoProductoPage() {
       name: '',
       supplier: '',
       category: '',
-      price: '',
+      sale_price: '',
+      cost_price: '',
+      stock_quantity: '0',
+      track_stock: false,
     })
   }
 
@@ -182,13 +208,52 @@ export default function NuevoProductoPage() {
 
             <Field
               icon={DollarSign}
-              label="Precio costo"
-              name="price"
-              value={form.price}
+              label="Precio de Venta"
+              name="sale_price"
+              value={form.sale_price}
               onChange={handleChange}
-              placeholder="Ej: 2500"
+              placeholder="Precio para el cliente"
               type="number"
             />
+
+            <Field
+              icon={DollarSign}
+              label="Precio de Costo"
+              name="cost_price"
+              value={form.cost_price}
+              onChange={handleChange}
+              placeholder="Costo interno"
+              type="number"
+            />
+
+            {enableStockModule && (
+              <>
+                <div className="flex items-center gap-3 px-1 md:col-span-2">
+                  <input
+                    type="checkbox"
+                    id="track_stock"
+                    checked={form.track_stock}
+                    onChange={(e) => setForm({ ...form, track_stock: e.target.checked })}
+                    className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="track_stock" className="text-sm font-black text-slate-700 cursor-pointer">
+                    Controlar stock de este producto
+                  </label>
+                </div>
+
+                {form.track_stock && (
+                  <Field
+                    icon={Boxes}
+                    label="Stock inicial"
+                    name="stock_quantity"
+                    value={form.stock_quantity}
+                    onChange={handleChange}
+                    placeholder="Ej: 100"
+                    type="number"
+                  />
+                )}
+              </>
+            )}
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -233,13 +298,24 @@ export default function NuevoProductoPage() {
               <p>Código: {form.internal_code || 'Sin código'}</p>
             </div>
 
-            <div className="mt-5 rounded-2xl bg-white p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                Precio costo
-              </p>
-              <p className="mt-1 text-2xl font-black text-blue-700">
-                ${Number(form.price || 0).toLocaleString('es-AR')}
-              </p>
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-2xl bg-white p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  Precio Venta
+                </p>
+                <p className="mt-1 text-2xl font-black text-blue-700">
+                  ${Number(form.sale_price || 0).toLocaleString('es-AR')}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  Precio Costo
+                </p>
+                <p className="mt-1 text-xl font-black text-slate-600">
+                  ${Number(form.cost_price || 0).toLocaleString('es-AR')}
+                </p>
+              </div>
             </div>
           </div>
         </aside>

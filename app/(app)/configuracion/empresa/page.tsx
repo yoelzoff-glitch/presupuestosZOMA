@@ -17,6 +17,8 @@ import {
   Phone,
   MapPin,
   FileText,
+  Boxes,
+  Zap,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -30,6 +32,8 @@ type Company = {
   website: string | null
   logo_url: string | null
   default_notes: string | null
+  enable_stock_module: boolean
+  plan_type: string | null
 }
 
 export default function EmpresaPage() {
@@ -84,6 +88,7 @@ export default function EmpresaPage() {
         website: company.website,
         logo_url: company.logo_url,
         default_notes: company.default_notes,
+        enable_stock_module: company.enable_stock_module,
       })
       .eq('id', company.id)
 
@@ -316,6 +321,52 @@ export default function EmpresaPage() {
                   />
                 </div>
               </div>
+            </section>
+
+            <section className="rounded-3xl border border-blue-100 bg-blue-50/30 p-6 shadow-sm">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-blue-600">Módulos Avanzados</h3>
+                  <p className="text-xs font-bold text-blue-400">Funcionalidades de nivel corporativo para tu empresa.</p>
+                </div>
+                {company.plan_type === 'pro' && (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-[10px] font-black uppercase text-white shadow-lg shadow-blue-600/20">
+                    <Zap size={10} /> Plan PRO
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-white p-5 transition hover:shadow-md">
+                <div className="flex gap-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
+                    <Boxes size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-slate-900">Gestión de Stock e Insumos</h4>
+                    <p className="text-xs font-bold text-slate-500 max-w-sm mt-0.5">
+                      Activa el control de inventario, recetas de productos (BOM) y alertas de stock crítico.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    checked={company.enable_stock_module}
+                    onChange={(e) => setCompany({ ...company, enable_stock_module: e.target.checked })}
+                    className="peer sr-only"
+                  />
+                  <div className="h-7 w-12 rounded-full bg-slate-200 transition-colors after:absolute after:left-[4px] after:top-[4px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-5 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100" />
+                </label>
+              </div>
+              
+              {!company.enable_stock_module && (
+                <div className="mt-4 rounded-xl bg-blue-100/50 p-4">
+                  <p className="text-[10px] font-bold text-blue-700 leading-relaxed uppercase tracking-wider">
+                    Nota: Al activar este módulo se habilitarán las pestañas de inventario y costos en la edición de productos.
+                  </p>
+                </div>
+              )}
             </section>
           </form>
         </div>

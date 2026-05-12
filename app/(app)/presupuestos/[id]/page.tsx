@@ -51,6 +51,7 @@ type Company = {
   website: string | null
   logo_url: string | null
   default_notes: string | null
+  enable_stock_module: boolean
 }
 
 type BudgetItem = {
@@ -141,7 +142,7 @@ export default function PresupuestoDetallePage() {
 
     const { data: companyData } = await supabase
       .from('companies')
-      .select('name, cuit, address, phone, email, website, logo_url, default_notes')
+      .select('name, cuit, address, phone, email, website, logo_url, default_notes, enable_stock_module')
       .eq('id', data.company_id)
       .single()
 
@@ -276,14 +277,94 @@ export default function PresupuestoDetallePage() {
         .eq('id', budget.id)
 
       if (budgetUpdateError) throw budgetUpdateError
+      
+      // DESCONTAR STOCK SI EL MÓDULO ESTÁ ACTIVO
+      if (company?.enable_stock_module) {
+        await subtractStockForOrder(orderData.id, orderItems)
+      }
 
       setAssociatedOrderId(orderData.id)
       setBudget(prev => prev ? { ...prev, status: 'approved' } : null)
       toast.success('¡Convertido a pedido y aprobado!')
     } catch (err: any) {
+      console.error(err)
       toast.error('Error al convertir pedido.')
     } finally {
       setConvertingToOrder(false)
+    }
+  }
+
+  async function subtractStockForOrder(orderId: string, orderItems: any[]) {
+    try {
+      const productIds = orderItems.map(i => i.product_id).filter(Boolean) as string[]
+      if (productIds.length === 0) return
+
+      // 1. Obtener información de los productos (si trackean stock y si son bundles/recetas)
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, track_stock, is_bundle, name')
+        .in('id', productIds)
+
+      if (!products) return
+
+      for (const item of orderItems) {
+        const product = products.find(p => p.id === item.product_id)
+        if (!product) continue
+
+        // Caso A: El producto tiene una RECETA (BOM)
+        if (product.is_bundle) {
+          const { data: recipe } = await supabase
+            .from('product_recipes')
+            .select('component_id, quantity')
+            .eq('parent_id', product.id)
+
+          if (recipe && recipe.length > 0) {
+            for (const r of recipe) {
+              const qtyToSubtract = Number(item.quantity) * Number(r.quantity)
+              
+              // Restar del componente
+              const { data: comp } = await supabase.rpc('increment_stock', { 
+                row_id: r.component_id, 
+                amount: -qtyToSubtract 
+              })
+
+              // Registrar movimiento
+              await supabase.from('stock_movements').insert({
+                company_id: budget?.company_id,
+                product_id: r.component_id,
+                type: 'out',
+                quantity: qtyToSubtract,
+                reason: 'Venta (Componente)',
+                reference_id: orderId,
+                notes: `Venta de ${product.name} (ID: ${item.order_id})`
+              })
+            }
+          }
+        } 
+        
+        // Caso B: Es un producto simple con track_stock activo
+        if (product.track_stock) {
+          const qtyToSubtract = Number(item.quantity)
+          
+          await supabase.rpc('increment_stock', { 
+            row_id: product.id, 
+            amount: -qtyToSubtract 
+          })
+
+          await supabase.from('stock_movements').insert({
+            company_id: budget?.company_id,
+            product_id: product.id,
+            type: 'out',
+            quantity: qtyToSubtract,
+            reason: 'Venta',
+            reference_id: orderId,
+            notes: `Pedido #${associatedOrderId || 'Confirmado'}`
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error al descontar stock:', error)
+      toast.error('Error al actualizar inventario.')
     }
   }
 

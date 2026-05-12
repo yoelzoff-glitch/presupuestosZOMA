@@ -11,7 +11,7 @@ export default async function ProductosPage() {
 
   const { data } = await supabase
     .from('products')
-    .select('id, internal_code, name, supplier, category, cost_price, last_price_update')
+    .select('id, internal_code, name, supplier, category, cost_price, sale_price, last_price_update, stock_quantity, track_stock')
     .eq('company_id', contexto.idEmpresa)
     .eq('active', true)
     .order('name', { ascending: true })

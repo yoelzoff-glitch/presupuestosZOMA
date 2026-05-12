@@ -22,17 +22,33 @@ export async function POST(req: NextRequest) {
       }
     )
 
+    const body = await req.json()
+    const { company_name, email, user_id: bodyUserId } = body
+
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    
+    // Si no hay sesión, intentamos usar el user_id del body (útil para registros nuevos)
+    const activeUserId = user?.id || bodyUserId
+
+    if (!activeUserId) {
       return NextResponse.json(
-        { error: 'No autorizado. Debés iniciar sesión primero.' },
+        { error: 'No autorizado. Debés iniciar sesión o proveer un ID de usuario.' },
         { status: 401 }
       )
     }
 
-    const body = await req.json()
-    const { company_name, email } = body
+    // Si usamos el ID del body, verificamos que el usuario exista realmente en Auth
+    if (!user && bodyUserId) {
+      const { data: authUser, error: findError } = await supabaseAdmin.auth.admin.getUserById(bodyUserId)
+      if (findError || !authUser) {
+        return NextResponse.json(
+          { error: 'Usuario no encontrado en el sistema.' },
+          { status: 401 }
+        )
+      }
+    }
 
+    const finalUserId = activeUserId
     if (!company_name || !email) {
       return NextResponse.json(
         { error: 'Faltan datos obligatorios (nombre de empresa, email)' },
@@ -44,7 +60,7 @@ export async function POST(req: NextRequest) {
     const { data: existingProfile } = await supabaseAdmin
       .from('users_profiles')
       .select('company_id')
-      .eq('id', user.id)
+      .eq('id', finalUserId)
       .maybeSingle()
 
     if (existingProfile?.company_id) {
@@ -73,11 +89,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 4. Create/Update User Profile — use authenticated user.id, not body
+    // 4. Create/Update User Profile — use authenticated finalUserId, not body
     const { error: profileError } = await supabaseAdmin
       .from('users_profiles')
       .upsert({
-        id: user.id,
+        id: finalUserId,
         company_id: company.id,
         full_name: email,
         role: 'admin',

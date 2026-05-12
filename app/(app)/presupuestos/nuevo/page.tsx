@@ -34,6 +34,7 @@ type Product = {
   name: string
   category: string | null
   cost_price: number
+  sale_price: number
 }
 
 type BudgetItem = {
@@ -131,7 +132,7 @@ export default function NuevoPresupuestoPage() {
 
       supabase
         .from('products')
-        .select('id, internal_code, name, category, cost_price')
+        .select('id, internal_code, name, category, cost_price, sale_price')
         .eq('company_id', currentCompanyId)
         .order('name', { ascending: true })
         .range(0, 4999),
@@ -168,7 +169,8 @@ export default function NuevoPresupuestoPage() {
   // Efecto para actualizar el precio del producto seleccionado cuando cambia el descuento
   useEffect(() => {
     if (selectedProduct && cascadingEnabled) {
-      const discounted = calculateCascadingPrice(selectedProduct.cost_price, productDiscount)
+      const basePrice = selectedProduct.sale_price || selectedProduct.cost_price || 0
+      const discounted = calculateCascadingPrice(basePrice, productDiscount)
       setProductPrice(discounted.toFixed(2))
     }
   }, [productDiscount, selectedProduct, cascadingEnabled])
@@ -209,7 +211,7 @@ export default function NuevoPresupuestoPage() {
   function selectProduct(product: Product) {
     setSelectedProduct(product)
     setProductQty('1')
-    setProductPrice(String(product.cost_price || 0))
+    setProductPrice(String(product.sale_price || product.cost_price || 0))
     setProductDiscount('')
   }
 
@@ -558,7 +560,7 @@ export default function NuevoPresupuestoPage() {
                     </div>
 
                     <p className="shrink-0 font-black text-blue-700">
-                      ${Number(product.cost_price || 0).toLocaleString('es-AR')}
+                      ${Number(product.sale_price || product.cost_price || 0).toLocaleString('es-AR')}
                     </p>
                   </button>
                 ))}
@@ -598,7 +600,7 @@ export default function NuevoPresupuestoPage() {
                     icon={DollarSign}
                     label="Precio lista"
                     value={`$${Number(
-                      selectedProduct.cost_price || 0
+                      selectedProduct.sale_price || selectedProduct.cost_price || 0
                     ).toLocaleString('es-AR')}`}
                   />
                 </div>

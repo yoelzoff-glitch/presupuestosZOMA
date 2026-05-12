@@ -59,6 +59,7 @@ export default function Register() {
           body: JSON.stringify({
             company_name: companyName.trim(),
             email: email.trim(),
+            user_id: userId,
           }),
         }
       )
