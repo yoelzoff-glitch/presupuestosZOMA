@@ -9,9 +9,12 @@ import {
   ArrowUp,
   Boxes,
   CheckCircle2,
+  Hash,
   Package,
   Percent,
   RefreshCw,
+  Search,
+  Tag,
   Truck,
 } from 'lucide-react'
 
@@ -20,7 +23,9 @@ type Product = {
   company_id: string
   name: string
   supplier: string | null
-  price: number
+  category: string | null
+  internal_code: string | null
+  cost_price: number
   last_price_update: string | null
 }
 
@@ -36,9 +41,22 @@ export default function AumentoPrecios() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  const [searchProduct, setSearchProduct] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
+
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isOpen && !(event.target as Element).closest('.product-select-container')) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
 
   async function loadData() {
     setLoading(true)
@@ -61,7 +79,7 @@ export default function AumentoPrecios() {
 
     const { data, error } = await supabase
       .from('products')
-      .select('*')
+      .select('id, company_id, name, supplier, category, internal_code, cost_price, last_price_update')
       .eq('company_id', currentCompanyId)
       .order('name', { ascending: true })
 
@@ -97,8 +115,22 @@ export default function AumentoPrecios() {
 
   const preview = selectedProducts.map((p) => ({
     ...p,
-    newPrice: Number(p.price || 0) * multiplier,
+    newPrice: Number(p.cost_price || 0) * multiplier,
   }))
+
+  const filteredProducts = useMemo(() => {
+    const q = searchProduct.toLowerCase().trim()
+    if (!q) return products
+
+    return products.filter((p) => {
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.internal_code?.toLowerCase().includes(q) ||
+        p.category?.toLowerCase().includes(q) ||
+        p.supplier?.toLowerCase().includes(q)
+      )
+    })
+  }, [products, searchProduct])
 
   async function applyIncrease() {
     const value = Number(percent)
@@ -136,12 +168,12 @@ export default function AumentoPrecios() {
     setSaving(true)
 
     for (const p of selectedProducts) {
-      const newPrice = Number(p.price || 0) * (1 + value / 100)
+      const newPrice = Number(p.cost_price || 0) * (1 + value / 100)
 
       const { error } = await supabase
         .from('products')
         .update({
-          price: newPrice,
+          cost_price: newPrice,
           last_price_update: new Date().toISOString(),
         })
         .eq('id', p.id)
@@ -159,7 +191,7 @@ export default function AumentoPrecios() {
         supplier: p.supplier,
         update_type: mode === 'proveedor' ? 'Proveedor' : 'Producto',
         percentage: value,
-        old_price: p.price,
+        old_price: p.cost_price,
         new_price: newPrice,
       })
     }
@@ -167,6 +199,9 @@ export default function AumentoPrecios() {
     toast.success('Precios actualizados correctamente.')
     setSaving(false)
     setPercent('')
+    setSupplier('')
+    setProductId('')
+    setSearchProduct('')
     await loadData()
   }
 
@@ -231,6 +266,8 @@ export default function AumentoPrecios() {
               onClick={() => {
                 setMode('proveedor')
                 setProductId('')
+                setSearchProduct('')
+                setIsOpen(false)
               }}
               className={`rounded-xl px-4 py-3 text-sm font-black transition ${
                 mode === 'proveedor'
@@ -245,6 +282,8 @@ export default function AumentoPrecios() {
               onClick={() => {
                 setMode('producto')
                 setSupplier('')
+                setSearchProduct('')
+                setIsOpen(false)
               }}
               className={`rounded-xl px-4 py-3 text-sm font-black transition ${
                 mode === 'producto'
@@ -276,22 +315,80 @@ export default function AumentoPrecios() {
                 </select>
               </div>
             ) : (
-              <div>
+              <div className="product-select-container relative">
                 <label className="mb-2 block text-sm font-black text-slate-700">
                   Producto
                 </label>
-                <select
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                >
-                  <option value="">Seleccionar producto</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Search
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, código o categoría..."
+                    value={searchProduct}
+                    onFocus={() => setIsOpen(true)}
+                    onChange={(e) => {
+                      setSearchProduct(e.target.value)
+                      setIsOpen(true)
+                    }}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  />
+                </div>
+
+                {isOpen && (
+                  <div className="absolute z-50 mt-2 max-h-60 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                    {filteredProducts.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-slate-500">
+                        No se encontraron productos
+                      </div>
+                    ) : (
+                      filteredProducts.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setProductId(p.id)
+                            setSearchProduct(p.name)
+                            setIsOpen(false)
+                          }}
+                          className={`flex w-full flex-col rounded-xl px-4 py-2 text-left transition hover:bg-blue-50 ${
+                            productId === p.id ? 'bg-blue-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-black text-slate-900">
+                              {p.name}
+                            </span>
+                            <span className="text-xs font-black text-blue-600">
+                              ${Number(p.cost_price || 0).toLocaleString('es-AR')}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {p.internal_code && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
+                                <Hash size={10} />
+                                {p.internal_code}
+                              </span>
+                            )}
+                            {p.category && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600">
+                                <Tag size={10} />
+                                {p.category}
+                              </span>
+                            )}
+                            {p.supplier && (mode === 'producto') && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-600">
+                                <Truck size={10} />
+                                {p.supplier}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -381,7 +478,7 @@ export default function AumentoPrecios() {
                       </td>
 
                       <td className="px-5 py-4 text-sm font-bold text-slate-600">
-                        ${Number(p.price || 0).toLocaleString('es-AR')}
+                        ${Number(p.cost_price || 0).toLocaleString('es-AR')}
                       </td>
 
                       <td className="px-5 py-4 text-sm font-black text-blue-700">
