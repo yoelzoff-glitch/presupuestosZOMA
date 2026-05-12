@@ -326,15 +326,21 @@ export default function PresupuestoDetallePage() {
           <table className="w-full text-left">
             <thead className="bg-slate-50">
               <tr>
+                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Código</th>
                 <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400">Producto</th>
                 <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 text-center">Cant.</th>
-                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 text-right">Unitario</th>
-                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 text-right">Total</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 text-right">Precio U.</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 text-right">Subtotal</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items.map((item) => (
                 <tr key={item.id}>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
+                      {item.product_code || '-'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4">
                     <p className="font-black text-slate-900">{item.product_name}</p>
                     {item.discount_str && (
@@ -390,15 +396,17 @@ export default function PresupuestoDetallePage() {
         <table className="w-full border-collapse mb-8 text-[10px]">
           <thead>
             <tr className="bg-slate-900 text-white">
-              <th className="p-3 text-left uppercase font-black tracking-widest">Descripción</th>
+              <th className="p-3 text-left uppercase font-black tracking-widest">Código</th>
+              <th className="p-3 text-left uppercase font-black tracking-widest">Producto</th>
               <th className="p-3 text-center uppercase font-black tracking-widest">Cant.</th>
-              <th className="p-3 text-right uppercase font-black tracking-widest">Unitario</th>
+              <th className="p-3 text-right uppercase font-black tracking-widest">Precio U.</th>
               <th className="p-3 text-right uppercase font-black tracking-widest">Subtotal</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 border-b border-slate-200">
             {items.map((item) => (
               <tr key={item.id} className="align-top">
+                <td className="p-3 font-bold text-slate-600">{item.product_code || '-'}</td>
                 <td className="p-3">
                   <p className="font-black text-slate-950">{item.product_name}</p>
                   {item.discount_str && (
