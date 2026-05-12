@@ -55,6 +55,7 @@ type Company = {
 
 type BudgetItem = {
   id: string
+  product_id: string | null
   product_code: string | null
   product_name: string
   category: string | null
@@ -76,6 +77,16 @@ export default function PresupuestoDetallePage() {
   const [role, setRole] = useState<string | null>(null)
   const [convertingToOrder, setConvertingToOrder] = useState(false)
   const [associatedOrderId, setAssociatedOrderId] = useState<string | null>(null)
+
+  // Estados para control de precios actualizados
+  const [showPriceAlert, setShowPriceAlert] = useState(false)
+  const [priceUpdates, setPriceUpdates] = useState<{
+    itemId: string
+    name: string
+    oldPrice: number
+    newPrice: number
+  }[]>([])
+  const [isCheckingPrices, setIsCheckingPrices] = useState(false)
 
   useEffect(() => {
     if (id) loadBudget()
@@ -138,7 +149,7 @@ export default function PresupuestoDetallePage() {
 
     const { data: itemsData } = await supabase
       .from('budget_items')
-      .select('id, product_code, product_name, category, quantity, unit_price, total, discount_str')
+      .select('id, product_id, product_code, product_name, category, quantity, unit_price, total, discount_str')
       .eq('budget_id', id)
       .order('created_at', { ascending: true })
 
@@ -155,11 +166,71 @@ export default function PresupuestoDetallePage() {
   }
 
 
-  async function convertToOrder() {
+  async function handlePasarAPedido() {
+    if (!budget || !role || associatedOrderId || budget.status === 'cancelled') return
+    
+    setIsCheckingPrices(true)
+    try {
+      const productIds = items.map(i => i.product_id).filter(Boolean) as string[]
+      
+      if (productIds.length === 0) {
+        // Si no hay productos enlazados (ítems manuales), pasamos directo
+        convertToOrder()
+        return
+      }
+
+      const { data: currentProducts } = await supabase
+        .from('products')
+        .select('id, cost_price')
+        .in('id', productIds)
+
+      const updates: typeof priceUpdates = []
+      
+      items.forEach(item => {
+        if (!item.product_id) return
+        const current = currentProducts?.find(p => p.id === item.product_id)
+        if (current && current.cost_price > item.unit_price) {
+          updates.push({
+            itemId: item.id,
+            name: item.product_name,
+            oldPrice: item.unit_price,
+            newPrice: current.cost_price
+          })
+        }
+      })
+
+      if (updates.length > 0) {
+        setPriceUpdates(updates)
+        setShowPriceAlert(true)
+      } else {
+        convertToOrder()
+      }
+    } catch (error) {
+      console.error(error)
+      convertToOrder() // Fallback a conversión normal si falla el chequeo
+    } finally {
+      setIsCheckingPrices(false)
+    }
+  }
+
+  async function convertToOrder(useNewPrices: boolean = false) {
     if (!budget || !role || associatedOrderId) return
     try {
       setConvertingToOrder(true)
+      setShowPriceAlert(false)
+
       const nextOrderNumber = await fetchNextNumber('order')
+      
+      // Calcular total final si se usan nuevos precios
+      let totalToSave = finalTotal
+      if (useNewPrices) {
+        totalToSave = items.reduce((acc, item) => {
+          const update = priceUpdates.find(u => u.itemId === item.id)
+          const price = update ? update.newPrice : item.unit_price
+          return acc + (Number(item.quantity) * price)
+        }, 0)
+      }
+
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -171,23 +242,31 @@ export default function PresupuestoDetallePage() {
           status: role === 'admin' ? 'confirmed' : 'pending',
           source: 'Manual',
           seller_id: budget.seller_id,
-          notes: budget.notes || 'Convertido desde presupuesto'
+          notes: budget.notes || 'Convertido desde presupuesto',
+          total_amount: totalToSave
         })
         .select('id')
         .single()
+
       if (orderError) throw orderError
 
-      const orderItems = items.map((item) => ({
-        company_id: budget.company_id,
-        order_id: orderData.id,
-        product_id: null, 
-        product_code: item.product_code,
-        product_name: item.product_name,
-        category: item.category,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        discount_str: item.discount_str,
-      }))
+      const orderItems = items.map((item) => {
+        const update = useNewPrices ? priceUpdates.find(u => u.itemId === item.id) : null
+        const price = update ? update.newPrice : item.unit_price
+
+        return {
+          company_id: budget.company_id,
+          order_id: orderData.id,
+          product_id: item.product_id, 
+          product_code: item.product_code,
+          product_name: item.product_name,
+          category: item.category,
+          quantity: item.quantity,
+          unit_price: price,
+          discount_str: item.discount_str,
+        }
+      })
+      
       await supabase.from('order_items').insert(orderItems)
 
       // ACTUALIZAR ESTADO DEL PRESUPUESTO
@@ -202,7 +281,7 @@ export default function PresupuestoDetallePage() {
       setBudget(prev => prev ? { ...prev, status: 'approved' } : null)
       toast.success('¡Convertido a pedido y aprobado!')
     } catch (err: any) {
-      toast.error('Error.')
+      toast.error('Error al convertir pedido.')
     } finally {
       setConvertingToOrder(false)
     }
@@ -299,11 +378,11 @@ export default function PresupuestoDetallePage() {
             <div className="flex gap-3">
               <StatusBadge status={budget.status || 'issued'} />
               <button
-                onClick={convertToOrder}
-                disabled={convertingToOrder || !!associatedOrderId || budget.status === 'cancelled'}
+                onClick={handlePasarAPedido}
+                disabled={convertingToOrder || isCheckingPrices || !!associatedOrderId || budget.status === 'cancelled'}
                 className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500 disabled:opacity-50"
               >
-                {convertingToOrder ? <Loader2 size={18} className="animate-spin" /> : <ClipboardList size={18} />}
+                {convertingToOrder || isCheckingPrices ? <Loader2 size={18} className="animate-spin" /> : <ClipboardList size={18} />}
                 {associatedOrderId ? 'Ya es pedido' : 'Pasar a pedido'}
               </button>
               <button
@@ -432,6 +511,63 @@ export default function PresupuestoDetallePage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL DE ALERTA DE PRECIOS */}
+      {showPriceAlert && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-xl rounded-[2rem] bg-white p-8 shadow-2xl border border-slate-200">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 mb-6">
+              <Zap size={28} />
+            </div>
+
+            <h2 className="text-2xl font-black text-slate-950">Detectamos aumentos de precio</h2>
+            <p className="mt-2 font-bold text-slate-500 leading-relaxed">
+              Algunos productos en este presupuesto tienen precios nuevos en el catálogo. 
+              ¿Cómo deseas proceder con el pedido?
+            </p>
+
+            <div className="mt-6 max-h-48 overflow-y-auto space-y-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 custom-scrollbar">
+              {priceUpdates.map((update, idx) => (
+                <div key={idx} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                  <p className="text-xs font-black text-slate-700 truncate flex-1">{update.name}</p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-bold text-slate-400 line-through">${update.oldPrice.toLocaleString('es-AR')}</span>
+                    <ArrowLeft size={10} className="rotate-180 text-slate-400" />
+                    <span className="text-xs font-black text-emerald-600">${update.newPrice.toLocaleString('es-AR')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <button
+                onClick={() => convertToOrder(false)}
+                disabled={convertingToOrder}
+                className="flex flex-col items-center justify-center rounded-2xl border-2 border-slate-200 p-4 transition hover:bg-slate-50 active:scale-95"
+              >
+                <span className="text-sm font-black text-slate-900">Mantener Precios</span>
+                <span className="text-[10px] font-bold text-slate-400 mt-1">Respetar presupuesto original</span>
+              </button>
+
+              <button
+                onClick={() => convertToOrder(true)}
+                disabled={convertingToOrder}
+                className="flex flex-col items-center justify-center rounded-2xl bg-blue-600 p-4 text-white shadow-xl shadow-blue-900/20 transition hover:bg-blue-500 active:scale-95"
+              >
+                <span className="text-sm font-black">Actualizar Precios</span>
+                <span className="text-[10px] font-bold text-blue-100 mt-1">Usar valores actuales del catálogo</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowPriceAlert(false)}
+              className="mt-4 w-full py-2 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition"
+            >
+              Cancelar conversión
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
