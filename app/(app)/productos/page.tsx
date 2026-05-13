@@ -17,10 +17,17 @@ export default async function ProductosPage() {
     .order('name', { ascending: true })
     .range(0, 4999)
 
+  const { data: companyData } = await supabase
+    .from('companies')
+    .select('enable_stock_module')
+    .eq('id', contexto.idEmpresa)
+    .single()
+
   return (
     <ProductosClient
       productosIniciales={data || []}
       idEmpresa={contexto.idEmpresa}
+      enableStockModule={companyData?.enable_stock_module || false}
     />
   )
 }

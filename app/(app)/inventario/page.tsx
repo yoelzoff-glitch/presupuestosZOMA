@@ -22,15 +22,17 @@ export default async function InventarioPage() {
 
   const { data: profile } = await supabase
     .from('users_profiles')
-    .select('company_id, company:companies(plan_type)')
+    .select('company_id, company:companies(plan_type, enable_stock_module)')
     .eq('id', user.id)
     .single()
 
   if (!profile?.company_id) redirect('/auth/login')
 
   const planType = (profile.company as any)?.plan_type || 'base'
-  if (planType === 'base') {
-    redirect('/configuracion/plan?error=plan_restriction')
+  const enableStockModule = (profile.company as any)?.enable_stock_module || false
+
+  if (planType === 'base' || !enableStockModule) {
+    redirect('/configuracion/empresa?error=module_disabled')
   }
 
   // Load products that have track_stock enabled or are relevant for inventory

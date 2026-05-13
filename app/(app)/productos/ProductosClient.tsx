@@ -43,9 +43,10 @@ type Producto = {
 type Props = {
   productosIniciales: Producto[]
   idEmpresa: string
+  enableStockModule: boolean
 }
 
-export default function ProductosClient({ productosIniciales, idEmpresa }: Props) {
+export default function ProductosClient({ productosIniciales, idEmpresa, enableStockModule }: Props) {
   const [productos, setProductos] = useState<Producto[]>(productosIniciales)
   const [busqueda, setBusqueda] = useState('')
   const [cargando, setCargando] = useState(false)
@@ -137,7 +138,11 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <Link href="/productos/nuevo" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"><Plus size={16} /> Nuevo</Link>
-            <Link href="/inventario" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"><Boxes size={16} /> Stock</Link>
+            {enableStockModule && (
+              <Link href="/inventario" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15">
+                <Boxes size={16} /> Stock
+              </Link>
+            )}
             <Link href="/productos/importar" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"><FileSpreadsheet size={16} /> Excel</Link>
             <Link href="/productos/aumentos" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"><ArrowUp size={16} /> Aumentos</Link>
           </div>
@@ -206,7 +211,7 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
                     <CabeceraTabla>Código</CabeceraTabla>
                     <CabeceraTabla>Proveedor</CabeceraTabla>
                     <CabeceraTabla>Categoría</CabeceraTabla>
-                    <CabeceraTabla alineacion="right">Stock</CabeceraTabla>
+                    {enableStockModule && <CabeceraTabla alineacion="right">Stock</CabeceraTabla>}
                     <CabeceraTabla alineacion="right">P. Venta</CabeceraTabla>
                     <CabeceraTabla alineacion="right">P. Costo</CabeceraTabla>
                     <CabeceraTabla>Actualizado</CabeceraTabla>
@@ -220,11 +225,13 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
                       <td className="min-w-0 px-4 py-2"><EtiquetaCodigo codigo={producto.internal_code} /></td>
                       <td className="min-w-0 px-4 py-2"><EtiquetaProveedor proveedor={producto.supplier} /></td>
                       <td className="min-w-0 px-4 py-2"><EtiquetaCategoria categoria={producto.category} /></td>
-                      <td className="min-w-0 px-4 py-2 text-right">
-                        <span className={`text-xs font-black ${Number(producto.stock_quantity || 0) <= 0 ? 'text-red-500' : 'text-slate-700'}`}>
-                          {producto.track_stock ? producto.stock_quantity : '∞'}
-                        </span>
-                      </td>
+                      {enableStockModule && (
+                        <td className="min-w-0 px-4 py-2 text-right">
+                          <span className={`text-xs font-black ${Number(producto.stock_quantity || 0) <= 0 ? 'text-red-500' : 'text-slate-700'}`}>
+                            {producto.track_stock ? producto.stock_quantity : '∞'}
+                          </span>
+                        </td>
+                      )}
                       <td className="min-w-0 px-4 py-2 text-right text-sm font-black text-blue-700">
                         <span className="block truncate">{formatearMoneda(Number(producto.sale_price || producto.cost_price || 0))}</span>
                       </td>
