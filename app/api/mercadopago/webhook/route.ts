@@ -3,10 +3,32 @@ import { createClient } from '@supabase/supabase-js'
 import { getValidMercadoPagoAccessToken } from '@/lib/mercadopago/refreshAccessToken'
 import { verifyMercadoPagoWebhookSignature } from '@/lib/mercadopago/verifyWebhookSignature'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+export async function POST(req: NextRequest) {
+  return handleWebhook(req)
+}
+
+export async function GET(req: NextRequest) {
+  return handleWebhook(req)
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Allow': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  })
+}
 
 type LocalPayment = {
   id: string
@@ -713,10 +735,4 @@ async function handleWebhook(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
-  return handleWebhook(req)
-}
-
-export async function GET(req: NextRequest) {
-  return handleWebhook(req)
-}
+// --- Exports moved to top ---
