@@ -249,7 +249,7 @@ export default function AumentoPrecios() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <Stat title="Productos cargados" value={products.length} icon={Package} loading={loading} />
         <Stat title="Proveedores" value={suppliers.length} icon={Truck} loading={loading} />
         <Stat title="A actualizar" value={selectedProducts.length} icon={Boxes} loading={loading} />
@@ -435,7 +435,7 @@ export default function AumentoPrecios() {
             </p>
           </div>
 
-          <div className="overflow-hidden">
+          <div className="overflow-x-auto overflow-y-hidden">
             {loading ? (
               <div className="p-10 text-center text-sm font-bold text-slate-500">
                 Cargando productos...
@@ -453,7 +453,7 @@ export default function AumentoPrecios() {
                 </p>
               </div>
             ) : (
-              <table className="w-full min-w-[680px]">
+              <table className="w-full min-w-[600px] border-collapse">
                 <thead className="bg-slate-50">
                   <tr>
                     <th className="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500">

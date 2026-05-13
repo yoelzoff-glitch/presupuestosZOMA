@@ -201,10 +201,10 @@ export default function ProductosClient({ productosIniciales, idEmpresa, enableS
           </div>
         </div>
 
-        <div className="w-full max-w-full overflow-x-hidden">
+        <div className="w-full max-w-full overflow-x-auto">
           {cargando ? <EstadoCargando /> : productosFiltrados.length === 0 ? <EstadoVacio tieneBusqueda={Boolean(busqueda.trim())} /> : (
-            <div className="w-full max-w-full overflow-x-hidden">
-              <table className="w-full table-fixed">
+            <div className="min-w-[900px]">
+              <table className="w-full">
                 <thead className="bg-slate-50">
                   <tr>
                     <CabeceraTabla>Producto</CabeceraTabla>
