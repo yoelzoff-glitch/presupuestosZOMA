@@ -37,7 +37,6 @@ const navItems = [
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
-  { href: '/configuracion', label: 'Configuración', icon: Settings },
 ]
 
 function getPageTitle(pathname: string) {
@@ -313,6 +312,14 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              <Link
+                href="/configuracion"
+                className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-all duration-300 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
+                title="Configuración"
+              >
+                <Settings size={20} />
+              </Link>
+
               <NotificationsBell />
 
               <div className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm md:block">
