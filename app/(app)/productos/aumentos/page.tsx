@@ -26,6 +26,7 @@ type Product = {
   category: string | null
   internal_code: string | null
   cost_price: number
+  sale_price: number | null
   last_price_update: string | null
 }
 
@@ -79,7 +80,7 @@ export default function AumentoPrecios() {
 
     const { data, error } = await supabase
       .from('products')
-      .select('id, company_id, name, supplier, category, internal_code, cost_price, last_price_update')
+      .select('id, company_id, name, supplier, category, internal_code, cost_price, sale_price, last_price_update')
       .eq('company_id', currentCompanyId)
       .order('name', { ascending: true })
 
@@ -115,7 +116,8 @@ export default function AumentoPrecios() {
 
   const preview = selectedProducts.map((p) => ({
     ...p,
-    newPrice: Number(p.cost_price || 0) * multiplier,
+    newCostPrice: Number(p.cost_price || 0) * multiplier,
+    newSalePrice: Number(p.sale_price || p.cost_price || 0) * multiplier,
   }))
 
   const filteredProducts = useMemo(() => {
@@ -168,12 +170,14 @@ export default function AumentoPrecios() {
     setSaving(true)
 
     for (const p of selectedProducts) {
-      const newPrice = Number(p.cost_price || 0) * (1 + value / 100)
+      const newCostPrice = Number(p.cost_price || 0) * (1 + value / 100)
+      const newSalePrice = Number(p.sale_price || p.cost_price || 0) * (1 + value / 100)
 
       const { error } = await supabase
         .from('products')
         .update({
-          cost_price: newPrice,
+          cost_price: newCostPrice,
+          sale_price: newSalePrice,
           last_price_update: new Date().toISOString(),
         })
         .eq('id', p.id)
@@ -192,7 +196,7 @@ export default function AumentoPrecios() {
         update_type: mode === 'proveedor' ? 'Proveedor' : 'Producto',
         percentage: value,
         old_price: p.cost_price,
-        new_price: newPrice,
+        new_price: newCostPrice,
       })
     }
 
@@ -481,10 +485,15 @@ export default function AumentoPrecios() {
                         ${Number(p.cost_price || 0).toLocaleString('es-AR')}
                       </td>
 
-                      <td className="px-5 py-4 text-sm font-black text-blue-700">
-                        ${Number(p.newPrice || 0).toLocaleString('es-AR', {
-                          maximumFractionDigits: 2,
-                        })}
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-black text-blue-700">
+                            Venta: ${Number(p.newSalePrice || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            Costo: ${Number(p.newCostPrice || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
                       </td>
 
                       <td className="px-5 py-4">

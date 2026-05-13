@@ -17,6 +17,7 @@ type Producto = {
   name: string
   category: string | null
   cost_price: number | null
+  sale_price: number | null
 }
 
 type ItemCarrito = {
@@ -46,7 +47,8 @@ export default function ShoppingCartPanel({
   alEnviar,
 }: Props) {
   const totalCarrito = carrito.reduce((acc, item) => {
-    return acc + Number(item.producto.cost_price || 0) * item.cantidad
+    const precio = item.producto.sale_price || item.producto.cost_price || 0
+    return acc + Number(precio) * item.cantidad
   }, 0)
 
   return (
@@ -118,7 +120,7 @@ export default function ShoppingCartPanel({
                   </div>
                   <p className="font-black text-blue-700">
                     {formatCurrency(
-                      Number(item.producto.cost_price || 0) * item.cantidad
+                      Number(item.producto.sale_price || item.producto.cost_price || 0) * item.cantidad
                     )}
                   </p>
                 </div>
