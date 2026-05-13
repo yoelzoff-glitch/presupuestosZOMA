@@ -245,6 +245,7 @@ export default function PedidoDetallePage(): any {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [sendingToAccount, setSendingToAccount] = useState(false)
   const [alreadyInAccount, setAlreadyInAccount] = useState(false)
+  const [enableStockModule, setEnableStockModule] = useState(false)
 
   useEffect(() => {
     if (orderId) {
@@ -264,7 +265,7 @@ export default function PedidoDetallePage(): any {
 
     const { data: profile } = await supabase
       .from('users_profiles')
-      .select('company_id, role')
+      .select('company_id, role, company:companies(enable_stock_module)')
       .eq('id', userData.user.id)
       .single()
 
@@ -277,6 +278,7 @@ export default function PedidoDetallePage(): any {
     const currentCompanyId = profile.company_id
     setRole(profile.role || 'vendedor')
     setCompanyId(currentCompanyId)
+    setEnableStockModule((profile.company as any)?.enable_stock_module || false)
 
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
@@ -586,9 +588,10 @@ export default function PedidoDetallePage(): any {
           .eq('id', budgetId)
       }
 
-      // 4. DESCUENTO DE STOCK AUTOMÁTICO
-      // Iteramos sobre los ítems del pedido que tienen un producto vinculado
-      for (const item of items) {
+      // 4. DESCUENTO DE STOCK AUTOMÁTICO (Solo si el módulo está activo)
+      if (enableStockModule) {
+        // Iteramos sobre los ítems del pedido que tienen un producto vinculado
+        for (const item of items) {
         if (!item.product_id) continue
 
         // Buscamos el producto en nuestra lista cargada para ver si trackea stock
@@ -622,6 +625,7 @@ export default function PedidoDetallePage(): any {
           })
         }
       }
+    }
 
       toast.success('Pedido confirmado correctamente. Ahora podés pasarlo a cuenta corriente cuando desees.')
 
