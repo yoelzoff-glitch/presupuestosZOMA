@@ -98,6 +98,7 @@ export default function PortalPage() {
       .select('id, internal_code, name, category, cost_price, active')
       .eq('company_id', datosCliente.company_id)
       .eq('active', true)
+      .eq('show_in_catalog', true)
       .order('name', { ascending: true })
       .range(0, 4999)
 

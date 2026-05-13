@@ -36,6 +36,7 @@ type Product = {
   min_stock_level: number
   track_stock: boolean
   is_bundle: boolean
+  show_in_catalog: boolean
 }
 
 type RecipeItem = {
@@ -172,7 +173,8 @@ export default function EditarProductoPage() {
           stock_quantity: product.stock_quantity,
           min_stock_level: product.min_stock_level,
           track_stock: product.track_stock,
-          is_bundle: recipe.length > 0
+          is_bundle: recipe.length > 0,
+          show_in_catalog: product.show_in_catalog
         })
         .eq('id', id)
 
@@ -344,6 +346,28 @@ export default function EditarProductoPage() {
                 <InputGroup label="Precio de venta ($)" type="number" value={(product.sale_price || product.cost_price || 0).toString()} onChange={v => setProduct({...product, sale_price: Number(v)})} icon={DollarSign} />
                 <InputGroup label="Precio de costo ($)" type="number" value={(product.cost_price || 0).toString()} onChange={v => setProduct({...product, cost_price: Number(v)})} icon={DollarSign} />
               </div>
+
+              {enableStockModule && (
+                <div className="mt-8 pt-8 border-t border-slate-100">
+                  <label className="flex items-center justify-between p-4 rounded-3xl bg-slate-50 hover:bg-slate-100 transition cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm text-blue-600">
+                        <Package size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-900">Visible en catálogo de clientes</p>
+                        <p className="text-xs font-bold text-slate-400">Si se desactiva, este producto solo se usará de forma interna (insumo).</p>
+                      </div>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      checked={product.show_in_catalog ?? true} 
+                      onChange={e => setProduct({...product, show_in_catalog: e.target.checked})}
+                      className="h-6 w-6 rounded-lg border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </label>
+                </div>
+              )}
             </section>
           )}
 

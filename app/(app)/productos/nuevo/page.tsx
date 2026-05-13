@@ -29,6 +29,7 @@ export default function NuevoProductoPage() {
     cost_price: '',
     stock_quantity: '0',
     track_stock: false,
+    show_in_catalog: true,
   })
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -100,6 +101,7 @@ export default function NuevoProductoPage() {
       cost_price: Number(form.cost_price) || 0,
       stock_quantity: Number(form.stock_quantity),
       track_stock: form.track_stock,
+      show_in_catalog: form.show_in_catalog,
       last_price_update: new Date().toISOString(),
     } as any)
 
@@ -121,6 +123,7 @@ export default function NuevoProductoPage() {
       cost_price: '',
       stock_quantity: '0',
       track_stock: false,
+      show_in_catalog: true,
     })
   }
 
@@ -252,6 +255,24 @@ export default function NuevoProductoPage() {
                     type="number"
                   />
                 )}
+
+                <div className="mt-4 flex items-center gap-3 px-1 md:col-span-2 rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                  <input
+                    type="checkbox"
+                    id="show_in_catalog"
+                    checked={form.show_in_catalog}
+                    onChange={(e) => setForm({ ...form, show_in_catalog: e.target.checked })}
+                    className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="cursor-pointer" onClick={() => setForm({ ...form, show_in_catalog: !form.show_in_catalog })}>
+                    <label htmlFor="show_in_catalog" className="text-sm font-black text-slate-700 cursor-pointer block">
+                      Visible en catálogo de clientes
+                    </label>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                      Desactivar si es un insumo o materia prima interna.
+                    </p>
+                  </div>
+                </div>
               </>
             )}
           </div>
