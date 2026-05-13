@@ -18,6 +18,7 @@ import {
   LifeBuoy,
   Loader2,
   ShieldCheck,
+  Boxes,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
@@ -32,6 +33,7 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/productos', label: 'Productos', icon: Package },
+  { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
@@ -42,6 +44,7 @@ function getPageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard'
   if (pathname.startsWith('/clientes')) return 'Clientes'
   if (pathname.startsWith('/productos')) return 'Productos'
+  if (pathname.startsWith('/inventario')) return 'Inventario'
   if (pathname.startsWith('/pedidos')) return 'Pedidos'
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
@@ -55,6 +58,7 @@ function getPageDescription(pathname: string) {
   if (pathname === '/') return 'Resumen general de la gestión comercial'
   if (pathname.startsWith('/clientes')) return 'Administración de clientes y datos comerciales'
   if (pathname.startsWith('/productos')) return 'Gestión de productos, precios y catálogo'
+  if (pathname.startsWith('/inventario')) return 'Control de stock y movimientos de mercadería'
   if (pathname.startsWith('/presupuestos')) return 'Creación de propuestas comerciales'
   if (pathname.startsWith('/pedidos')) return 'Gestión de órdenes de venta confirmadas'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
@@ -81,7 +85,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         if (user) {
           const { data } = await supabase
             .from('users_profiles')
-            .select('role, company:companies(plan_type)')
+            .select('role, company:companies(plan_type, enable_stock_module)')
             .eq('id', user.id)
             .single()
           setProfile({ ...data, email: user.email })
@@ -99,11 +103,22 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const isSuperAdmin = profile?.email?.toLowerCase() === 'yoel.zoff@gmail.com'
   const planType = profile?.company?.plan_type || 'base'
   const isPro = planType === 'pro' || planType === 'pro_plus'
+  const stockEnabled = profile?.company?.enable_stock_module || false
+
+  // Filtrat navItems based on stock module activation
+  let baseNavItems = navItems.filter(item => {
+    // If it's the inventory link, check if it's enabled OR if user is base (upsell)
+    if (item.href === '/inventario') {
+      if (!isPro) return true // Show as upsell for base
+      return stockEnabled // For PRO, only show if they activated it
+    }
+    return true
+  })
 
   // Admin sees all. We show Vendedores even if not PRO to encourage upgrade.
   let finalNavItems = isAdmin 
-    ? [...navItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users, isProFeature: true }, ...navItems.slice(2)]
-    : navItems
+    ? [...baseNavItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users, isProFeature: true }, ...baseNavItems.slice(2)]
+    : baseNavItems
 
   // Only Yoel sees Super Admin
   if (isSuperAdmin) {

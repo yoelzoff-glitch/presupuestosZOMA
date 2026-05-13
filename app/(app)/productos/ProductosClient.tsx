@@ -131,6 +131,7 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <Link href="/productos/nuevo" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500"><Plus size={16} /> Nuevo</Link>
+            <Link href="/inventario" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"><Boxes size={16} /> Stock</Link>
             <Link href="/productos/importar" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"><FileSpreadsheet size={16} /> Excel</Link>
             <Link href="/productos/aumentos" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"><ArrowUp size={16} /> Aumentos</Link>
           </div>

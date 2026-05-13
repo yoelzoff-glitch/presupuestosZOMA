@@ -236,12 +236,13 @@ export default function EditarProductoPage() {
       const finalQty = adjustType === 'in' ? quantity : -quantity
 
       // 1. Create movement
-      const { error: moveErr } = await supabase.from('inventory_movements').insert({
+      const { error: moveErr } = await supabase.from('stock_movements').insert({
         company_id: (product as any).company_id,
         product_id: id,
         type: adjustType === 'in' ? 'in' : 'out',
         quantity: quantity,
         reason: adjustReason || 'Ajuste manual',
+        notes: `Ajuste manual desde detalle de producto`
       })
 
       if (moveErr) throw moveErr

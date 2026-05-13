@@ -353,14 +353,22 @@ export default function EmpresaPage() {
                   <input
                     type="checkbox"
                     checked={company.enable_stock_module}
+                    disabled={company.plan_type === 'base'}
                     onChange={(e) => setCompany({ ...company, enable_stock_module: e.target.checked })}
                     className="peer sr-only"
                   />
-                  <div className="h-7 w-12 rounded-full bg-slate-200 transition-colors after:absolute after:left-[4px] after:top-[4px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-5 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100" />
+                  <div className={`h-7 w-12 rounded-full transition-colors after:absolute after:left-[4px] after:top-[4px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-5 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 ${company.plan_type === 'base' ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-200'}`} />
                 </label>
               </div>
               
-              {!company.enable_stock_module && (
+              {company.plan_type === 'base' ? (
+                <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-4 flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-amber-700 leading-relaxed uppercase tracking-wider">
+                    Este módulo requiere el **Plan PRO**. ¡Mejorá tu plan para activar el control de stock!
+                  </p>
+                  <Link href="/configuracion/plan" className="text-[10px] font-black text-amber-800 underline">VER PLANES</Link>
+                </div>
+              ) : !company.enable_stock_module && (
                 <div className="mt-4 rounded-xl bg-blue-100/50 p-4">
                   <p className="text-[10px] font-bold text-blue-700 leading-relaxed uppercase tracking-wider">
                     Nota: Al activar este módulo se habilitarán las pestañas de inventario y costos en la edición de productos.
