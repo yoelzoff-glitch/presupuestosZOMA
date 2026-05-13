@@ -19,7 +19,16 @@ BEGIN
             (SELECT COUNT(*) FROM budgets WHERE company_id = company_id_param AND created_at >= date_limit) as budgets_count,
             (SELECT COALESCE(SUM(debit - credit), 0) FROM account_movements WHERE company_id = company_id_param AND created_at >= date_limit) as total_balance,
             (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status != 'cancelled' AND created_at >= date_limit) as total_budgeted,
-            (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status = 'approved' AND created_at >= date_limit) as total_converted
+            (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status = 'approved' AND created_at >= date_limit) as total_converted,
+            (
+                SELECT COALESCE(SUM(bi.quantity * p.cost_price), 0)
+                FROM budget_items bi
+                JOIN budgets b ON bi.budget_id = b.id
+                JOIN products p ON bi.product_id = p.id
+                WHERE b.company_id = company_id_param 
+                  AND b.status = 'approved' 
+                  AND b.created_at >= date_limit
+            ) as total_cost
     ),
     history AS (
         SELECT 
@@ -61,6 +70,8 @@ BEGIN
         'balance', (SELECT total_balance FROM stats),
         'totalBudgeted', (SELECT total_budgeted FROM stats),
         'totalConverted', (SELECT total_converted FROM stats),
+        'totalCost', (SELECT total_cost FROM stats),
+        'profitability', (SELECT total_converted - total_cost FROM stats),
         'conversionRate', CASE WHEN (SELECT total_budgeted FROM stats) > 0 THEN ((SELECT total_converted FROM stats)::FLOAT / (SELECT total_budgeted FROM stats)::FLOAT) * 100 ELSE 0 END,
         'salesHistory', COALESCE((SELECT json_agg(json_build_object('month', month_key, 'total', total)) FROM (SELECT * FROM history ORDER BY month_key ASC) h), '[]'::json),
         'topProducts', COALESCE((SELECT json_agg(json_build_object('name', name, 'quantity', quantity)) FROM top_products), '[]'::json),

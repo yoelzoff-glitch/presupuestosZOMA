@@ -34,6 +34,8 @@ type DashboardStats = {
   balance: number
   totalBudgeted: number
   totalConverted: number
+  totalCost: number
+  profitability: number
   conversionRate: number
   salesHistory: { month: string; total: number }[]
   topProducts: { name: string; quantity: number }[]
@@ -119,7 +121,7 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
           <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex-1 space-y-4">
               <p className="text-xs font-black uppercase tracking-[0.3em] text-indigo-400">Rendimiento de Ventas</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div>
                   <p className="text-sm font-bold text-slate-400">Total Presupuestado</p>
                   <h3 className="text-3xl font-black mt-1">${stats.totalBudgeted.toLocaleString('es-AR')}</h3>
@@ -129,8 +131,17 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
                   <h3 className="text-3xl font-black mt-1 text-indigo-400">${stats.totalConverted.toLocaleString('es-AR')}</h3>
                 </div>
                 <div>
+                  <p className="text-sm font-bold text-slate-400">Rentabilidad Bruta</p>
+                  <h3 className="text-3xl font-black mt-1 text-emerald-400">
+                    ${stats.profitability.toLocaleString('es-AR')}
+                    <span className="ml-2 text-sm font-bold opacity-60">
+                      ({stats.totalConverted > 0 ? ((stats.profitability / stats.totalConverted) * 100).toFixed(1) : 0}%)
+                    </span>
+                  </h3>
+                </div>
+                <div>
                   <p className="text-sm font-bold text-slate-400">Tasa de Cierre </p>
-                  <h3 className="text-3xl font-black mt-1 text-emerald-400">{stats.conversionRate.toFixed(1)}%</h3>
+                  <h3 className="text-3xl font-black mt-1 text-blue-400">{stats.conversionRate.toFixed(1)}%</h3>
                 </div>
               </div>
             </div>
