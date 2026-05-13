@@ -66,6 +66,8 @@ type Product = {
   category: string | null
   cost_price: number | null
   sale_price: number | null
+  track_stock: boolean | null
+  stock_quantity: number | null
 }
 
 type BudgetItemPreview = {
@@ -352,7 +354,7 @@ export default function PedidoDetallePage(): any {
     if (productIds.length > 0) {
       const { data, error } = await supabase
         .from('products')
-        .select('id, internal_code, name, category, cost_price, sale_price')
+        .select('id, internal_code, name, category, cost_price, sale_price, track_stock, stock_quantity')
         .eq('company_id', currentCompanyId)
         .in('id', productIds)
 
@@ -582,6 +584,43 @@ export default function PedidoDetallePage(): any {
           .from('budgets')
           .update({ status: 'approved', updated_at: new Date().toISOString() })
           .eq('id', budgetId)
+      }
+
+      // 4. DESCUENTO DE STOCK AUTOMÁTICO
+      // Iteramos sobre los ítems del pedido que tienen un producto vinculado
+      for (const item of items) {
+        if (!item.product_id) continue
+
+        // Buscamos el producto en nuestra lista cargada para ver si trackea stock
+        const product = products.find((p) => p.id === item.product_id)
+
+        if (product?.track_stock) {
+          // Consultamos el stock actual en la base de datos por seguridad (concurrencia)
+          const { data: latestProduct } = await supabase
+            .from('products')
+            .select('stock_quantity')
+            .eq('id', item.product_id)
+            .single()
+
+          const currentStock = latestProduct?.stock_quantity || 0
+          const newStock = currentStock - (item.quantity || 0)
+
+          // Actualizamos el stock en la tabla de productos
+          await supabase
+            .from('products')
+            .update({ stock_quantity: newStock })
+            .eq('id', item.product_id)
+
+          // Registramos el movimiento en el historial
+          await supabase.from('stock_movements').insert({
+            company_id: companyId,
+            product_id: item.product_id,
+            type: 'out',
+            quantity: item.quantity,
+            reason: `Venta - Pedido ${orderLabel}`,
+            notes: `Descuento automático al confirmar pedido.`
+          })
+        }
       }
 
       toast.success('Pedido confirmado correctamente. Ahora podés pasarlo a cuenta corriente cuando desees.')
