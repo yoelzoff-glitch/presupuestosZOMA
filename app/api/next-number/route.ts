@@ -52,20 +52,23 @@ export async function POST(req: NextRequest) {
       .eq('company_id', perfil.company_id)
       .order(columna, { ascending: false })
       .limit(1)
-      .maybeSingle()
 
     if (error) {
-      console.error('Error al obtener el siguiente número:', error)
-      return NextResponse.json({ error: 'Error generando número' }, { status: 500 })
+      console.error('Error detallado en base de datos:', error)
+      return NextResponse.json({ 
+        error: 'Error generando número', 
+        details: error.message 
+      }, { status: 500 })
     }
 
     const inicioPorDefecto = tipo === 'budget' ? 1950 : 1
-    const currentNumber = data ? (data as any)[columna] : null
-    const siguienteNumero = (currentNumber ?? inicioPorDefecto - 1) + 1
+    const lastRecord = data && data.length > 0 ? data[0] : null
+    const currentNumber = lastRecord ? (lastRecord as any)[columna] : null
+    const proximoNumero = currentNumber ? Number(currentNumber) + 1 : inicioPorDefecto
 
     return NextResponse.json({ 
       ok: true, 
-      proximo_numero: siguienteNumero,
+      proximo_numero: proximoNumero,
       id_empresa: perfil.company_id 
     })
   } catch (error) {
