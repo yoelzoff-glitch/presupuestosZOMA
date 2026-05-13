@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -53,7 +53,7 @@ export default function NuevoProductoPage() {
     return profile?.company_id ?? null
   }
 
-  useState(() => {
+  useEffect(() => {
     async function checkStockModule() {
       const companyId = await getCompanyId()
       if (!companyId) return
@@ -61,7 +61,7 @@ export default function NuevoProductoPage() {
       setEnableStockModule(data?.enable_stock_module || false)
     }
     checkStockModule()
-  })
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -231,7 +231,48 @@ export default function NuevoProductoPage() {
 
             {enableStockModule && (
               <>
-                <div className="flex items-center gap-3 px-1 md:col-span-2">
+                <div className="md:col-span-2 space-y-3">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Propósito del producto</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, show_in_catalog: true })}
+                      className={`flex flex-col items-center gap-3 rounded-3xl border-2 p-5 transition-all ${
+                        form.show_in_catalog 
+                          ? 'border-blue-600 bg-blue-50/50 ring-4 ring-blue-100' 
+                          : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                      }`}
+                    >
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${form.show_in_catalog ? 'bg-blue-600 text-white' : 'bg-white text-slate-400 shadow-sm'}`}>
+                        <DollarSign size={20} />
+                      </div>
+                      <div className="text-center">
+                        <p className={`text-sm font-black ${form.show_in_catalog ? 'text-blue-900' : 'text-slate-600'}`}>Para Venta</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Visible en catálogo</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, show_in_catalog: false })}
+                      className={`flex flex-col items-center gap-3 rounded-3xl border-2 p-5 transition-all ${
+                        !form.show_in_catalog 
+                          ? 'border-amber-600 bg-amber-50/50 ring-4 ring-amber-100' 
+                          : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                      }`}
+                    >
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${!form.show_in_catalog ? 'bg-amber-600 text-white' : 'bg-white text-slate-400 shadow-sm'}`}>
+                        <Boxes size={20} />
+                      </div>
+                      <div className="text-center">
+                        <p className={`text-sm font-black ${!form.show_in_catalog ? 'text-amber-900' : 'text-slate-600'}`}>Solo Insumo</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Uso interno (Recetas)</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 px-1 md:col-span-2 pt-2">
                   <input
                     type="checkbox"
                     id="track_stock"
@@ -240,14 +281,14 @@ export default function NuevoProductoPage() {
                     className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                   <label htmlFor="track_stock" className="text-sm font-black text-slate-700 cursor-pointer">
-                    Controlar stock de este producto
+                    Habilitar control de stock e inventario
                   </label>
                 </div>
 
                 {form.track_stock && (
                   <Field
                     icon={Boxes}
-                    label="Stock inicial"
+                    label="Stock inicial en depósito"
                     name="stock_quantity"
                     value={form.stock_quantity}
                     onChange={handleChange}
@@ -255,24 +296,6 @@ export default function NuevoProductoPage() {
                     type="number"
                   />
                 )}
-
-                <div className="mt-4 flex items-center gap-3 px-1 md:col-span-2 rounded-2xl bg-slate-50 p-4 border border-slate-100">
-                  <input
-                    type="checkbox"
-                    id="show_in_catalog"
-                    checked={form.show_in_catalog}
-                    onChange={(e) => setForm({ ...form, show_in_catalog: e.target.checked })}
-                    className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div className="cursor-pointer" onClick={() => setForm({ ...form, show_in_catalog: !form.show_in_catalog })}>
-                    <label htmlFor="show_in_catalog" className="text-sm font-black text-slate-700 cursor-pointer block">
-                      Visible en catálogo de clientes
-                    </label>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                      Desactivar si es un insumo o materia prima interna.
-                    </p>
-                  </div>
-                </div>
               </>
             )}
           </div>

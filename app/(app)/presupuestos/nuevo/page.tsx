@@ -134,6 +134,7 @@ export default function NuevoPresupuestoPage() {
         .from('products')
         .select('id, internal_code, name, category, cost_price, sale_price')
         .eq('company_id', currentCompanyId)
+        .eq('show_in_catalog', true)
         .order('name', { ascending: true })
         .range(0, 4999),
     ])

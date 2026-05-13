@@ -37,6 +37,7 @@ type Producto = {
   stock_quantity: number | null
   track_stock: boolean | null
   sale_price: number | null
+  show_in_catalog: boolean
 }
 
 type Props = {
@@ -51,13 +52,14 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
   const [actualizando, setActualizando] = useState(false)
   const [mensajeError, setMensajeError] = useState('')
   const [paginaActual, setPaginaActual] = useState(1)
+  const [activeTab, setActiveTab] = useState<'venta' | 'insumo'>('venta')
 
   async function actualizarProductos() {
     setActualizando(true)
     setMensajeError('')
     const { data, error } = await supabase
       .from('products')
-      .select('id, internal_code, name, supplier, category, cost_price, sale_price, last_price_update, stock_quantity, track_stock')
+      .select('id, internal_code, name, supplier, category, cost_price, sale_price, last_price_update, stock_quantity, track_stock, show_in_catalog')
       .eq('company_id', idEmpresa)
       .eq('active', true)
       .order('name', { ascending: true })
@@ -69,10 +71,13 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
   }
 
   const productosFiltrados = useMemo(() => {
+    // Primero filtramos por la pestaña activa
+    const porTipo = productos.filter(p => activeTab === 'venta' ? p.show_in_catalog : !p.show_in_catalog)
+    
     const q = busqueda.toLowerCase().trim()
-    if (!q) return productos
+    if (!q) return porTipo
 
-    return productos.filter((producto) => {
+    return porTipo.filter((producto) => {
       return (
         producto.name?.toLowerCase().includes(q) ||
         producto.internal_code?.toLowerCase().includes(q) ||
@@ -80,7 +85,7 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
         producto.category?.toLowerCase().includes(q)
       )
     })
-  }, [productos, busqueda])
+  }, [productos, busqueda, activeTab])
 
   const ITEMS_POR_PAGINA = 50
 
@@ -105,13 +110,14 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
     ).size
   }, [productos])
 
+  const productosActuales = productos.filter(p => activeTab === 'venta' ? p.show_in_catalog : !p.show_in_catalog)
   const precioPromedio = useMemo(() => {
-    if (productos.length === 0) return 0
-    const total = productos.reduce((acc, p) => acc + Number(p.cost_price || 0), 0)
-    return total / productos.length
-  }, [productos])
+    if (productosActuales.length === 0) return 0
+    const total = productosActuales.reduce((acc, p) => acc + Number(p.cost_price || 0), 0)
+    return total / productosActuales.length
+  }, [productosActuales])
 
-  const productosSinPrecio = productos.filter((p) => Number(p.cost_price || 0) <= 0).length
+  const productosSinPrecio = productosActuales.filter((p) => Number(p.cost_price || 0) <= 0).length
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden space-y-3 pb-6">
@@ -141,20 +147,42 @@ export default function ProductosClient({ productosIniciales, idEmpresa }: Props
       {mensajeError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-700">{mensajeError}</div>}
 
       <section className="grid w-full max-w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <TarjetaEstado titulo="Productos" valor={productos.length} icon={Package} cargando={cargando} tono="blue" />
+        <TarjetaEstado titulo={activeTab === 'venta' ? "Productos" : "Insumos"} valor={productosActuales.length} icon={activeTab === 'venta' ? Package : Boxes} cargando={cargando} tono="blue" />
         <TarjetaEstado titulo="Proveedores" valor={conteoProveedores} icon={Truck} cargando={cargando} tono="green" />
         <TarjetaEstado titulo="Categorías" valor={conteoCategorias} icon={Tag} cargando={cargando} tono="slate" />
         <TarjetaEstado titulo="Promedio" valor={formatearMoneda(precioPromedio)} icon={DollarSign} cargando={cargando} tono="blue" />
-        <TarjetaEstado titulo="Sin precio" valor={productosSinPrecio} icon={AlertCircle} cargando={cargando} tono={productosSinPrecio > 0 ? 'amber' : 'green'} />
+        <TarjetaEstado titulo="Sin costo" valor={productosSinPrecio} icon={AlertCircle} cargando={cargando} tono={productosSinPrecio > 0 ? 'amber' : 'green'} />
       </section>
 
       <section className="w-full max-w-full overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <h2 className="truncate text-lg font-black text-slate-950">Catálogo de productos</h2>
-              <p className="text-xs text-slate-500">Buscá por nombre, código, proveedor o categoría.</p>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+              <button
+                onClick={() => { setActiveTab('venta'); setPaginaActual(1); }}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                  activeTab === 'venta' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+              >
+                <DollarSign size={14} /> Catálogo de Venta
+              </button>
+              <button
+                onClick={() => { setActiveTab('insumo'); setPaginaActual(1); }}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                  activeTab === 'insumo' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/20' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+              >
+                <Boxes size={14} /> Insumos Internos
+              </button>
             </div>
+            
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <h2 className="truncate text-lg font-black text-slate-950">
+                  {activeTab === 'venta' ? 'Productos para clientes' : 'Suministros y Materia Prima'}
+                </h2>
+                <p className="text-xs text-slate-500">Buscá por nombre, código, proveedor o categoría.</p>
+              </div>
             <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
               <div className="relative w-full sm:w-72">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
