@@ -137,7 +137,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se pudo obtener token de Mercado Pago' }, { status: 400 })
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://presupuestos-zoma.vercel.app'
+    // Detectamos la URL base dinámicamente para soportar servidores de prueba y local
+    const host = req.headers.get('host')
+    const protocol = host?.includes('localhost') ? 'http' : 'https'
+    const dynamicAppUrl = `${protocol}://${host}`
+    
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || dynamicAppUrl
     const externalReference = `cascade:${plan.id}`
 
     const budgetsSummary =
