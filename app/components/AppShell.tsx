@@ -98,8 +98,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     getProfile()
   }, [])
 
-  const isAdmin = profile?.role === 'admin'
   const isSuperAdmin = profile?.email?.toLowerCase() === 'yoel.zoff@gmail.com'
+  const isAdmin = profile?.role === 'admin' || isSuperAdmin
   const planType = profile?.company?.plan_type || 'base'
   const isPro = planType === 'pro' || planType === 'pro_plus'
   const stockEnabled = profile?.company?.enable_stock_module || false
