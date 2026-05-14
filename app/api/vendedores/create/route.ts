@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { email, password, full_name } = body
+    const { email, password, full_name, phone, address } = body
 
     if (!email || !password || !full_name) {
       return NextResponse.json({ error: 'Faltan datos (email, password, nombre)' }, { status: 400 })
@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
         id: authData.user.id,
         company_id: profile.company_id,
         full_name,
-        role: 'vendedor'
+        role: 'vendedor',
+        phone: phone || null,
+        address: address || null
       })
 
     if (profileError) {

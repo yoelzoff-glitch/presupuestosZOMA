@@ -55,6 +55,8 @@ export default function VendedoresClient({
   const [nombreCompleto, setNombreCompleto] = useState('')
   const [correo, setCorreo] = useState('')
   const [contrasena, setContrasena] = useState('')
+  const [telefono, setTelefono] = useState('')
+  const [direccion, setDireccion] = useState('')
   const [creando, setCreando] = useState(false)
 
   async function actualizarVendedores() {
@@ -140,7 +142,13 @@ export default function VendedoresClient({
       const respuesta = await fetch('/api/vendedores/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: nombreCompleto, email: correo, password: contrasena })
+        body: JSON.stringify({ 
+          full_name: nombreCompleto, 
+          email: correo, 
+          password: contrasena,
+          phone: telefono,
+          address: direccion
+        })
       })
 
       const datos = await respuesta.json()
@@ -151,6 +159,8 @@ export default function VendedoresClient({
       setNombreCompleto('')
       setCorreo('')
       setContrasena('')
+      setTelefono('')
+      setDireccion('')
       actualizarVendedores()
     } catch (error: any) {
       toast.error(error.message || 'Error al crear vendedor')
@@ -442,6 +452,34 @@ export default function VendedoresClient({
                     value={contrasena}
                     onChange={(e) => setContrasena(e.target.value)}
                     placeholder="••••••••"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-4 text-sm font-bold text-slate-900 outline-none transition-all focus:border-blue-500/50 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500">Teléfono</label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
+                    placeholder="Ej: +54 9 11 ..."
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-4 text-sm font-bold text-slate-900 outline-none transition-all focus:border-blue-500/50 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500">Dirección</label>
+                <div className="relative">
+                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    value={direccion}
+                    onChange={(e) => setDireccion(e.target.value)}
+                    placeholder="Calle, Ciudad, Provincia"
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-4 text-sm font-bold text-slate-900 outline-none transition-all focus:border-blue-500/50 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                   />
                 </div>
