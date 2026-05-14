@@ -93,6 +93,13 @@ export default function BudgetPublicClient() {
     }
     setBudget(normalizedBudget as Budget)
 
+    // Registrar la visita silenciosamente (Fire and forget)
+    fetch('/api/budgets/track-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ budgetId: data.id })
+    }).catch(e => console.error('Error tracking view:', e))
+
     const { data: companyData } = await supabase
       .from('companies')
       .select('name, cuit, address, phone, email, logo_url, default_notes')

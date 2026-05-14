@@ -33,6 +33,7 @@ type Presupuesto = {
   payment_status: 'unpaid' | 'partial' | 'paid'
   paid_amount: number
   created_at: string
+  viewed_at?: string | null
   seller_id?: string
   seller?: { full_name: string } | null
   client: { name: string; cuit: string } | null
@@ -73,7 +74,7 @@ export default function PresupuestosClient({
 
     let consulta = supabase
       .from('budgets')
-      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, seller_id, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
+      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, viewed_at, seller_id, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
       .eq('company_id', idEmpresa)
       .order('budget_number', { ascending: false })
 
@@ -188,7 +189,13 @@ export default function PresupuestosClient({
               <tbody className="divide-y divide-slate-100">
                 {presupuestosFiltrados.map(p => (
                   <tr key={p.id} className="hover:bg-blue-50/30 transition">
-                    <td className="px-6 py-4"><p className="font-black text-slate-900">{p.budget_code || `000-${p.budget_number}`}</p><p className="text-[10px] font-bold text-slate-400">{new Date(p.budget_date).toLocaleDateString()}</p></td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <p className="font-black text-slate-900">{p.budget_code || `000-${p.budget_number}`}</p>
+                        {p.viewed_at && <span title={`Visto el ${new Date(p.viewed_at).toLocaleDateString('es-AR')}`}><Eye size={14} className="text-emerald-500" /></span>}
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400">{new Date(p.budget_date).toLocaleDateString()}</p>
+                    </td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-700">{p.client?.name}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
