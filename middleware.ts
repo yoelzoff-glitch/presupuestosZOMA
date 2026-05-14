@@ -52,6 +52,7 @@ export async function middleware(request: NextRequest) {
   const esPaginaPortal = rutaActual.startsWith('/portal')
   const esPaginaVendedor = rutaActual.startsWith('/vendedor')
   const esPaginaSuperAdmin = rutaActual.startsWith('/superadmin')
+  const esPaginaPublica = rutaActual.startsWith('/p/')
 
   // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal, vendedor o superadmin
   const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor && !esPaginaSuperAdmin
@@ -68,8 +69,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 1. Redirigir a login si no hay usuario y no es página de auth
-  if (!usuario && !esPaginaAuth) {
+  // 1. Redirigir a login si no hay usuario y no es página de auth ni pública
+  if (!usuario && !esPaginaAuth && !esPaginaPublica) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)

@@ -37,7 +37,6 @@ const navItems = [
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
-  { href: '/configuracion/remito', label: 'Diseño Remitos', icon: Settings, isProFeature: true },
 ]
 
 function getPageTitle(pathname: string) {
@@ -49,7 +48,6 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
   if (pathname.startsWith('/notificaciones')) return 'Notificaciones'
-  if (pathname.startsWith('/configuracion/remito')) return 'Diseñador de Remitos'
   if (pathname.startsWith('/configuracion')) return 'Configuración'
 
   return 'Panel principal'
@@ -64,7 +62,6 @@ function getPageDescription(pathname: string) {
   if (pathname.startsWith('/pedidos')) return 'Gestión de órdenes de venta confirmadas'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
   if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'
-  if (pathname.startsWith('/configuracion/remito')) return 'Personalizá el formato de tus remitos físicos'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'
 
   return 'Sistema de gestión'
