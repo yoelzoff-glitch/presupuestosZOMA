@@ -21,6 +21,7 @@ import {
   ClipboardList,
   Zap,
   MessageCircle,
+  Eye,
 } from 'lucide-react'
 
 type Budget = {
@@ -34,6 +35,7 @@ type Budget = {
   status: string | null
   seller_id: string | null
   notes: string | null
+  viewed_at: string | null
   clients: {
     name: string
     cuit: string
@@ -118,6 +120,7 @@ export default function PresupuestoDetallePage() {
         status,
         seller_id,
         notes,
+        viewed_at,
         clients (
           name,
           cuit,
@@ -487,6 +490,11 @@ export default function PresupuestoDetallePage() {
                 <ArrowLeft size={17} /> Volver
               </Link>
               <h1 className="text-3xl font-black tracking-tight">Presupuesto {budgetLabel}</h1>
+              {budget.viewed_at && (
+                <p className="mt-2 flex items-center gap-2 text-sm font-bold text-emerald-400">
+                  <Eye size={16} /> Visto por el cliente: {new Date(budget.viewed_at).toLocaleString('es-AR')}
+                </p>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-3">
