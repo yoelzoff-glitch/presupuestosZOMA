@@ -302,8 +302,24 @@ export default function PresupuestoDetallePage() {
     const publicUrl = `${window.location.origin}/p/${budget.id}`
     const message = `¡Hola! Te envío el presupuesto *#${budgetLabel}* de *${company?.name || 'nuestra empresa'}*.\n\nPodés verlo y descargarlo en PDF desde este link:\n${publicUrl}\n\nQuedamos a tu disposición.`
     
-    // Si el cliente tiene teléfono, intentamos enviarlo directo
-    const phone = budget.clients?.phone?.replace(/\D/g, '')
+    // Normalización del teléfono para Argentina
+    let phone = budget.clients?.phone?.replace(/\D/g, '') || ''
+    
+    if (phone) {
+      // Si empieza con 0, se lo sacamos
+      if (phone.startsWith('0')) phone = phone.substring(1)
+      // Si no tiene el 54 adelante, se lo ponemos
+      if (!phone.startsWith('54')) {
+        // En Argentina los celulares llevan un 9 después del 54
+        // Si el número tiene 10 dígitos (ej: 11 4145...) le ponemos 549
+        if (phone.length === 10) {
+          phone = '549' + phone
+        } else {
+          phone = '54' + phone
+        }
+      }
+    }
+
     const waUrl = phone 
       ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`
