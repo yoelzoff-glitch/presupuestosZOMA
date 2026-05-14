@@ -82,12 +82,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('users_profiles')
             .select('role, company:companies(plan_type, enable_stock_module)')
             .eq('id', user.id)
             .single()
-          setProfile({ ...data, email: user.email })
+          
+          // Seteamos el perfil. Si no hay data (error), igual guardamos el email para el check de Super Admin
+          setProfile({ ...(data || {}), email: user.email })
         }
       } catch (err) {
         console.error('Error al cargar perfil:', err)
