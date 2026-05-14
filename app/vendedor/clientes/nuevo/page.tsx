@@ -25,8 +25,10 @@ export default function VendedorNuevoCliente() {
   const [address, setAddress] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [clientType, setClientType] = useState<'consumidor_final' | 'distribuidor'>('consumidor_final')
   
   const [loading, setLoading] = useState(false)
+// ... (omitting lines for brevity in instruction, will provide full replacement below)
   const [importing, setImporting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -59,7 +61,8 @@ export default function VendedorNuevoCliente() {
         address: address.trim() || null,
         email: email.trim() || null,
         phone: phone.trim() || null,
-        seller_id: profile.role === 'vendedor' ? userData.user.id : null
+        seller_id: profile.role === 'vendedor' ? userData.user.id : null,
+        client_type: clientType
       })
 
       if (error) throw error
@@ -76,10 +79,58 @@ export default function VendedorNuevoCliente() {
   async function handleExcelImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    
     setImporting(true)
-    // ... (Lógica de Excel similar a la original para mantener compatibilidad)
-    setImporting(false)
-    toast.info('Importación desde Excel completada')
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData.user) throw new Error('No autenticado')
+      const { data: profile } = await supabase.from('users_profiles').select('company_id, role').eq('id', userData.user.id).single()
+      if (!profile?.company_id) throw new Error('No se encontró la empresa')
+
+      const buffer = await file.arrayBuffer()
+      const workbook = XLSX.read(buffer, { type: 'array' })
+      const rows = XLSX.utils.sheet_to_json<any>(workbook.Sheets[workbook.SheetNames[0]])
+
+      const payload = rows.map(r => {
+        const normalizedRow: any = {}
+        Object.keys(r).forEach(key => {
+          const normalizedKey = key.toLowerCase().trim().replace(/[\s_]/g, '')
+          normalizedRow[normalizedKey] = r[key]
+        })
+
+        const name = normalizedRow.nombre || normalizedRow.name || normalizedRow.razonsocial || normalizedRow.cliente || normalizedRow.empresa || ''
+        if (!name) return null
+
+        const tipoStr = String(normalizedRow.tipo || normalizedRow.type || normalizedRow.categoria || normalizedRow.clasificacion || '').toLowerCase()
+        let detectedType: 'consumidor_final' | 'distribuidor' = 'consumidor_final'
+        if (tipoStr.includes('dist') || tipoStr.includes('mayo') || tipoStr.includes('revend')) {
+          detectedType = 'distribuidor'
+        }
+
+        return {
+          company_id: profile.company_id,
+          cuit: String(normalizedRow.cuit || normalizedRow.dni || normalizedRow.cuil || normalizedRow.identificacion || '').replace(/\D/g, '') || null,
+          name: String(name).trim(),
+          address: String(normalizedRow.direccion || normalizedRow.address || normalizedRow.domicilio || normalizedRow.calle || normalizedRow.ubicacion || ''),
+          email: String(normalizedRow.email || normalizedRow.mail || normalizedRow.correo || normalizedRow['e-mail'] || ''),
+          phone: String(normalizedRow.telefono || normalizedRow.phone || normalizedRow.celular || normalizedRow.whatsapp || normalizedRow.tel || ''),
+          seller_id: profile.role === 'vendedor' ? userData.user.id : null,
+          client_type: detectedType
+        }
+      }).filter(Boolean) as any[]
+
+      if (payload.length === 0) throw new Error('No se encontraron clientes válidos en el archivo.')
+
+      const { error } = await supabase.from('clients').insert(payload)
+      if (error) throw error
+      
+      toast.success(`Se importaron ${payload.length} clientes correctamente.`)
+      router.push('/vendedor/clientes')
+    } catch (err: any) {
+      toast.error(err.message || 'Error en la importación.')
+    } finally {
+      setImporting(false); e.target.value = ''
+    }
   }
 
   return (
@@ -109,7 +160,7 @@ export default function VendedorNuevoCliente() {
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Importar contactos rápido</p>
               </div>
             </div>
-            <input type="file" className="hidden" accept=".xlsx,.xls" onChange={handleExcelImport} disabled={importing} />
+            <input type="file" className="hidden" accept=".xlsx,.xls,.xlsm,.csv" onChange={handleExcelImport} disabled={importing} />
           </label>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -185,6 +236,14 @@ export default function VendedorNuevoCliente() {
                     placeholder="Calle, Número, Ciudad..."
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-4 pl-12 pr-4 text-sm font-bold text-slate-900 outline-none focus:border-blue-500 focus:bg-white transition shadow-inner"
                   />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Tipo de Cliente</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setClientType('consumidor_final')} className={`py-4 px-4 rounded-xl text-xs font-black transition border-2 ${clientType === 'consumidor_final' ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-500'}`}>CONSUMIDOR FINAL</button>
+                  <button type="button" onClick={() => setClientType('distribuidor')} className={`py-4 px-4 rounded-xl text-xs font-black transition border-2 ${clientType === 'distribuidor' ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-500'}`}>DISTRIBUIDOR</button>
                 </div>
               </div>
             </div>
