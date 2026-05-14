@@ -26,6 +26,7 @@ export default function NuevoCliente() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [selectedSellerId, setSelectedSellerId] = useState<string>('')
+  const [clientType, setClientType] = useState<'consumidor_final' | 'distribuidor'>('consumidor_final')
   
   const [sellers, setSellers] = useState<SellerProfile[]>([])
   const [loading, setLoading] = useState(false)
@@ -73,7 +74,8 @@ export default function NuevoCliente() {
         address: address.trim() || null,
         email: email.trim() || null,
         phone: phone.trim() || null,
-        seller_id: selectedSellerId || null
+        seller_id: selectedSellerId || null,
+        client_type: clientType
       })
 
       if (error) throw error
@@ -114,7 +116,8 @@ export default function NuevoCliente() {
           address: String(normalizedRow.direccion || normalizedRow.address || normalizedRow.domicilio || ''),
           email: String(normalizedRow.email || normalizedRow.mail || ''),
           phone: String(normalizedRow.telefono || normalizedRow.phone || normalizedRow.celular || ''),
-          seller_id: selectedSellerId || null
+          seller_id: selectedSellerId || null,
+          client_type: String(normalizedRow.tipo || normalizedRow.type || '').toLowerCase().includes('dist') ? 'distribuidor' : 'consumidor_final'
         }
       }).filter(Boolean) as any[]
 
@@ -188,6 +191,34 @@ export default function NuevoCliente() {
                   <input value={email} type="email" onChange={(e) => setEmail(e.target.value)} placeholder="Email de contacto" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition" />
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition" />
                   <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Dirección completa" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition" />
+                  
+                  <div className="pt-2">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Tipo de Cliente</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setClientType('consumidor_final')}
+                        className={`py-3 px-4 rounded-xl text-xs font-black transition border-2 ${
+                          clientType === 'consumidor_final' 
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                            : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
+                        }`}
+                      >
+                        CONSUMIDOR FINAL
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClientType('distribuidor')}
+                        className={`py-3 px-4 rounded-xl text-xs font-black transition border-2 ${
+                          clientType === 'distribuidor' 
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                            : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
+                        }`}
+                      >
+                        DISTRIBUIDOR
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <button disabled={loading} type="submit" className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-sm hover:bg-blue-600 transition shadow-xl active:scale-95 disabled:opacity-50">
