@@ -323,7 +323,7 @@ export default function VendedorNuevoPresupuesto() {
                   }}
                   className="w-full mt-4 bg-blue-600 text-white py-3 rounded-xl font-black text-xs hover:bg-blue-500 transition shadow-lg shadow-blue-900/10"
                 >
-                  Agregar a la lista
+                  Agregar a la lista  
                 </button>
               </div>
             )}

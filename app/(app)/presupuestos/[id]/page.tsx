@@ -20,6 +20,7 @@ import {
   Clock3,
   ClipboardList,
   Zap,
+  MessageCircle,
 } from 'lucide-react'
 
 type Budget = {
@@ -294,6 +295,38 @@ export default function PresupuestoDetallePage() {
     }
   }
 
+  function handleWhatsAppShare() {
+    if (!budget) return
+    
+    const budgetLabel = budget.budget_code || `000-${budget.budget_number}`
+    const publicUrl = `${window.location.origin}/p/${budget.id}`
+    const message = `¡Hola! Te envío el presupuesto *#${budgetLabel}* de *${company?.name || 'nuestra empresa'}*.\n\nPodés verlo y descargarlo en PDF desde este link:\n${publicUrl}\n\nQuedamos a tu disposición.`
+    
+    // Normalización del teléfono para Argentina
+    let phone = budget.clients?.phone?.replace(/\D/g, '') || ''
+    
+    if (phone) {
+      // Si empieza con 0, se lo sacamos
+      if (phone.startsWith('0')) phone = phone.substring(1)
+      // Si no tiene el 54 adelante, se lo ponemos
+      if (!phone.startsWith('54')) {
+        // En Argentina los celulares llevan un 9 después del 54
+        // Si el número tiene 10 dígitos (ej: 11 4145...) le ponemos 549
+        if (phone.length === 10) {
+          phone = '549' + phone
+        } else {
+          phone = '54' + phone
+        }
+      }
+    }
+
+    const waUrl = phone 
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`
+    
+    window.open(waUrl, '_blank')
+  }
+
   async function subtractStockForOrder(orderId: string, orderItems: any[]) {
     try {
       const productIds = orderItems.map(i => i.product_id).filter(Boolean) as string[]
@@ -456,19 +489,27 @@ export default function PresupuestoDetallePage() {
               <h1 className="text-3xl font-black tracking-tight">Presupuesto {budgetLabel}</h1>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <StatusBadge status={budget.status || 'issued'} />
               <button
                 onClick={handlePasarAPedido}
                 disabled={convertingToOrder || isCheckingPrices || !!associatedOrderId || budget.status === 'cancelled'}
-                className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-500 disabled:opacity-50 transition active:scale-95 shadow-lg shadow-blue-900/20"
               >
                 {convertingToOrder || isCheckingPrices ? <Loader2 size={18} className="animate-spin" /> : <ClipboardList size={18} />}
                 {associatedOrderId ? 'Ya es pedido' : 'Pasar a pedido'}
               </button>
+              
+              <button
+                onClick={handleWhatsAppShare}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-500 transition active:scale-95 shadow-lg shadow-emerald-900/20"
+              >
+                <MessageCircle size={18} /> Compartir WhatsApp
+              </button>
+
               <button
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white hover:bg-slate-700"
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-800 px-5 py-3 text-sm font-black text-white hover:bg-slate-700 transition active:scale-95 shadow-lg shadow-slate-900/20"
               >
                 <Printer size={18} /> Imprimir / PDF
               </button>

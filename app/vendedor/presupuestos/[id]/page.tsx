@@ -19,6 +19,7 @@ import {
   Clock3,
   ClipboardList,
   Zap,
+  MessageCircle,
 } from 'lucide-react'
 
 type Budget = {
@@ -145,6 +146,34 @@ export default function VendedorPresupuestoDetalle() {
     }
   }
 
+  function handleWhatsAppShare() {
+    if (!budget) return
+    
+    const budgetLabel = budget.budget_code || `000-${budget.budget_number}`
+    const publicUrl = `${window.location.origin}/p/${budget.id}`
+    const message = `¡Hola! Te envío el presupuesto *#${budgetLabel}* de *${company?.name || 'nuestra empresa'}*.\n\nPodés verlo y descargarlo en PDF desde este link:\n${publicUrl}\n\nQuedamos a tu disposición.`
+    
+    // Normalización del teléfono para Argentina
+    let phone = budget.clients?.phone?.replace(/\D/g, '') || ''
+    
+    if (phone) {
+      if (phone.startsWith('0')) phone = phone.substring(1)
+      if (!phone.startsWith('54')) {
+        if (phone.length === 10) {
+          phone = '549' + phone
+        } else {
+          phone = '54' + phone
+        }
+      }
+    }
+
+    const waUrl = phone 
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`
+    
+    window.open(waUrl, '_blank')
+  }
+
   if (loading) return <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" size={40} /></div>
   if (!budget) return <div className="p-20 text-center font-black">Presupuesto no encontrado</div>
 
@@ -179,8 +208,14 @@ export default function VendedorPresupuestoDetalle() {
                 {convertingToOrder ? <Loader2 size={16} className="animate-spin" /> : <ClipboardList size={16} />}
                 {associatedOrderId ? 'Ya es pedido' : 'Aprobar Pedido'}
               </button>
-              <button onClick={() => window.print()} className="bg-white/10 hover:bg-white/20 px-5 py-3 rounded-2xl font-black text-xs transition border border-white/10">
+               <button onClick={() => window.print()} className="bg-white/10 hover:bg-white/20 px-5 py-3 rounded-2xl font-black text-xs transition border border-white/10">
                 <Printer size={16} className="inline mr-2" /> PDF
+              </button>
+              <button 
+                onClick={handleWhatsAppShare}
+                className="bg-emerald-600 hover:bg-emerald-500 px-5 py-3 rounded-2xl font-black text-xs transition shadow-lg shadow-emerald-900/20 flex items-center gap-2"
+              >
+                <MessageCircle size={16} /> Compartir WhatsApp
               </button>
           </div>
         </section>
