@@ -28,12 +28,28 @@ type Client = {
   active?: boolean | null
   created_at?: string
   seller_id?: string | null
+  client_type?: 'consumidor_final' | 'distribuidor' | null
 }
 
 type Props = {
   clientesIniciales: Client[]
   rol: string
   idUsuario: string
+}
+
+function EtiquetaTipoCliente({ tipo }: { tipo?: string | null }) {
+  if (tipo === 'distribuidor') {
+    return (
+      <span className="bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-blue-200">
+        DIST
+      </span>
+    )
+  }
+  return (
+    <span className="bg-slate-100 text-slate-500 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-slate-200">
+      C.F.
+    </span>
+  )
 }
 
 export default function ClientesVendedorClient({ clientesIniciales, rol, idUsuario }: Props) {
@@ -49,7 +65,7 @@ export default function ClientesVendedorClient({ clientesIniciales, rol, idUsuar
     let query = supabase
       .from('clients')
       .select(`
-        id, cuit, name, address, email, phone, active, created_at, seller_id
+        id, cuit, name, address, email, phone, active, created_at, seller_id, client_type
       `)
       .order('name', { ascending: true })
 
@@ -137,7 +153,10 @@ export default function ClientesVendedorClient({ clientesIniciales, rol, idUsuar
                     {client.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-black text-slate-900 truncate pr-2">{client.name}</h3>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="font-black text-slate-900 truncate pr-2">{client.name}</h3>
+                      <EtiquetaTipoCliente tipo={client.client_type} />
+                    </div>
                     <div className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       <IdCard size={12} />
                       {client.cuit || 'S/D'}
