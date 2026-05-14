@@ -34,6 +34,7 @@ export default function EditarCliente() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [active, setActive] = useState<ClientStatus>(true)
+  const [clientType, setClientType] = useState<'consumidor_final' | 'distribuidor'>('consumidor_final')
 
   const [loading, setLoading] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
@@ -53,7 +54,7 @@ export default function EditarCliente() {
 
     const { data, error } = await supabase
       .from('clients')
-      .select('id, cuit, name, address, active, email, phone, seller_id')
+      .select('id, cuit, name, address, active, email, phone, seller_id, client_type')
       .eq('id', id)
       .single()
 
@@ -71,6 +72,7 @@ export default function EditarCliente() {
       setPhone(data.phone || '')
       setActive(data.active !== false)
       setSelectedSellerId(data.seller_id || '')
+      setClientType((data.client_type as any) || 'consumidor_final')
     }
 
     // Load sellers and plan info
@@ -113,6 +115,7 @@ export default function EditarCliente() {
         email: email.trim() || null,
         phone: phone.trim() || null,
         seller_id: selectedSellerId || null,
+        client_type: clientType,
       })
       .eq('id', id)
 
@@ -350,6 +353,34 @@ export default function EditarCliente() {
                     className="w-full rounded-2xl border-2 border-slate-50 bg-slate-50/50 py-4 pl-12 pr-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
                     placeholder="Calle, Ciudad..."
                   />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Tipo de Cliente</p>
+                <div className="grid grid-cols-2 gap-3 max-w-md">
+                  <button
+                    type="button"
+                    onClick={() => setClientType('consumidor_final')}
+                    className={`py-4 px-6 rounded-2xl text-xs font-black transition border-2 ${
+                      clientType === 'consumidor_final' 
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20' 
+                        : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
+                    }`}
+                  >
+                    CONSUMIDOR FINAL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClientType('distribuidor')}
+                    className={`py-4 px-6 rounded-2xl text-xs font-black transition border-2 ${
+                      clientType === 'distribuidor' 
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20' 
+                        : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
+                    }`}
+                  >
+                    DISTRIBUIDOR
+                  </button>
                 </div>
               </div>
 
