@@ -29,6 +29,7 @@ type Cliente = {
   active?: boolean | null
   created_at?: string
   seller_id?: string | null
+  client_type?: 'consumidor_final' | 'distribuidor' | null
   seller?: {
     full_name: string
   } | null
@@ -62,7 +63,7 @@ export default function ClientesClient({
     setActualizando(true)
     const { data, error } = await supabase
       .from('clients')
-      .select(`id, cuit, name, address, email, phone, active, created_at, seller_id, seller:users_profiles!seller_id(full_name)`)
+      .select(`id, cuit, name, address, email, phone, active, created_at, seller_id, client_type, seller:users_profiles!seller_id(full_name)`)
       .eq('company_id', idEmpresa)
       .order('created_at', { ascending: false })
 
@@ -153,7 +154,10 @@ export default function ClientesClient({
               {clientesFiltrados.map(c => (
                 <tr key={c.id} className="hover:bg-blue-50/30 transition">
                   <td className="px-6 py-4">
-                    <p className="font-black text-slate-900">{c.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-black text-slate-900">{c.name}</p>
+                      <EtiquetaTipoCliente tipo={c.client_type} />
+                    </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{c.email || c.phone || 'Sin contacto'}</p>
                   </td>
                   <td className="px-6 py-4"><EtiquetaCuit cuit={c.cuit} /></td>
@@ -188,6 +192,21 @@ function EtiquetaCuit({ cuit }: { cuit: string | null }) {
 
 function EtiquetaEstado({ activo }: { activo: boolean }) {
   return <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase ${activo ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>{activo ? 'Activo' : 'Inactivo'}</span>
+}
+
+function EtiquetaTipoCliente({ tipo }: { tipo: string | null | undefined }) {
+  if (tipo === 'distribuidor') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-600 text-[9px] font-black uppercase tracking-tighter text-white shadow-sm">
+        DIST
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-slate-100 text-[9px] font-black uppercase tracking-tighter text-slate-500">
+      C.F.
+    </span>
+  )
 }
 
 function BotonEditar({ id }: { id: string }) {
