@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/server'
-const { WSAA, WSFE } = require('afip-apis')
+const Afip = require('afip-apis')
+// Si la librería exporta un default, lo usamos, si no, usamos el objeto directamente
+const { WSAA, WSFE } = Afip.default || Afip 
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
