@@ -81,12 +81,12 @@ export default function LandingPage() {
         {/* --- HERO SECTION (Light) --- */}
         <section className="relative pt-40 pb-24 lg:pt-56 lg:pb-40 bg-white overflow-hidden">
           {/* Tech Background Banner (Blurred) */}
-          <div className="absolute top-0 left-0 w-full h-[600px] opacity-[0.08] pointer-events-none">
+          <div className="absolute top-0 left-0 w-full h-[600px] opacity-[0.15] pointer-events-none">
             <Image 
               src="/tech-banner.png" 
               alt="Tech Background" 
               fill 
-              className="object-cover blur-[100px]"
+              className="object-cover blur-[40px]"
               priority
             />
             <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white" />
