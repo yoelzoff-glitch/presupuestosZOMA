@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     if (cError || !config) throw new Error('Configuración fiscal no encontrada')
 
     console.log('Facturando para Company:', budget.company_id)
+    console.log('Usando Config ID:', config.id)
     console.log('Cert starts with:', config.cert_content?.substring(0, 20))
     console.log('Key starts with:', config.key_content?.substring(0, 20))
 
