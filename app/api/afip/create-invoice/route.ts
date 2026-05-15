@@ -98,12 +98,16 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log('AFIP Result:', JSON.stringify(result, null, 2))
+    // La respuesta del SDK tiene el Resultado dentro de response.FeCabResp
+    const status = result.response?.FeCabResp?.Resultado || result.Resultado
+    const cae = result.cae || result.CAE || result.response?.FeDetResp?.FECAEDetResponse?.[0]?.CAE
+    const caeFchVto = result.caeFchVto || result.CAEFchVto || result.response?.FeDetResp?.FECAEDetResponse?.[0]?.CAEFchVto
+    const cbteNro = result.cbteDesde || result.CbteDesde || result.response?.FeDetResp?.FECAEDetResponse?.[0]?.CbteDesde
 
-    if (result.Resultado !== 'A') {
-      const obs = result.Observaciones?.Obs?.[0]?.Msg
+    if (status !== 'A') {
+      const obs = result.response?.FeDetResp?.FECAEDetResponse?.[0]?.Observaciones?.Obs?.[0]?.Msg || result.Observaciones?.Obs?.[0]?.Msg
       const err = result.Errors?.Err?.[0]?.Msg
-      const msg = obs || err || `Error ARCA: ${JSON.stringify(result).substring(0, 150)}...`
+      const msg = obs || err || `Error ARCA: ${JSON.stringify(result).substring(0, 100)}...`
       throw new Error(msg)
     }
 
@@ -111,9 +115,9 @@ export async function POST(request: Request) {
     const { error: updateError } = await supabaseAdmin
       .from('budgets')
       .update({
-        afip_cae: result.CAE,
-        afip_cae_vencimiento: result.CAEFchVto,
-        afip_comprobante_numero: result.CbteDesde,
+        afip_cae: cae,
+        afip_cae_vencimiento: caeFchVto,
+        afip_comprobante_numero: cbteNro,
         afip_comprobante_tipo: cbteTipo,
         status: 'facturado'
       })
@@ -123,8 +127,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      cae: result.CAE,
-      invoice_number: result.CbteDesde,
+      cae: cae,
+      invoice_number: cbteNro,
       message: 'Factura emitida con éxito'
     })
 
