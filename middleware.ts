@@ -85,10 +85,23 @@ export async function middleware(request: NextRequest) {
     if (!rol) {
       const { data: perfil } = await supabase
         .from('users_profiles')
-        .select('role')
+        .select('role, subscription_expiry')
         .eq('id', usuario.id)
         .single()
       rol = perfil?.role
+      
+      // 3. Validar Suscripción Vencida (Excepto Yoel)
+      const esYoel = usuario.email?.toLowerCase() === 'yoel.zoff@gmail.com'
+      if (!esYoel && perfil?.subscription_expiry) {
+        const hoy = new Date()
+        const vencimiento = new Date(perfil.subscription_expiry)
+        
+        if (hoy > vencimiento && rutaActual !== '/vencido' && !esPaginaPublica && !esPaginaAuth) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/vencido'
+          return NextResponse.redirect(url)
+        }
+      }
     }
 
     // Redirigir si intenta entrar a /auth o / (landing) estando logueado
