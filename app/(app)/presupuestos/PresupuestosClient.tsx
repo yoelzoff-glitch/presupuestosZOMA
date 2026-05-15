@@ -18,6 +18,7 @@ import {
   Loader2,
   Clock3,
   Lock,
+  ShieldCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -37,6 +38,7 @@ type Presupuesto = {
   seller_id?: string
   seller?: { full_name: string } | null
   client: { name: string; cuit: string } | null
+  afip_cae?: string | null
 }
 
 type PerfilVendedor = { id: string; full_name: string }
@@ -68,13 +70,39 @@ export default function PresupuestosClient({
   const [filtroVendedor, setFiltroVendedor] = useState<string>('all')
   const [cargando, setCargando] = useState(false)
   const [filtroDias, setFiltroDias] = useState('30')
+  const [emitiendoId, setEmitiendoId] = useState<string | null>(null)
+
+  async function emitirFactura(id: string) {
+    if (!confirm('¿Estás seguro de emitir la Factura Electrónica legal ante ARCA?')) return
+    
+    setEmitiendoId(id)
+    try {
+      const response = await fetch('/api/afip/create-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ budget_id: id })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success(`Factura emitida con éxito! CAE: ${data.cae}`)
+        cargarPresupuestos() // Recargar lista
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (error: any) {
+      toast.error('Error al facturar: ' + error.message)
+    } finally {
+      setEmitiendoId(null)
+    }
+  }
 
   async function cargarPresupuestos() {
     setCargando(true)
 
     let consulta = supabase
       .from('budgets')
-      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, viewed_at, seller_id, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
+      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, viewed_at, seller_id, afip_cae, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
       .eq('company_id', idEmpresa)
       .order('budget_number', { ascending: false })
 
@@ -204,8 +232,22 @@ export default function PresupuestosClient({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right font-black text-blue-700">${p.total_amount.toLocaleString('es-AR')}</td>
-                    <td className="px-6 py-4"><EtiquetaEstado estado={p.status} /></td>
-                    <td className="px-6 py-4 text-right"><Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link></td>
+                    <td className="px-6 py-4"><EtiquetaEstado estado={p.status} tieneCAE={!!p.afip_cae} /></td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {p.status === 'approved' && !p.afip_cae && (
+                          <button
+                            onClick={() => emitirFactura(p.id)}
+                            disabled={!!emitiendoId}
+                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50"
+                          >
+                            {emitiendoId === p.id ? <Loader2 className="animate-spin" size={14} /> : <DollarSign size={14} />}
+                            Emitir Factura
+                          </button>
+                        )}
+                        <Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -226,13 +268,16 @@ function TarjetaEstado({ titulo, valor, icon: Icon, cargando }: { titulo: string
   )
 }
 
-function EtiquetaEstado({ estado }: { estado: string }) {
+function EtiquetaEstado({ estado, tieneCAE }: { estado: string; tieneCAE?: boolean }) {
   const configs: any = {
     cancelled: { etiqueta: 'Cancelado', icon: XCircle, className: 'bg-red-50 text-red-600' },
     approved: { etiqueta: 'Aprobado', icon: CheckCircle2, className: 'bg-blue-50 text-blue-600' },
     issued: { etiqueta: 'Emitido', icon: Clock3, className: 'bg-emerald-50 text-emerald-600' },
+    facturado: { etiqueta: 'Facturado', icon: ShieldCheck, className: 'bg-indigo-50 text-indigo-600' },
   }
-  const config = configs[estado] || configs.issued
+  
+  const currentStatus = tieneCAE ? 'facturado' : estado
+  const config = configs[currentStatus] || configs.issued
   return <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ${config.className}`}><config.icon size={12} /> {config.etiqueta}</span>
 }
 
