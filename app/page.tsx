@@ -153,9 +153,9 @@ export default function LandingPage() {
               <motion.div 
                 animate={{ y: [0, -20, 0] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -top-20 -right-20 hidden lg:block z-20 pointer-events-none"
+                className="absolute -top-12 -right-12 hidden lg:block z-20 pointer-events-none"
               >
-                <Image src="/hero-3d.png" alt="3D" width={320} height={320} className="drop-shadow-2xl scale-110" />
+                <Image src="/hero-3d.png" alt="3D" width={240} height={240} className="drop-shadow-2xl" />
               </motion.div>
             </motion.div>
           </div>
@@ -199,12 +199,12 @@ export default function LandingPage() {
                       Saber más <ChevronRight size={18} />
                    </Link>
                 </div>
-                <div className="absolute right-0 bottom-0 w-[55%] h-[90%] opacity-50 group-hover:scale-105 transition-transform duration-700 pointer-events-none">
+                <div className="absolute right-0 bottom-0 w-[50%] h-full opacity-60 group-hover:scale-105 transition-transform duration-700 pointer-events-none">
                    <Image 
-                     src="/growth-icon.png" 
+                     src="/growth-icon-dark.png" 
                      alt="Growth" 
                      fill 
-                     className="object-contain object-right-bottom"
+                     className="object-contain object-right-bottom mix-blend-screen"
                    />
                 </div>
               </motion.div>
