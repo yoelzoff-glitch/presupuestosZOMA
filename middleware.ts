@@ -52,7 +52,7 @@ export async function middleware(request: NextRequest) {
   const esPaginaPortal = rutaActual.startsWith('/portal')
   const esPaginaVendedor = rutaActual.startsWith('/vendedor')
   const esPaginaSuperAdmin = rutaActual.startsWith('/superadmin')
-  const esPaginaPublica = rutaActual.startsWith('/p/')
+  const esPaginaPublica = rutaActual.startsWith('/p/') || rutaActual === '/'
 
   // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal, vendedor o superadmin
   const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor && !esPaginaSuperAdmin
@@ -64,7 +64,7 @@ export async function middleware(request: NextRequest) {
   if (esPaginaSuperAdmin) {
     if (!usuario || usuario.email?.toLowerCase() !== 'yoel.zoff@gmail.com') {
       const url = request.nextUrl.clone()
-      url.pathname = '/'
+      url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }
   }
@@ -91,10 +91,10 @@ export async function middleware(request: NextRequest) {
       rol = perfil?.role
     }
 
-    // Redirigir si intenta entrar a /auth estando logueado
-    if (esPaginaAuth) {
+    // Redirigir si intenta entrar a /auth o / (landing) estando logueado
+    if (esPaginaAuth || rutaActual === '/') {
       const url = request.nextUrl.clone()
-      url.pathname = rol === 'customer' ? '/portal' : rol === 'vendedor' ? '/vendedor' : '/'
+      url.pathname = rol === 'customer' ? '/portal' : rol === 'vendedor' ? '/vendedor' : '/dashboard'
       return NextResponse.redirect(url)
     }
 
@@ -115,7 +115,7 @@ export async function middleware(request: NextRequest) {
     // Admin/Vendedor no deben entrar al portal de clientes
     if (rol !== 'customer' && esPaginaPortal) {
       const url = request.nextUrl.clone()
-      url.pathname = '/'
+      url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }
   }

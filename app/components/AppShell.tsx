@@ -30,7 +30,7 @@ type AppShellProps = {
 }
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/productos', label: 'Productos', icon: Package },
   { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
@@ -40,7 +40,7 @@ const navItems = [
 ]
 
 function getPageTitle(pathname: string) {
-  if (pathname === '/') return 'Dashboard'
+  if (pathname === '/dashboard') return 'Dashboard'
   if (pathname.startsWith('/clientes')) return 'Clientes'
   if (pathname.startsWith('/productos')) return 'Productos'
   if (pathname.startsWith('/inventario')) return 'Inventario'
@@ -54,7 +54,7 @@ function getPageTitle(pathname: string) {
 }
 
 function getPageDescription(pathname: string) {
-  if (pathname === '/') return 'Resumen general de la gestión comercial'
+  if (pathname === '/dashboard') return 'Resumen general de la gestión comercial'
   if (pathname.startsWith('/clientes')) return 'Administración de clientes y datos comerciales'
   if (pathname.startsWith('/productos')) return 'Gestión de productos, precios y catálogo'
   if (pathname.startsWith('/inventario')) return 'Control de stock y movimientos de mercadería'
@@ -68,7 +68,7 @@ function getPageDescription(pathname: string) {
 }
 
 function isActiveRoute(pathname: string, href: string) {
-  if (href === '/') return pathname === '/'
+  if (href === '/dashboard') return pathname === '/dashboard'
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
