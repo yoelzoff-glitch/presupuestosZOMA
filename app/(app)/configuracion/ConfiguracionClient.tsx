@@ -12,6 +12,7 @@ import {
   Loader2,
   Building2,
   ClipboardList,
+  Gavel,
 } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase/client'
@@ -261,6 +262,30 @@ export default function ConfiguracionClient({ companyId }: Props) {
 
           <p className="mt-4 text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
             Ir a gestión →
+          </p>
+        </Link>
+
+        {/* Configuración Fiscal (AFIP/ARCA) */}
+        <Link
+          href="/configuracion/fiscal"
+          className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
+              <Gavel size={22} />
+            </div>
+
+            <h2 className="text-lg font-black text-slate-900">
+              Configuración Fiscal
+            </h2>
+          </div>
+
+          <p className="mt-3 text-sm text-slate-500">
+            Vinculá tu CUIT y certificados de ARCA para emitir facturas electrónicas legales.
+          </p>
+
+          <p className="mt-4 text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
+            Configurar AFIP →
           </p>
         </Link>
 
