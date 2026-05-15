@@ -19,6 +19,7 @@ import {
   Loader2,
   ShieldCheck,
   Boxes,
+  Clock,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
@@ -229,6 +230,7 @@ export default function AppShell({ children }: AppShellProps) {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [planType, setPlanType] = useState<string | null>(null)
+  const [diasRestantes, setDiasRestantes] = useState<number | null>(null)
 
   useEffect(() => {
     async function checkAccess() {
@@ -236,7 +238,7 @@ export default function AppShell({ children }: AppShellProps) {
       if (user) {
         const { data } = await supabase
           .from('users_profiles')
-          .select('role, company_id, company:companies(plan_type)')
+          .select('role, company_id, company:companies(plan_type, subscription_expiry)')
           .eq('id', user.id)
           .single()
         
@@ -246,8 +248,16 @@ export default function AppShell({ children }: AppShellProps) {
           return
         }
 
-        const rawPlan = (data?.company as any)?.plan_type
-        setPlanType(rawPlan || 'base')
+        const company = data?.company as any
+        setPlanType(company?.plan_type || 'base')
+        
+        if (company?.subscription_expiry) {
+          const hoy = new Date()
+          const vencimiento = new Date(company.subscription_expiry)
+          const diferencia = vencimiento.getTime() - hoy.getTime()
+          const dias = Math.ceil(diferencia / (1000 * 60 * 60 * 24))
+          setDiasRestantes(dias)
+        }
       }
     }
     checkAccess()
@@ -314,6 +324,20 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              {diasRestantes !== null && diasRestantes <= 15 && (
+                <Link
+                  href="/configuracion/suscripcion" // Opcional: una página de suscripción futura
+                  className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${
+                    diasRestantes <= 3 
+                      ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' 
+                      : 'bg-amber-50 border-amber-200 text-amber-700'
+                  }`}
+                >
+                  <Clock size={14} />
+                  {diasRestantes <= 0 ? 'Vence hoy' : `Quedan ${diasRestantes} días`}
+                </Link>
+              )}
+
               <Link
                 href="/configuracion"
                 className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-all duration-300 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
