@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 type Props = {
   isOpen: boolean
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: (tipoCbte: number) => void
   budgetId: string
   clientName: string
   totalAmount: number
@@ -26,6 +26,7 @@ export default function InvoicePreviewModal({
   const [config, setConfig] = useState<any>(null)
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [tipoCbte, setTipoCbte] = useState<number>(11)
 
   useEffect(() => {
     if (isOpen && budgetId) {
@@ -36,7 +37,6 @@ export default function InvoicePreviewModal({
   async function fetchData() {
     setLoading(true)
     try {
-      // Fetch items, budget (with client) and afip config
       const { data: budgetData } = await supabase
         .from('budgets')
         .select('*, clients(*), budget_items(*)')
@@ -45,9 +45,9 @@ export default function InvoicePreviewModal({
 
       if (budgetData) {
         setItems(budgetData.budget_items || [])
-        setClient(Array.isArray(budgetData.clients) ? budgetData.clients[0] : budgetData.clients)
+        const cl = Array.isArray(budgetData.clients) ? budgetData.clients[0] : budgetData.clients
+        setClient(cl)
         
-        // Fetch AFIP config for this company
         const { data: afipData } = await supabase
           .from('afip_configs')
           .select('*')
@@ -55,6 +55,13 @@ export default function InvoicePreviewModal({
           .single()
         
         setConfig(afipData)
+
+        // Pre-seleccionar tipo
+        if (afipData?.tipo_contribuyente === 'responsable_inscripto') {
+           setTipoCbte(cl?.client_type === 'distribuidor' ? 1 : 6)
+        } else {
+           setTipoCbte(11)
+        }
       }
     } catch (err) {
       console.error(err)
@@ -68,8 +75,9 @@ export default function InvoicePreviewModal({
   const esRI = config?.tipo_contribuyente === 'responsable_inscripto'
   const condicionCliente = client?.client_type === 'distribuidor' ? 'Responsable Inscripto' : 'Consumidor Final'
   
-  // Cálculos de IVA si es RI
-  const neto = esRI ? (totalAmount / 1.21) : totalAmount
+  // Cálculos de IVA si es RI y eligió A o B
+  // Nota: Factura B también tiene IVA aunque no se detalla en el PDF para el cliente
+  const neto = (esRI && (tipoCbte === 1 || tipoCbte === 6)) ? (totalAmount / 1.21) : totalAmount
   const iva = totalAmount - neto
 
   return (
@@ -95,7 +103,6 @@ export default function InvoicePreviewModal({
         {/* Content */}
         <div className="max-h-[70vh] overflow-y-auto p-8">
           <div className="grid gap-6 sm:grid-cols-2">
-            {/* Info Emisión */}
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
@@ -114,6 +121,33 @@ export default function InvoicePreviewModal({
                 <p className="font-bold text-slate-900">{new Date().toLocaleDateString('es-AR')}</p>
                 <p className="text-xs text-slate-500 italic mt-1">Vencimiento: Inmediato</p>
               </div>
+            </div>
+          </div>
+
+          {/* Selector de Tipo de Factura */}
+          <div className="mt-8 rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6">
+            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 px-2">Tipo de Comprobante</h4>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { id: 1, label: 'Factura A', disabled: !esRI },
+                { id: 6, label: 'Factura B', disabled: !esRI },
+                { id: 11, label: 'Factura C', disabled: esRI }
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={t.disabled || loading}
+                  onClick={() => setTipoCbte(t.id)}
+                  className={`
+                    flex flex-col items-center gap-1 rounded-2xl py-4 px-2 transition-all border-2
+                    ${t.disabled ? 'opacity-30 cursor-not-allowed bg-slate-100 border-transparent grayscale' : 
+                      tipoCbte === t.id ? 'bg-indigo-600 border-indigo-200 text-white shadow-xl shadow-indigo-100' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300'}
+                  `}
+                >
+                  <span className="text-xl font-black">{t.label.split(' ')[1]}</span>
+                  <span className="text-[9px] font-bold uppercase tracking-tight opacity-80">{t.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -159,11 +193,11 @@ export default function InvoicePreviewModal({
           {/* Total Box */}
           <div className="mt-6 flex flex-col items-end gap-2">
             <div className="flex w-full max-w-[200px] items-center justify-between border-t border-slate-100 pt-4">
-              <span className="text-xs font-bold text-slate-500 uppercase">{esRI ? 'Neto' : 'Subtotal'}</span>
+              <span className="text-xs font-bold text-slate-500 uppercase">{(tipoCbte === 1 || tipoCbte === 6) ? 'Neto' : 'Subtotal'}</span>
               <span className="text-sm font-bold text-slate-900">${neto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
             </div>
             <div className="flex w-full max-w-[200px] items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase">IVA ({esRI ? '21%' : '0%'})</span>
+              <span className="text-xs font-bold text-slate-500 uppercase">IVA ({(tipoCbte === 1 || tipoCbte === 6) ? '21%' : '0%'})</span>
               <span className="text-sm font-bold text-slate-900">${iva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
             </div>
             <div className="mt-2 flex w-full max-w-[240px] items-center justify-between rounded-2xl bg-blue-600 p-4 text-white shadow-xl shadow-blue-100">
@@ -194,7 +228,7 @@ export default function InvoicePreviewModal({
             Cancelar
           </button>
           <button 
-            onClick={onConfirm}
+            onClick={() => onConfirm(tipoCbte)}
             disabled={isEmitting || loading}
             className="flex items-center gap-2 rounded-2xl bg-blue-600 px-8 py-3 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-500 active:scale-95 disabled:opacity-50"
           >

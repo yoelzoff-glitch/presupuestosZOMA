@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const keyPath = path.join(tempDir, `key_inv_${Date.now()}.key`)
 
   try {
-    const { budget_id } = await request.json()
+    const { budget_id, cbteTipoOverride } = await request.json()
     if (!budget_id) return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
 
     const supabaseAdmin = createSupabaseAdminClient()
@@ -85,29 +85,52 @@ export async function POST(request: Request) {
 
     if (esRI) {
       if (client?.client_type === 'distribuidor' || esCuitValido) {
-        if (!esCuitValido) throw new Error('Para Factura A es obligatorio un CUIT válido del cliente')
+        if (!esCuitValido) {
+           // Si no tiene CUIT pero es distribuidor, lo dejamos pasar para el cálculo pero 
+           // lanzará error si se elige Factura A
+        }
         cbteTipo = 1 // Factura A
         docTipo = 80 // CUIT
-        docNro = parseInt(cuitLimpio)
+        docNro = parseInt(cuitLimpio) || 0
         condicionIvaReceptor = 1 // Responsable Inscripto
       } else {
         cbteTipo = 6 // Factura B
-        if (montoTotal > LIMITE_IDENTIFICACION && !esCuitValido && !esDniValido) {
-          throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString()} es obligatorio identificar al cliente con DNI/CUIT`)
-        }
         docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
         docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
         condicionIvaReceptor = 5
       }
     } else {
       // Monotributista (Factura C)
-      if (montoTotal > LIMITE_IDENTIFICACION && !esCuitValido && !esDniValido) {
-        throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString()} es obligatorio identificar al cliente con DNI/CUIT`)
-      }
       cbteTipo = 11
       docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
       docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
       condicionIvaReceptor = esCuitValido ? 1 : 5
+    }
+
+    // Aplicar Override del usuario si existe y es válido
+    if (cbteTipoOverride) {
+      if (esRI && cbteTipoOverride === 11) throw new Error('Un Responsable Inscripto no puede emitir Factura C')
+      if (!esRI && cbteTipoOverride !== 11) throw new Error('Un Monotributista solo puede emitir Factura C')
+      
+      cbteTipo = cbteTipoOverride
+      // Si el usuario fuerza Factura A, validamos CUIT sí o sí
+      if (cbteTipo === 1 && !esCuitValido) throw new Error('Para Factura A es obligatorio un CUIT válido del cliente')
+      
+      // Ajustar docTipo/docNro según el nuevo cbteTipo si cambió la lógica
+      if (cbteTipo === 1) {
+         docTipo = 80
+         docNro = parseInt(cuitLimpio)
+         condicionIvaReceptor = 1
+      } else if (cbteTipo === 6) {
+         docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
+         docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
+         condicionIvaReceptor = 5
+      }
+    }
+
+    // Validación final de montos según tipo de comprobante (A no tiene límite, B y C sí)
+    if (cbteTipo !== 1 && montoTotal > LIMITE_IDENTIFICACION && docTipo === 99) {
+       throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString()} es obligatorio identificar al cliente con DNI/CUIT`)
     }
 
     // 6. Preparar datos del voucher

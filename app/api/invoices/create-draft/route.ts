@@ -4,7 +4,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/server'
 export async function POST(request: Request) {
   try {
     const supabase = createSupabaseAdminClient()
-    const { budget_id } = await request.json()
+    const { budget_id, cbteTipo } = await request.json()
 
     if (!budget_id) {
       return NextResponse.json({ success: false, error: 'Budget ID is required' }, { status: 400 })
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
         budget_id: budget.id,
         total_amount: budget.total_amount,
         status: 'draft',
+        afip_comprobante_tipo: cbteTipo,
         invoice_date: new Date().toISOString().split('T')[0]
       })
       .select()

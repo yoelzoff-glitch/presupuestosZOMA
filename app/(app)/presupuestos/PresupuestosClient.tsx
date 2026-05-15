@@ -73,7 +73,7 @@ export default function PresupuestosClient({
     setShowPreview(true)
   }
 
-  async function emitirFacturaFinal() {
+  async function emitirFacturaFinal(tipo: number) {
     if (!presupuestoSeleccionado) return
     
     setEmitiendoId(presupuestoSeleccionado.id)
@@ -81,7 +81,10 @@ export default function PresupuestosClient({
       const response = await fetch('/api/invoices/create-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ budget_id: presupuestoSeleccionado.id })
+        body: JSON.stringify({ 
+          budget_id: presupuestoSeleccionado.id,
+          cbteTipo: tipo
+        })
       })
 
       const data = await response.json()
@@ -272,7 +275,7 @@ export default function PresupuestosClient({
       <InvoicePreviewModal 
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}
-        onConfirm={emitirFacturaFinal}
+        onConfirm={(tipo) => emitirFacturaFinal(tipo)}
         budgetId={presupuestoSeleccionado?.id || ''}
         clientName={presupuestoSeleccionado?.client?.name || ''}
         totalAmount={presupuestoSeleccionado?.total_amount || 0}

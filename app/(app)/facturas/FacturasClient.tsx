@@ -10,6 +10,7 @@ import {
   Printer, ShieldCheck, MoreVertical, Trash2, Send
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
 
 type Factura = {
   id: string
@@ -38,6 +39,17 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
   const [filtroTiempo, setFiltroTiempo] = useState<number | 'all'>(30) // 30 días por defecto
   const [cargando, setCargando] = useState(false)
   const [procesandoId, setProcesandoId] = useState<string | null>(null)
+  const [modalPreview, setModalPreview] = useState<{
+    isOpen: boolean;
+    budgetId: string | null;
+    clientName: string;
+    totalAmount: number;
+  }>({
+    isOpen: false,
+    budgetId: null,
+    clientName: '',
+    totalAmount: 0
+  })
 
   async function cargarFacturas(dias: number | 'all' = filtroTiempo) {
     setCargando(true)
@@ -70,21 +82,16 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
     cargarFacturas(nuevoRango)
   }
 
-  async function legalizarFactura(id: string) {
+  async function legalizarFactura(id: string, cbteTipoOverride?: number) {
     setProcesandoId(id)
     try {
-      // Nota: Aquí llamaremos a la API de AFIP que ya tenemos, 
-      // pero necesitaremos ajustarla para que acepte un invoice_id o budget_id.
-      // Por ahora, simulamos el éxito o llamamos a la ruta actual si tiene budget_id.
-      const factura = facturas.find(f => f.id === id)
-      if (!factura?.budget?.budget_number) {
-        throw new Error('Esta factura no está asociada a un presupuesto válido para AFIP.')
-      }
-
       const response = await fetch('/api/afip/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ budget_id: factura.budget_id })
+        body: JSON.stringify({ 
+          budget_id: id,
+          cbteTipoOverride
+        }),
       })
 
       const data = await response.json()
@@ -230,12 +237,17 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       {f.status === 'draft' && (
                         <button
-                          onClick={() => legalizarFactura(f.id)}
+                          onClick={() => setModalPreview({
+                            isOpen: true,
+                            budgetId: f.budget_id || null,
+                            clientName: f.client?.name || '',
+                            totalAmount: f.total_amount
+                          })}
                           disabled={!!procesandoId}
                           className="p-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition"
                           title="Legalizar en AFIP"
                         >
-                          {procesandoId === f.id ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                          <Send size={16} />
                         </button>
                       )}
                       {f.status === 'emitted' && (
@@ -258,6 +270,19 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
           </table>
         </div>
       </section>
+
+      <InvoicePreviewModal
+        isOpen={modalPreview.isOpen}
+        onClose={() => setModalPreview({ ...modalPreview, isOpen: false })}
+        onConfirm={(tipo) => {
+          setModalPreview({ ...modalPreview, isOpen: false })
+          legalizarFactura(modalPreview.budgetId!, tipo)
+        }}
+        budgetId={modalPreview.budgetId || ''}
+        clientName={modalPreview.clientName}
+        totalAmount={modalPreview.totalAmount}
+        isEmitting={!!procesandoId}
+      />
     </div>
   )
 }
