@@ -52,11 +52,8 @@ export async function POST(request: Request) {
     const puntoVenta = config.punto_venta
 
     // 6. Obtener último número autorizado
-    const lastVoucher = await arca.electronicBillingService.getLastVoucher({
-      pos: puntoVenta,
-      type: cbteTipo
-    })
-    const nextNumber = lastVoucher + 1
+    const lastVoucher = await arca.electronicBillingService.getLastVoucher(puntoVenta, cbteTipo)
+    const nextNumber = Number(lastVoucher) + 1
 
     // 7. Preparar datos del voucher
     const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
@@ -66,23 +63,24 @@ export async function POST(request: Request) {
       PtoVta: puntoVenta,
       CbteTipo: cbteTipo,
       Concepto: 1, // 1=Productos, 2=Servicios, 3=Productos y Servicios
-      DocTipo: 99, // 99=Sin identificar (Consumidor Final) - Deberíamos usar el del cliente si lo tenemos
+      DocTipo: 99, // 99=Sin identificar (Consumidor Final)
       DocNro: 0,
       CbteDesde: nextNumber,
       CbteHasta: nextNumber,
       CbteFch: date,
-      ImpTotal: budget.total_price,
+      ImpTotal: budget.total_amount,
       ImpTotConc: 0,
-      ImpNeto: budget.total_price,
+      ImpNeto: budget.total_amount,
       ImpOpEx: 0,
       ImpIVA: 0,
       ImpTrib: 0,
       MonId: 'PES',
-      MonCotiz: 1
+      MonCotiz: 1,
+      CondicionIVAReceptorId: 5 // 5 = Consumidor Final
     }
 
     // 8. Solicitar CAE
-    const result = await arca.electronicBillingService.createVoucher(voucherData)
+    const result = await arca.electronicBillingService.createVoucher(voucherData as any) as any
 
     if (result.Resultado !== 'A') {
       const msg = result.Observaciones?.Obs?.[0]?.Msg || 'Error desconocido de ARCA'
