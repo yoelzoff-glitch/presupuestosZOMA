@@ -48,7 +48,8 @@ export async function POST(request: Request) {
       key: cleanKey,
       cert: cleanCert,
       cuit: parseInt(config.cuit.replace(/-/g, '')),
-      production: !config.is_sandbox
+      production: !config.is_sandbox,
+      ticketPath: path.join(os.tmpdir(), 'arca-tickets')
     })
 
     // 5. Determinar tipo de comprobante (Ej: 11 para Factura C Monotributo)
