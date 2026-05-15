@@ -246,13 +246,14 @@ export default function PresupuestosClient({
                           </button>
                         )}
                         {p.afip_cae && (
-                          <button
-                            onClick={() => window.open(`/api/afip/print-invoice/${p.id}`, '_blank')}
+                          <Link
+                            href={`/presupuestos/factura/${p.id}`}
+                            target="_blank"
                             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition"
                           >
                             <Printer size={14} />
                             Ver Factura
-                          </button>
+                          </Link>
                         )}
                         <Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link>
                       </div>

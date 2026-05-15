@@ -16,16 +16,18 @@ export async function POST(request: Request) {
 
     const supabaseAdmin = createSupabaseAdminClient()
 
-    // 1. Obtener datos del presupuesto
+    // 1. Obtener datos del presupuesto e ítems (con datos del cliente)
     const { data: budget, error: bError } = await supabaseAdmin
       .from('budgets')
-      .select('*, budget_items(*)')
+      .select('*, budget_items(*), clients(*)')
       .eq('id', budget_id)
       .single()
 
     if (bError || !budget) throw new Error('Presupuesto no encontrado')
     if (budget.afip_cae) throw new Error('Este presupuesto ya tiene una factura emitida')
 
+    const client = Array.isArray(budget.clients) ? budget.clients[0] : budget.clients
+    
     // 2. Obtener config fiscal
     const { data: config, error: cError } = await supabaseAdmin
       .from('afip_configs')
@@ -35,12 +37,7 @@ export async function POST(request: Request) {
 
     if (cError || !config) throw new Error('Configuración fiscal no encontrada')
 
-    console.log('Facturando para Company:', budget.company_id)
-    console.log('Usando Config ID:', config.id)
-    console.log('Cert starts with:', config.cert_content?.substring(0, 20))
-    console.log('Key starts with:', config.key_content?.substring(0, 20))
-
-    // 3. Inicializar ARCA directamente con los strings normalizados
+    // 3. Inicializar ARCA
     const cleanKey = config.key_content.replace(/\r\n/g, '\n').trim()
     const cleanCert = config.cert_content.replace(/\r\n/g, '\n').trim()
 
@@ -52,30 +49,86 @@ export async function POST(request: Request) {
       ticketPath: path.join(os.tmpdir(), 'arca-tickets-stable')
     })
 
-    // 5. Determinar tipo de comprobante (Ej: 11 para Factura C Monotributo)
-    const cbteTipo = config.tipo_contribuyente === 'monotributo' ? 11 : 1 // 11=C, 1=A (simplificado)
-    const puntoVenta = config.punto_venta
+    // 5. Determinar tipo de comprobante y lógica de IVA
+    const esRI = config.tipo_contribuyente === 'responsable_inscripto'
+    const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
+    const esCuitValido = cuitLimpio.length === 11
+    
+    let cbteTipo = 11 // Por defecto Factura C (Monotributo)
+    let docTipo = 99
+    let docNro = 0
+    let condicionIvaReceptor = 5 // Consumidor Final
 
-    // 6. Preparar datos del voucher (Usamos createNextVoucher que calcula el número solo)
+    if (esRI) {
+      if (esCuitValido) {
+        cbteTipo = 1 // Factura A
+        docTipo = 80 // CUIT
+        docNro = parseInt(cuitLimpio)
+        condicionIvaReceptor = 1 // Responsable Inscripto
+      } else {
+        cbteTipo = 6 // Factura B
+        docTipo = 96 // DNI (si tiene) o 99
+        docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
+        if (cuitLimpio.length < 7) docTipo = 99
+        condicionIvaReceptor = 5 // Consumidor Final
+      }
+    } else {
+      // Monotributo
+      cbteTipo = 11
+      if (esCuitValido) {
+        docTipo = 80
+        docNro = parseInt(cuitLimpio)
+        condicionIvaReceptor = 1
+      } else if (cuitLimpio.length >= 7) {
+        docTipo = 96
+        docNro = parseInt(cuitLimpio)
+      }
+    }
+
+    const puntoVenta = config.punto_venta
+    const total = Number(budget.total_amount)
+    
+    // 6. Cálculos de IVA (Solo para Factura A y B)
+    let impNeto = total
+    let impIVA = 0
+    let ivaArray: any[] = []
+
+    if (esRI) {
+      // Asumimos IVA 21% y que el total ya lo incluye (Desglosamos)
+      impNeto = Number((total / 1.21).toFixed(2))
+      impIVA = Number((total - impNeto).toFixed(2))
+      ivaArray = [
+        {
+          Id: 5, // 21%
+          BaseImp: impNeto,
+          Importe: impIVA
+        }
+      ]
+    }
+
     const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
     
-    const voucherData = {
+    const voucherData: any = {
       CantReg: 1,
       PtoVta: puntoVenta,
       CbteTipo: cbteTipo,
-      Concepto: 1, // 1=Productos
-      DocTipo: 99, // 99=Sin identificar (Consumidor Final)
-      DocNro: 0,
+      Concepto: 1, 
+      DocTipo: docTipo,
+      DocNro: docNro,
       CbteFch: date,
-      ImpTotal: Number(budget.total_amount),
+      ImpTotal: total,
       ImpTotConc: 0,
-      ImpNeto: Number(budget.total_amount),
+      ImpNeto: impNeto,
       ImpOpEx: 0,
-      ImpIVA: 0,
+      ImpIVA: impIVA,
       ImpTrib: 0,
       MonId: 'PES',
       MonCotiz: 1,
-      CondicionIVAReceptorId: 5 // 5 = Consumidor Final
+      CondicionIVAReceptorId: condicionIvaReceptor
+    }
+
+    if (ivaArray.length > 0) {
+      voucherData.Iva = ivaArray
     }
 
     // 7. Solicitar CAE usando createNextVoucher (más robusto)
@@ -99,15 +152,17 @@ export async function POST(request: Request) {
     }
 
     // La respuesta del SDK tiene el Resultado dentro de response.FeCabResp
+    const resDet = result.response?.FeDetResp?.FECAEDetResponse?.[0]
     const status = result.response?.FeCabResp?.Resultado || result.Resultado
-    const cae = result.cae || result.CAE || result.response?.FeDetResp?.FECAEDetResponse?.[0]?.CAE
-    const caeFchVto = result.caeFchVto || result.CAEFchVto || result.response?.FeDetResp?.FECAEDetResponse?.[0]?.CAEFchVto
-    const cbteNro = result.cbteDesde || result.CbteDesde || result.response?.FeDetResp?.FECAEDetResponse?.[0]?.CbteDesde
+    const cae = result.cae || result.CAE || resDet?.CAE
+    const caeFchVto = result.caeFchVto || result.CAEFchVto || resDet?.CAEFchVto
+    const cbteNro = result.cbteDesde || result.CbteDesde || resDet?.CbteDesde
 
     if (status !== 'A') {
-      const obs = result.response?.FeDetResp?.FECAEDetResponse?.[0]?.Observaciones?.Obs?.[0]?.Msg || result.Observaciones?.Obs?.[0]?.Msg
-      const err = result.Errors?.Err?.[0]?.Msg
-      const msg = obs || err || `Error ARCA: ${JSON.stringify(result).substring(0, 100)}...`
+      // Extraer mensaje de error más específico
+      const obs = resDet?.Observaciones?.Obs?.[0]?.Msg || result.Observaciones?.Obs?.[0]?.Msg
+      const err = result.Errors?.Err?.[0]?.Msg || result.response?.Errors?.Err?.[0]?.Msg
+      const msg = obs || err || `Error ARCA (Status ${status}): ${JSON.stringify(result).substring(0, 200)}`
       throw new Error(msg)
     }
 
@@ -118,8 +173,7 @@ export async function POST(request: Request) {
         afip_cae: cae,
         afip_cae_vencimiento: caeFchVto,
         afip_comprobante_numero: cbteNro,
-        afip_comprobante_tipo: cbteTipo,
-        status: 'facturado'
+        afip_comprobante_tipo: cbteTipo
       })
       .eq('id', budget_id)
 

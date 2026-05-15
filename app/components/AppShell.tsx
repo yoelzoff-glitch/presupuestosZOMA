@@ -273,7 +273,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r border-white/5 bg-slate-950 text-white lg:block">
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r border-white/5 bg-slate-950 text-white lg:block print:hidden">
         <SidebarContent />
       </aside>
 
@@ -282,12 +282,12 @@ export default function AppShell({ children }: AppShellProps) {
           type="button"
           aria-label="Cerrar menú"
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm lg:hidden print:hidden"
         />
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen w-80 max-w-[86vw] border-r border-white/10 bg-slate-950 text-white shadow-2xl transition-transform duration-300 lg:hidden ${
+        className={`fixed left-0 top-0 z-50 h-screen w-80 max-w-[86vw] border-r border-white/10 bg-slate-950 text-white shadow-2xl transition-transform duration-300 lg:hidden print:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -305,8 +305,8 @@ export default function AppShell({ children }: AppShellProps) {
         <SidebarContent onNavigate={() => setMobileOpen(false)} />
       </aside>
 
-      <main className="lg:pl-64">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 px-4 py-4 backdrop-blur-xl sm:px-6">
+      <main className="lg:pl-64 print:pl-0">
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 px-4 py-4 backdrop-blur-xl sm:px-6 print:hidden">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -370,13 +370,17 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
         </header>
 
-        <section className="p-4 lg:p-8">
+        <section className="p-4 lg:p-8 print:p-0">
           <div className="mx-auto w-full max-w-[1800px]">{children}</div>
         </section>
       </main>
 
       {/* Burbuja de Chat Global - Solo para planes PRO o superior */}
-      {(planType === 'pro' || planType === 'pro_plus') && <GlobalChatBubble />}
+      {(planType === 'pro' || planType === 'pro_plus') && (
+        <div className="print:hidden">
+          <GlobalChatBubble />
+        </div>
+      )}
     </div>
   )
 }
