@@ -82,24 +82,24 @@ export async function POST(request: Request) {
     const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
     
     const voucherData = {
-      CantReg: 1,
-      PtoVta: puntoVenta,
-      CbteTipo: cbteTipo,
-      CbteDesde: nextNumber,
-      CbteHasta: nextNumber,
-      Concepto: 1, // 1=Productos, 2=Servicios, 3=Productos y Servicios
-      DocTipo: 99, // 99=Sin identificar (Consumidor Final)
-      DocNro: 0,
-      CbteFch: date,
-      ImpTotal: budget.total_amount,
-      ImpTotConc: 0,
-      ImpNeto: budget.total_amount,
-      ImpOpEx: 0,
-      ImpIVA: 0,
-      ImpTrib: 0,
-      MonId: 'PES',
-      MonCotiz: 1,
-      CondicionIVAReceptorId: 5 // 5 = Consumidor Final
+      cantReg: 1,
+      ptoVta: puntoVenta,
+      cbteTipo: cbteTipo,
+      cbteDesde: nextNumber,
+      cbteHasta: nextNumber,
+      concepto: 1, 
+      docTipo: 99, 
+      docNro: 0,
+      cbteFch: date,
+      impTotal: budget.total_amount,
+      impTotConc: 0,
+      impNeto: budget.total_amount,
+      impOpEx: 0,
+      impIva: 0,
+      impTrib: 0,
+      monId: 'PES',
+      monCotiz: 1,
+      condicionIvaReceptorId: 5 
     }
 
     // 8. Solicitar CAE
