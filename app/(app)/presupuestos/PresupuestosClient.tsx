@@ -5,22 +5,12 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import {
-  FileText,
-  Plus,
-  Search,
-  RefreshCw,
-  Eye,
-  User,
-  DollarSign,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Clock3,
-  Lock,
-  ShieldCheck,
+import { 
+  FileText, Plus, Search, RefreshCw, Eye, User, DollarSign, 
+  CheckCircle2, XCircle, Loader2, Clock3, Lock, ShieldCheck, Printer
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
 
 type EstadoPresupuesto = 'all' | 'issued' | 'approved' | 'draft' | 'cancelled'
 
@@ -71,21 +61,31 @@ export default function PresupuestosClient({
   const [cargando, setCargando] = useState(false)
   const [filtroDias, setFiltroDias] = useState('30')
   const [emitiendoId, setEmitiendoId] = useState<string | null>(null)
+  
+  // Estado para el modal de previsualización
+  const [showPreview, setShowPreview] = useState(false)
+  const [presupuestoSeleccionado, setPresupuestoSeleccionado] = useState<Presupuesto | null>(null)
 
-  async function emitirFactura(id: string) {
-    if (!confirm('¿Estás seguro de emitir la Factura Electrónica legal ante ARCA?')) return
+  function abrirPreview(p: Presupuesto) {
+    setPresupuestoSeleccionado(p)
+    setShowPreview(true)
+  }
+
+  async function emitirFacturaFinal() {
+    if (!presupuestoSeleccionado) return
     
-    setEmitiendoId(id)
+    setEmitiendoId(presupuestoSeleccionado.id)
     try {
       const response = await fetch('/api/afip/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ budget_id: id })
+        body: JSON.stringify({ budget_id: presupuestoSeleccionado.id })
       })
 
       const data = await response.json()
       if (data.success) {
         toast.success(`Factura emitida con éxito! CAE: ${data.cae}`)
+        setShowPreview(false)
         cargarPresupuestos() // Recargar lista
       } else {
         throw new Error(data.error)
@@ -237,12 +237,21 @@ export default function PresupuestosClient({
                       <div className="flex items-center justify-end gap-2">
                         {p.status === 'approved' && !p.afip_cae && (
                           <button
-                            onClick={() => emitirFactura(p.id)}
+                            onClick={() => abrirPreview(p)}
                             disabled={!!emitiendoId}
                             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50"
                           >
-                            {emitiendoId === p.id ? <Loader2 className="animate-spin" size={14} /> : <DollarSign size={14} />}
-                            Emitir Factura
+                            <DollarSign size={14} />
+                            Facturar
+                          </button>
+                        )}
+                        {p.afip_cae && (
+                          <button
+                            onClick={() => window.open(`/api/afip/print-invoice/${p.id}`, '_blank')}
+                            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition"
+                          >
+                            <Printer size={14} />
+                            Ver Factura
                           </button>
                         )}
                         <Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link>
@@ -255,6 +264,17 @@ export default function PresupuestosClient({
           </div>
         )}
       </section>
+
+      {/* Modal de Previsualización */}
+      <InvoicePreviewModal 
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        onConfirm={emitirFacturaFinal}
+        budgetId={presupuestoSeleccionado?.id || ''}
+        clientName={presupuestoSeleccionado?.client?.name || ''}
+        totalAmount={presupuestoSeleccionado?.total_amount || 0}
+        isEmitting={!!emitiendoId}
+      />
     </div>
   )
 }
