@@ -56,8 +56,26 @@ export async function POST(request: Request) {
     const cbteTipo = config.tipo_contribuyente === 'monotributo' ? 11 : 1 // 11=C, 1=A (simplificado)
     const puntoVenta = config.punto_venta
 
-    // 6. Obtener último número autorizado
-    const lastVoucher = await arca.electronicBillingService.getLastVoucher(puntoVenta, cbteTipo)
+    // 6. Obtener último número autorizado (con reintento por si AFIP se pone terca)
+    let lastVoucher;
+    try {
+      lastVoucher = await arca.electronicBillingService.getLastVoucher(puntoVenta, cbteTipo)
+    } catch (error: any) {
+      if (error.message.includes('alreadyAuthenticated')) {
+        console.log('AFIP dice que ya estamos autenticados, reintentando con nueva carpeta...')
+        // Si falla por ya estar autenticado, cambiamos la carpeta para forzar algo distinto
+        const arcaRetry = new Arca({
+          key: cleanKey,
+          cert: cleanCert,
+          cuit: parseInt(config.cuit.replace(/-/g, '')),
+          production: !config.is_sandbox,
+          ticketPath: path.join(os.tmpdir(), `arca-tickets-retry-${Date.now()}`)
+        })
+        lastVoucher = await arcaRetry.electronicBillingService.getLastVoucher(puntoVenta, cbteTipo)
+      } else {
+        throw error
+      }
+    }
     const nextNumber = Number(lastVoucher) + 1
 
     // 7. Preparar datos del voucher
