@@ -36,8 +36,8 @@ export async function POST(request: Request) {
     if (cError || !config) throw new Error('Configuración fiscal no encontrada')
 
     // 3. Escribir certificados temporales
-    fs.writeFileSync(certPath, config.cert_content)
-    fs.writeFileSync(keyPath, config.key_content)
+    fs.writeFileSync(certPath, config.cert_content.trim())
+    fs.writeFileSync(keyPath, config.key_content.trim())
 
     // 4. Inicializar ARCA
     const arca = new Arca({
