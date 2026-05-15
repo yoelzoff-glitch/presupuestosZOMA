@@ -36,14 +36,14 @@ export async function POST(request: Request) {
 
     // 3. Inicializar ARCA SDK
     const arca = new Arca({
-      key: fs.readFileSync(keyPath),
-      cert: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath, 'utf8'),
+      cert: fs.readFileSync(certPath, 'utf8'),
       cuit: parseInt(config.cuit.replace(/-/g, '')),
       production: !config.is_sandbox
     })
 
     // 4. Probar estado del servidor WSFE
-    const status = await arca.wsfe.getServerStatus()
+    const status = await arca.electronicBillingService.getServerStatus()
 
     return NextResponse.json({
       success: true,
