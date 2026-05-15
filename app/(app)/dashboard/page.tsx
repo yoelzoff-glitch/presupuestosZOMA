@@ -1,5 +1,5 @@
 import { createServerComponentClient } from '@/lib/supabase/server'
-import DashboardClient from './DashboardClient'
+import DashboardClient from '../DashboardClient'
 import { Settings, Package } from 'lucide-react'
 
 export default async function DashboardPage(props: {
