@@ -85,11 +85,11 @@ export async function POST(request: Request) {
       CantReg: 1,
       PtoVta: puntoVenta,
       CbteTipo: cbteTipo,
+      CbteDesde: nextNumber,
+      CbteHasta: nextNumber,
       Concepto: 1, // 1=Productos, 2=Servicios, 3=Productos y Servicios
       DocTipo: 99, // 99=Sin identificar (Consumidor Final)
       DocNro: 0,
-      CbteDesde: nextNumber,
-      CbteHasta: nextNumber,
       CbteFch: date,
       ImpTotal: budget.total_amount,
       ImpTotConc: 0,
