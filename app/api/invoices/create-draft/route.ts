@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createServerComponentClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerComponentClient()
+    const supabase = createSupabaseAdminClient()
     const { budget_id } = await request.json()
 
     if (!budget_id) {
@@ -57,7 +57,6 @@ export async function POST(request: Request) {
 
     if (itemsError) {
       console.error('Error creating invoice items:', itemsError)
-      // Podríamos borrar la factura aquí si quisiéramos, pero RLS/Transacciones son mejores.
       return NextResponse.json({ success: false, error: 'Error al copiar ítems a la factura' }, { status: 500 })
     }
 

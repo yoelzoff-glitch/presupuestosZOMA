@@ -24,7 +24,26 @@ export async function POST(request: Request) {
       .single()
 
     if (bError || !budget) throw new Error('Presupuesto no encontrado')
-    if (budget.afip_cae) throw new Error('Este presupuesto ya tiene una factura emitida')
+    
+    if (budget.afip_cae) {
+      // Sincronización automática si ya tiene CAE
+      await supabaseAdmin
+        .from('invoices')
+        .update({
+          status: 'emitted',
+          afip_cae: budget.afip_cae,
+          afip_cae_vencimiento: budget.afip_cae_vencimiento,
+          afip_comprobante_numero: budget.afip_comprobante_numero,
+          afip_comprobante_tipo: budget.afip_comprobante_tipo
+        })
+        .eq('budget_id', budget_id)
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Sincronizado: El presupuesto ya tenía factura emitida.',
+        cae: budget.afip_cae 
+      })
+    }
 
     const client = Array.isArray(budget.clients) ? budget.clients[0] : budget.clients
 
@@ -53,6 +72,11 @@ export async function POST(request: Request) {
     const esRI = config.tipo_contribuyente === 'responsable_inscripto'
     const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
     const esCuitValido = cuitLimpio.length === 11
+    const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
+    const montoTotal = Number(budget.total_amount)
+
+    // Límite AFIP identificación (Aprox mayo 2024)
+    const LIMITE_IDENTIFICACION = 191624
 
     let cbteTipo = 11 // Por defecto Factura C (Monotributo)
     let docTipo = 99
@@ -60,84 +84,65 @@ export async function POST(request: Request) {
     let condicionIvaReceptor = 5 // Consumidor Final
 
     if (esRI) {
-      if (esCuitValido) {
+      if (client?.client_type === 'distribuidor' || esCuitValido) {
+        if (!esCuitValido) throw new Error('Para Factura A es obligatorio un CUIT válido del cliente')
         cbteTipo = 1 // Factura A
         docTipo = 80 // CUIT
         docNro = parseInt(cuitLimpio)
         condicionIvaReceptor = 1 // Responsable Inscripto
       } else {
         cbteTipo = 6 // Factura B
-        docTipo = 96 // DNI (si tiene) o 99
+        if (montoTotal > LIMITE_IDENTIFICACION && !esCuitValido && !esDniValido) {
+          throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString()} es obligatorio identificar al cliente con DNI/CUIT`)
+        }
+        docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
         docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
-        if (cuitLimpio.length < 7) docTipo = 99
-        condicionIvaReceptor = 5 // Consumidor Final
+        condicionIvaReceptor = 5
       }
     } else {
-      // Monotributo
-      cbteTipo = 11
-      if (esCuitValido) {
-        docTipo = 80
-        docNro = parseInt(cuitLimpio)
-        condicionIvaReceptor = 1
-      } else if (cuitLimpio.length >= 7) {
-        docTipo = 96
-        docNro = parseInt(cuitLimpio)
+      // Monotributista (Factura C)
+      if (montoTotal > LIMITE_IDENTIFICACION && !esCuitValido && !esDniValido) {
+        throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString()} es obligatorio identificar al cliente con DNI/CUIT`)
       }
+      cbteTipo = 11
+      docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
+      docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
+      condicionIvaReceptor = esCuitValido ? 1 : 5
     }
 
-    const puntoVenta = config.punto_venta
-    const total = Number(budget.total_amount)
-
-    // 6. Cálculos de IVA (Solo para Factura A y B)
-    let impNeto = total
-    let impIVA = 0
-    let ivaArray: any[] = []
-
-    if (esRI) {
-      // Asumimos IVA 21% y que el total ya lo incluye (Desglosamos)
-      impNeto = Number((total / 1.21).toFixed(2))
-      impIVA = Number((total - impNeto).toFixed(2))
-      ivaArray = [
-        {
-          Id: 5, // 21%
-          BaseImp: impNeto,
-          Importe: impIVA
-        }
-      ]
-    }
-
-    const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
-
+    // 6. Preparar datos del voucher
     const voucherData: any = {
       CantReg: 1,
-      PtoVta: puntoVenta,
+      PtoVta: config.punto_venta || 2,
       CbteTipo: cbteTipo,
-      Concepto: 1,
+      Concepto: 1, // Productos
       DocTipo: docTipo,
       DocNro: docNro,
-      CbteFch: date,
-      ImpTotal: total,
+      CbteFch: new Date().toISOString().replace(/-/g, '').split('T')[0],
+      ImpTotal: montoTotal,
       ImpTotConc: 0,
-      ImpNeto: impNeto,
+      ImpNeto: cbteTipo === 1 || cbteTipo === 6 ? parseFloat((montoTotal / 1.21).toFixed(2)) : montoTotal,
       ImpOpEx: 0,
-      ImpIVA: impIVA,
+      ImpIVA: cbteTipo === 1 || cbteTipo === 6 ? parseFloat((montoTotal - (montoTotal / 1.21)).toFixed(2)) : 0,
       ImpTrib: 0,
       MonId: 'PES',
-      MonCotiz: 1,
-      CondicionIVAReceptorId: condicionIvaReceptor
+      MonCotiz: 1
     }
 
-    if (ivaArray.length > 0) {
-      voucherData.Iva = ivaArray
+    if (cbteTipo === 1 || cbteTipo === 6) {
+      voucherData.Iva = [{
+        Id: 5, // 21%
+        BaseImp: voucherData.ImpNeto,
+        Importe: voucherData.ImpIVA
+      }]
     }
 
-    // 7. Solicitar CAE usando createNextVoucher (más robusto)
+    // 7. Solicitar CAE
     let result: any;
     try {
       result = await arca.electronicBillingService.createNextVoucher(voucherData)
     } catch (error: any) {
       if (error.message.includes('alreadyAuthenticated')) {
-        console.log('Reintentando con sesión limpia...')
         const arcaRetry = new Arca({
           key: cleanKey,
           cert: cleanCert,
@@ -151,7 +156,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // La respuesta del SDK tiene el Resultado dentro de response.FeCabResp
     const resDet = result.response?.FeDetResp?.FECAEDetResponse?.[0]
     const status = result.response?.FeCabResp?.Resultado || result.Resultado
     const cae = result.cae || result.CAE || resDet?.CAE
@@ -159,25 +163,34 @@ export async function POST(request: Request) {
     const cbteNro = result.cbteDesde || result.CbteDesde || resDet?.CbteDesde
 
     if (status !== 'A') {
-      // Extraer mensaje de error más específico
       const obs = resDet?.Observaciones?.Obs?.[0]?.Msg || result.Observaciones?.Obs?.[0]?.Msg
       const err = result.Errors?.Err?.[0]?.Msg || result.response?.Errors?.Err?.[0]?.Msg
-      const msg = obs || err || `Error ARCA (Status ${status}): ${JSON.stringify(result).substring(0, 200)}`
+      const msg = obs || err || `Error ARCA (Status ${status})`
       throw new Error(msg)
     }
 
-    // 9. Actualizar presupuesto en Supabase
-    const { error: updateError } = await supabaseAdmin
+    // 8. Actualización Dual: Presupuestos y Facturas
+    await supabaseAdmin
       .from('budgets')
       .update({
         afip_cae: cae,
         afip_cae_vencimiento: caeFchVto,
         afip_comprobante_numero: cbteNro,
-        afip_comprobante_tipo: cbteTipo
+        afip_comprobante_tipo: cbteTipo,
+        status: 'issued'
       })
       .eq('id', budget_id)
 
-    if (updateError) throw updateError
+    await supabaseAdmin
+      .from('invoices')
+      .update({
+        status: 'emitted',
+        afip_cae: cae,
+        afip_cae_vencimiento: caeFchVto,
+        afip_comprobante_numero: cbteNro,
+        afip_comprobante_tipo: cbteTipo
+      })
+      .eq('budget_id', budget_id)
 
     return NextResponse.json({
       success: true,
