@@ -98,8 +98,12 @@ export async function POST(request: Request) {
       }
     }
 
+    console.log('AFIP Result:', JSON.stringify(result, null, 2))
+
     if (result.Resultado !== 'A') {
-      const msg = result.Observaciones?.Obs?.[0]?.Msg || 'Error desconocido de ARCA'
+      const obs = result.Observaciones?.Obs?.[0]?.Msg
+      const err = result.Errors?.Err?.[0]?.Msg
+      const msg = obs || err || 'Error desconocido de ARCA (ver logs)'
       throw new Error(msg)
     }
 
