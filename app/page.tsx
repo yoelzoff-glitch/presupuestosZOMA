@@ -79,8 +79,20 @@ export default function LandingPage() {
 
       <main>
         {/* --- HERO SECTION (Light) --- */}
-        <section className="relative pt-40 pb-24 lg:pt-56 lg:pb-40 bg-white">
-          <div className="container mx-auto px-6">
+        <section className="relative pt-40 pb-24 lg:pt-56 lg:pb-40 bg-white overflow-hidden">
+          {/* Tech Background Banner (Blurred) */}
+          <div className="absolute top-0 left-0 w-full h-[600px] opacity-[0.08] pointer-events-none">
+            <Image 
+              src="/tech-banner.png" 
+              alt="Tech Background" 
+              fill 
+              className="object-cover blur-[100px]"
+              priority
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white" />
+          </div>
+
+          <div className="container mx-auto px-6 relative z-10">
             <motion.div style={{ y: heroY }} className="max-w-4xl mx-auto text-center mb-20">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -148,15 +160,6 @@ export default function LandingPage() {
                   />
                 </div>
               </div>
-              
-              {/* Floating Decorative Elements */}
-              <motion.div 
-                animate={{ y: [0, -20, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -top-12 -right-12 hidden lg:block z-20 pointer-events-none"
-              >
-                <Image src="/hero-3d.png" alt="3D" width={240} height={240} className="drop-shadow-2xl" />
-              </motion.div>
             </motion.div>
           </div>
         </section>
