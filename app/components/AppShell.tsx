@@ -85,7 +85,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         if (user) {
           const { data, error } = await supabase
             .from('users_profiles')
-            .select('role, company:companies(plan_type, enable_stock_module)')
+            .select('role, company:companies(name, plan_type, enable_stock_module)')
             .eq('id', user.id)
             .single()
           
@@ -142,6 +142,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <h1 className="text-xl font-black tracking-tight text-white">
               ZOMA<span className="text-blue-500">.</span>
             </h1>
+            {profile?.company?.name && (
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate max-w-[140px]">
+                {profile.company.name}
+              </p>
+            )}
           </div>
         </div>
       </div>
