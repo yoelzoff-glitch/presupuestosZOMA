@@ -39,10 +39,13 @@ export async function POST(request: Request) {
     console.log('Cert starts with:', config.cert_content?.substring(0, 20))
     console.log('Key starts with:', config.key_content?.substring(0, 20))
 
-    // 3. Inicializar ARCA directamente con los strings
+    // 3. Inicializar ARCA directamente con los strings normalizados
+    const cleanKey = config.key_content.replace(/\r\n/g, '\n').trim()
+    const cleanCert = config.cert_content.replace(/\r\n/g, '\n').trim()
+
     const arca = new Arca({
-      key: config.key_content.trim(),
-      cert: config.cert_content.trim(),
+      key: cleanKey,
+      cert: cleanCert,
       cuit: parseInt(config.cuit.replace(/-/g, '')),
       production: !config.is_sandbox
     })
