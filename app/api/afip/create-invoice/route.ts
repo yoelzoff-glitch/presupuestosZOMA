@@ -56,54 +56,47 @@ export async function POST(request: Request) {
     const cbteTipo = config.tipo_contribuyente === 'monotributo' ? 11 : 1 // 11=C, 1=A (simplificado)
     const puntoVenta = config.punto_venta
 
-    // 6. Obtener último número autorizado (con reintento por si AFIP se pone terca)
-    let lastVoucher;
-    try {
-      lastVoucher = await arca.electronicBillingService.getLastVoucher(puntoVenta, cbteTipo)
-    } catch (error: any) {
-      if (error.message.includes('alreadyAuthenticated')) {
-        console.log('AFIP dice que ya estamos autenticados, reintentando con nueva carpeta...')
-        // Si falla por ya estar autenticado, cambiamos la carpeta para forzar algo distinto
-        const arcaRetry = new Arca({
-          key: cleanKey,
-          cert: cleanCert,
-          cuit: parseInt(config.cuit.replace(/-/g, '')),
-          production: !config.is_sandbox,
-          ticketPath: path.join(os.tmpdir(), `arca-tickets-retry-${Date.now()}`)
-        })
-        lastVoucher = await arcaRetry.electronicBillingService.getLastVoucher(puntoVenta, cbteTipo)
-      } else {
-        throw error
-      }
-    }
-    const nextNumber = Number(lastVoucher) + 1
-
-    // 7. Preparar datos del voucher
+    // 6. Preparar datos del voucher (Usamos createNextVoucher que calcula el número solo)
     const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
     
     const voucherData = {
       CantReg: 1,
       PtoVta: puntoVenta,
       CbteTipo: cbteTipo,
-      CbteDesde: nextNumber,
-      CbteHasta: nextNumber,
-      Concepto: 1, 
-      DocTipo: 99, 
+      Concepto: 1, // 1=Productos
+      DocTipo: 99, // 99=Sin identificar (Consumidor Final)
       DocNro: 0,
       CbteFch: date,
-      ImpTotal: budget.total_amount,
+      ImpTotal: Number(budget.total_amount),
       ImpTotConc: 0,
-      ImpNeto: budget.total_amount,
+      ImpNeto: Number(budget.total_amount),
       ImpOpEx: 0,
       ImpIVA: 0,
       ImpTrib: 0,
       MonId: 'PES',
       MonCotiz: 1,
-      CondicionIVAReceptorId: 5 
+      CondicionIVAReceptorId: 5 // 5 = Consumidor Final
     }
 
-    // 8. Solicitar CAE
-    const result = await arca.electronicBillingService.createVoucher(voucherData as any) as any
+    // 7. Solicitar CAE usando createNextVoucher (más robusto)
+    let result: any;
+    try {
+      result = await arca.electronicBillingService.createNextVoucher(voucherData)
+    } catch (error: any) {
+      if (error.message.includes('alreadyAuthenticated')) {
+        console.log('Reintentando con sesión limpia...')
+        const arcaRetry = new Arca({
+          key: cleanKey,
+          cert: cleanCert,
+          cuit: parseInt(config.cuit.replace(/-/g, '')),
+          production: !config.is_sandbox,
+          ticketPath: path.join(os.tmpdir(), `arca-retry-${Date.now()}`)
+        })
+        result = await arcaRetry.electronicBillingService.createNextVoucher(voucherData)
+      } else {
+        throw error
+      }
+    }
 
     if (result.Resultado !== 'A') {
       const msg = result.Observaciones?.Obs?.[0]?.Msg || 'Error desconocido de ARCA'
@@ -116,7 +109,7 @@ export async function POST(request: Request) {
       .update({
         afip_cae: result.CAE,
         afip_cae_vencimiento: result.CAEFchVto,
-        afip_comprobante_numero: nextNumber,
+        afip_comprobante_numero: result.CbteDesde,
         afip_comprobante_tipo: cbteTipo,
         status: 'facturado'
       })
@@ -127,7 +120,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       cae: result.CAE,
-      invoice_number: nextNumber,
+      invoice_number: result.CbteDesde,
       message: 'Factura emitida con éxito'
     })
 
