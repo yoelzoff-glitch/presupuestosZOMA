@@ -78,29 +78,33 @@ export async function middleware(request: NextRequest) {
 
   // 2. Si hay usuario, validar permisos según rol
   if (usuario) {
-    // Intentar obtener el rol de la metadata (mucho más rápido)
-    let rol = usuario.app_metadata?.role
+    // 1. Obtener perfil y datos de la empresa (suscripción)
+    const { data: perfil } = await supabase
+      .from('users_profiles')
+      .select(`
+        role,
+        company_id,
+        companies (
+          subscription_expiry
+        )
+      `)
+      .eq('id', usuario.id)
+      .single()
 
-    // Si no está en metadata, fallback a la base de datos (solo una vez)
-    if (!rol) {
-      const { data: perfil } = await supabase
-        .from('users_profiles')
-        .select('role, subscription_expiry')
-        .eq('id', usuario.id)
-        .single()
-      rol = perfil?.role
+    const rol = perfil?.role
+    // @ts-ignore - companies es un objeto por la relación select
+    const vencimientoEmpresa = perfil?.companies?.subscription_expiry
+
+    // 2. Validar Suscripción Vencida de la Empresa (Excepto Yoel)
+    const esYoel = usuario.email?.toLowerCase() === 'yoel.zoff@gmail.com'
+    if (!esYoel && vencimientoEmpresa) {
+      const hoy = new Date()
+      const vencimiento = new Date(vencimientoEmpresa)
       
-      // 3. Validar Suscripción Vencida (Excepto Yoel)
-      const esYoel = usuario.email?.toLowerCase() === 'yoel.zoff@gmail.com'
-      if (!esYoel && perfil?.subscription_expiry) {
-        const hoy = new Date()
-        const vencimiento = new Date(perfil.subscription_expiry)
-        
-        if (hoy > vencimiento && rutaActual !== '/vencido' && !esPaginaPublica && !esPaginaAuth) {
-          const url = request.nextUrl.clone()
-          url.pathname = '/vencido'
-          return NextResponse.redirect(url)
-        }
+      if (hoy > vencimiento && rutaActual !== '/vencido' && !esPaginaPublica && !esPaginaAuth) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/vencido'
+        return NextResponse.redirect(url)
       }
     }
 
