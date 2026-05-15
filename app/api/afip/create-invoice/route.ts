@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     if (result.Resultado !== 'A') {
       const obs = result.Observaciones?.Obs?.[0]?.Msg
       const err = result.Errors?.Err?.[0]?.Msg
-      const msg = obs || err || 'Error desconocido de ARCA (ver logs)'
+      const msg = obs || err || `Error ARCA: ${JSON.stringify(result).substring(0, 150)}...`
       throw new Error(msg)
     }
 
