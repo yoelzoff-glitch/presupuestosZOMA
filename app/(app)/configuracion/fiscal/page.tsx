@@ -10,7 +10,8 @@ import {
   Key, 
   Settings2,
   CheckCircle2,
-  Database
+  Database,
+  Loader2
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -18,6 +19,7 @@ import { toast } from 'sonner'
 export default function ConfigFiscalPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [config, setConfig] = useState({
     cuit: '',
     tipo_contribuyente: 'monotributo',
@@ -26,6 +28,38 @@ export default function ConfigFiscalPage() {
     key_content: '',
     is_sandbox: true
   })
+
+  const testConnection = async () => {
+    setTesting(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: profile } = await supabase
+        .from('users_profiles')
+        .select('company_id')
+        .eq('id', user?.id)
+        .single()
+
+      if (!profile?.company_id) throw new Error('No se encontró la empresa')
+
+      const response = await fetch('/api/afip/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: profile.company_id })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        toast.success('Conexión exitosa: ' + result.message)
+        console.log('Estado AFIP:', result.status)
+      } else {
+        throw new Error(result.error)
+      }
+    } catch (error: any) {
+      toast.error('Error de conexión: ' + error.message)
+    } finally {
+      setTesting(false)
+    }
+  }
 
   useEffect(() => {
     async function loadConfig() {
@@ -107,14 +141,25 @@ export default function ConfigFiscalPage() {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Configuración Fiscal</h1>
           <p className="text-slate-500 font-medium">Vinculá ZOMA con ARCA para facturación electrónica.</p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:opacity-50"
-        >
-          {saving ? <Database className="animate-spin" size={20} /> : <Save size={20} />}
-          Guardar Cambios
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={testConnection}
+            disabled={testing || saving}
+            className="flex items-center gap-2 bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black hover:bg-slate-200 transition-all disabled:opacity-50"
+          >
+            {testing ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={20} />}
+            Probar Conexión
+          </button>
+          
+          <button
+            onClick={handleSave}
+            disabled={saving || testing}
+            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:opacity-50"
+          >
+            {saving ? <Database className="animate-spin" size={20} /> : <Save size={20} />}
+            Guardar Cambios
+          </button>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-8">
