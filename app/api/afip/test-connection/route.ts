@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase/client'
+import { createSupabaseAdminClient } from '@/lib/supabase/server'
 const { WSAA, WSFE } = require('afip-apis')
 import fs from 'fs'
 import path from 'path'
@@ -11,21 +11,30 @@ export async function POST(request: Request) {
   const keyPath = path.join(tempDir, `key_${Date.now()}.key`)
 
   try {
-    const { company_id } = await request.json()
+    const body = await request.json()
+    const { company_id } = body
+    console.log('Probando conexión para company_id:', company_id)
 
     if (!company_id) {
       return NextResponse.json({ error: 'Falta company_id' }, { status: 400 })
     }
 
-    // 1. Obtener config
-    const { data: config, error } = await supabase
+    // 1. Obtener config con el cliente Admin para saltar RLS en el servidor
+    const supabaseAdmin = createSupabaseAdminClient()
+    const { data: config, error: dbError } = await supabaseAdmin
       .from('afip_configs')
       .select('*')
       .eq('company_id', company_id)
       .single()
 
-    if (error || !config) {
-      return NextResponse.json({ error: 'Configuración fiscal no encontrada' }, { status: 404 })
+    if (dbError) {
+      console.error('Error al buscar configuración en DB:', dbError)
+      return NextResponse.json({ error: 'Configuración fiscal no encontrada en DB' }, { status: 404 })
+    }
+
+    if (!config) {
+      console.error('Config es null para company_id:', company_id)
+      return NextResponse.json({ error: 'Configuración fiscal vacía' }, { status: 404 })
     }
 
     // 2. Crear archivos temporales para los certificados (AFIP pide archivos físicos para firmar)
@@ -55,9 +64,9 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Error AFIP:', error)
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message || 'Error al conectar con AFIP. Verificá tus certificados.' 
+    return NextResponse.json({
+      success: false,
+      error: error.message || 'Error al conectar con AFIP. Verificá tus certificados.'
     }, { status: 500 })
   } finally {
     // Limpiar archivos temporales
