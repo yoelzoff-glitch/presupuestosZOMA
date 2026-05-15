@@ -326,15 +326,21 @@ export default function AppShell({ children }: AppShellProps) {
             <div className="flex items-center gap-2 sm:gap-3">
               {diasRestantes !== null && diasRestantes <= 15 && (
                 <Link
-                  href="/configuracion/suscripcion" // Opcional: una página de suscripción futura
+                  href="/configuracion/suscripcion"
                   className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${
-                    diasRestantes <= 3 
+                    diasRestantes <= 0 
                       ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' 
-                      : 'bg-amber-50 border-amber-200 text-amber-700'
+                      : diasRestantes <= 3
+                        ? 'bg-amber-50 border-amber-200 text-amber-700'
+                        : 'bg-blue-50 border-blue-100 text-blue-600'
                   }`}
                 >
                   <Clock size={14} />
-                  {diasRestantes <= 0 ? 'Vence hoy' : `Quedan ${diasRestantes} días`}
+                  {diasRestantes < 0 
+                    ? 'Suscripción Vencida' 
+                    : diasRestantes === 0 
+                      ? 'Vence hoy' 
+                      : `Quedan ${diasRestantes} días`}
                 </Link>
               )}
 
