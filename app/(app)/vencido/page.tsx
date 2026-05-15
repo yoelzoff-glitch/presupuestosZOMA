@@ -2,12 +2,11 @@
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Clock, creditCard, MessageCircle, LogOut, AlertCircle } from 'lucide-react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Clock, CreditCard, MessageCircle, LogOut, AlertCircle } from 'lucide-react'
+import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 export default function VencidoPage() {
-  const supabase = createClientComponentClient()
   const router = useRouter()
 
   const handleLogout = async () => {
