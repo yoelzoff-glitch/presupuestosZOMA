@@ -93,7 +93,7 @@ export default function FacturaPage() {
             <div className="flex border-2 border-slate-900 relative">
                {/* Centro: Tipo de Factura (Ahora mejor posicionado) */}
                <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 flex h-16 w-16 items-center justify-center border-2 border-slate-900 bg-white text-4xl font-black z-10">
-                  {budget.afip_comprobante_tipo === 11 ? 'C' : 'B'}
+                  {budget.afip_comprobante_tipo === 1 ? 'A' : (budget.afip_comprobante_tipo === 11 ? 'C' : 'B')}
                </div>
 
                {/* Lado Izquierdo: Datos Emisor */}
@@ -132,7 +132,7 @@ export default function FacturaPage() {
                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs font-bold text-slate-800">
                   <p><span className="text-slate-400 font-black uppercase mr-2">Apellido y Nombre / Razón Social:</span> {client?.name}</p>
                   <p><span className="text-slate-400 font-black uppercase mr-2">CUIT:</span> {client?.cuit || 'Consumidor Final'}</p>
-                  <p><span className="text-slate-400 font-black uppercase mr-2">Condición IVA:</span> {client?.client_type === 'distribuidor' ? 'Responsable Inscripto' : 'Consumidor Final'}</p>
+                  <p><span className="text-slate-400 font-black uppercase mr-2">Condición IVA:</span> {budget.afip_comprobante_tipo === 1 ? 'Responsable Inscripto' : 'Consumidor Final'}</p>
                   <p><span className="text-slate-400 font-black uppercase mr-2">Domicilio:</span> {client?.address || '-'}</p>
                </div>
             </div>
@@ -152,7 +152,7 @@ export default function FacturaPage() {
                   <tbody className="divide-y divide-slate-200 font-bold text-slate-800">
                      {items.map((item: any, idx: number) => (
                         <tr key={idx}>
-                           <td className="px-4 py-2">{item.description}</td>
+                           <td className="px-4 py-2">{item.product_code ? `[${item.product_code}] ` : ''}{item.product_name}</td>
                            <td className="px-4 py-2 text-center">{item.quantity}</td>
                            <td className="px-4 py-2 uppercase">Unidades</td>
                            <td className="px-4 py-2 text-right">${Number(item.unit_price).toLocaleString('es-AR')}</td>
@@ -193,14 +193,29 @@ export default function FacturaPage() {
                {/* Totales */}
                <div className="w-64 border-2 border-slate-900">
                   <div className="p-4 space-y-2 text-sm">
-                     <div className="flex justify-between font-bold text-slate-500">
-                        <span>Subtotal:</span>
-                        <span>${budget.total_amount.toLocaleString('es-AR')}</span>
-                     </div>
-                     <div className="flex justify-between font-bold text-slate-500">
-                        <span>IVA:</span>
-                        <span>$0,00</span>
-                     </div>
+                     {budget.afip_comprobante_tipo === 1 ? (
+                        <>
+                           <div className="flex justify-between font-bold text-slate-500">
+                              <span>Subtotal (Neto):</span>
+                              <span>${(Number(budget.total_amount) / 1.21).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                           </div>
+                           <div className="flex justify-between font-bold text-slate-500">
+                              <span>IVA (21%):</span>
+                              <span>${(Number(budget.total_amount) - (Number(budget.total_amount) / 1.21)).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                           </div>
+                        </>
+                     ) : (
+                        <>
+                           <div className="flex justify-between font-bold text-slate-500">
+                              <span>Subtotal:</span>
+                              <span>${budget.total_amount.toLocaleString('es-AR')}</span>
+                           </div>
+                           <div className="flex justify-between font-bold text-slate-500">
+                              <span>IVA:</span>
+                              <span>$0,00</span>
+                           </div>
+                        </>
+                     )}
                      <div className="flex justify-between border-t-2 border-slate-900 pt-2 text-xl font-black text-slate-950">
                         <span>Total:</span>
                         <span>${budget.total_amount.toLocaleString('es-AR')}</span>

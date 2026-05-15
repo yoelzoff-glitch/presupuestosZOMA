@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     if (budget.afip_cae) throw new Error('Este presupuesto ya tiene una factura emitida')
 
     const client = Array.isArray(budget.clients) ? budget.clients[0] : budget.clients
-    
+
     // 2. Obtener config fiscal
     const { data: config, error: cError } = await supabaseAdmin
       .from('afip_configs')
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const esRI = config.tipo_contribuyente === 'responsable_inscripto'
     const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
     const esCuitValido = cuitLimpio.length === 11
-    
+
     let cbteTipo = 11 // Por defecto Factura C (Monotributo)
     let docTipo = 99
     let docNro = 0
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
 
     const puntoVenta = config.punto_venta
     const total = Number(budget.total_amount)
-    
+
     // 6. Cálculos de IVA (Solo para Factura A y B)
     let impNeto = total
     let impIVA = 0
@@ -107,12 +107,12 @@ export async function POST(request: Request) {
     }
 
     const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
-    
+
     const voucherData: any = {
       CantReg: 1,
       PtoVta: puntoVenta,
       CbteTipo: cbteTipo,
-      Concepto: 1, 
+      Concepto: 1,
       DocTipo: docTipo,
       DocNro: docNro,
       CbteFch: date,
@@ -188,9 +188,9 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Error emitiendo factura:', error)
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message || 'Error al emitir factura' 
+    return NextResponse.json({
+      success: false,
+      error: error.message || 'Error al emitir factura'
     }, { status: 500 })
   } finally {
     if (fs.existsSync(certPath)) fs.unlinkSync(certPath)

@@ -2,6 +2,7 @@
 import FilterButton from '@/app/components/FilterButton'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -53,6 +54,7 @@ export default function PresupuestosClient({
   idEmpresa,
   planType,
 }: Props) {
+  const router = useRouter()
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>(presupuestosIniciales)
   const [vendedores] = useState<PerfilVendedor[]>(vendedoresIniciales)
   const [busqueda, setBusqueda] = useState('')
@@ -76,7 +78,7 @@ export default function PresupuestosClient({
     
     setEmitiendoId(presupuestoSeleccionado.id)
     try {
-      const response = await fetch('/api/afip/create-invoice', {
+      const response = await fetch('/api/invoices/create-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ budget_id: presupuestoSeleccionado.id })
@@ -84,14 +86,14 @@ export default function PresupuestosClient({
 
       const data = await response.json()
       if (data.success) {
-        toast.success(`Factura emitida con éxito! CAE: ${data.cae}`)
+        toast.success('¡Borrador de factura generado con éxito!')
         setShowPreview(false)
-        cargarPresupuestos() // Recargar lista
+        router.push('/facturas') // Ir a ver la factura
       } else {
         throw new Error(data.error)
       }
     } catch (error: any) {
-      toast.error('Error al facturar: ' + error.message)
+      toast.error('Error al generar factura: ' + error.message)
     } finally {
       setEmitiendoId(null)
     }

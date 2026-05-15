@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Boxes,
   Clock,
+  Receipt,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/productos', label: 'Productos', icon: Package },
   { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
+  { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
 ]
@@ -47,6 +49,7 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/inventario')) return 'Inventario'
   if (pathname.startsWith('/pedidos')) return 'Pedidos'
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
+  if (pathname.startsWith('/facturas')) return 'Facturación'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
   if (pathname.startsWith('/notificaciones')) return 'Notificaciones'
   if (pathname.startsWith('/configuracion')) return 'Configuración'
@@ -60,6 +63,7 @@ function getPageDescription(pathname: string) {
   if (pathname.startsWith('/productos')) return 'Gestión de productos, precios y catálogo'
   if (pathname.startsWith('/inventario')) return 'Control de stock y movimientos de mercadería'
   if (pathname.startsWith('/presupuestos')) return 'Creación de propuestas comerciales'
+  if (pathname.startsWith('/facturas')) return 'Gestión de comprobantes y CAE'
   if (pathname.startsWith('/pedidos')) return 'Gestión de órdenes de venta confirmadas'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
   if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'

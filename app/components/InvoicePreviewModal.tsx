@@ -23,23 +23,39 @@ export default function InvoicePreviewModal({
   isEmitting 
 }: Props) {
   const [items, setItems] = useState<any[]>([])
+  const [config, setConfig] = useState<any>(null)
+  const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (isOpen && budgetId) {
-      fetchItems()
+      fetchData()
     }
   }, [isOpen, budgetId])
 
-  async function fetchItems() {
+  async function fetchData() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('budget_items')
-        .select('*')
-        .eq('budget_id', budgetId)
-      
-      if (!error) setItems(data || [])
+      // Fetch items, budget (with client) and afip config
+      const { data: budgetData } = await supabase
+        .from('budgets')
+        .select('*, clients(*), budget_items(*)')
+        .eq('id', budgetId)
+        .single()
+
+      if (budgetData) {
+        setItems(budgetData.budget_items || [])
+        setClient(Array.isArray(budgetData.clients) ? budgetData.clients[0] : budgetData.clients)
+        
+        // Fetch AFIP config for this company
+        const { data: afipData } = await supabase
+          .from('afip_configs')
+          .select('*')
+          .eq('company_id', budgetData.company_id)
+          .single()
+        
+        setConfig(afipData)
+      }
     } catch (err) {
       console.error(err)
     } finally {
@@ -48,6 +64,13 @@ export default function InvoicePreviewModal({
   }
 
   if (!isOpen) return null
+
+  const esRI = config?.tipo_contribuyente === 'responsable_inscripto'
+  const condicionCliente = client?.client_type === 'distribuidor' ? 'Responsable Inscripto' : 'Consumidor Final'
+  
+  // Cálculos de IVA si es RI
+  const neto = esRI ? (totalAmount / 1.21) : totalAmount
+  const iva = totalAmount - neto
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -79,7 +102,7 @@ export default function InvoicePreviewModal({
                   <User size={12} /> Cliente
                 </div>
                 <p className="font-bold text-slate-900">{clientName}</p>
-                <p className="text-xs text-slate-500 italic mt-1">Condición: Consumidor Final</p>
+                <p className="text-xs text-slate-500 italic mt-1">Condición: {loading ? '...' : condicionCliente}</p>
               </div>
             </div>
 
@@ -122,7 +145,7 @@ export default function InvoicePreviewModal({
                 ) : (
                   items.map((item, idx) => (
                     <tr key={idx} className="text-xs font-semibold text-slate-700">
-                      <td className="px-4 py-3">{item.description}</td>
+                      <td className="px-4 py-3">{item.product_name}</td>
                       <td className="px-4 py-3 text-center">{item.quantity}</td>
                       <td className="px-4 py-3 text-right">${Number(item.unit_price).toLocaleString('es-AR')}</td>
                       <td className="px-4 py-3 text-right font-bold text-slate-900">${(item.quantity * item.unit_price).toLocaleString('es-AR')}</td>
@@ -136,12 +159,12 @@ export default function InvoicePreviewModal({
           {/* Total Box */}
           <div className="mt-6 flex flex-col items-end gap-2">
             <div className="flex w-full max-w-[200px] items-center justify-between border-t border-slate-100 pt-4">
-              <span className="text-xs font-bold text-slate-500 uppercase">Subtotal</span>
-              <span className="text-sm font-bold text-slate-900">${totalAmount.toLocaleString('es-AR')}</span>
+              <span className="text-xs font-bold text-slate-500 uppercase">{esRI ? 'Neto' : 'Subtotal'}</span>
+              <span className="text-sm font-bold text-slate-900">${neto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
             </div>
             <div className="flex w-full max-w-[200px] items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase">IVA (0%)</span>
-              <span className="text-sm font-bold text-slate-900">$0</span>
+              <span className="text-xs font-bold text-slate-500 uppercase">IVA ({esRI ? '21%' : '0%'})</span>
+              <span className="text-sm font-bold text-slate-900">${iva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
             </div>
             <div className="mt-2 flex w-full max-w-[240px] items-center justify-between rounded-2xl bg-blue-600 p-4 text-white shadow-xl shadow-blue-100">
               <div className="flex items-center gap-2">
