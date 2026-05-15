@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     // 1. Obtener datos del presupuesto
     const { data: budget, error: bError } = await supabaseAdmin
       .from('budgets')
-      .select('*, budgets_items(*)')
+      .select('*, budget_items(*)')
       .eq('id', budget_id)
       .single()
 
@@ -92,9 +92,9 @@ export async function POST(request: Request) {
       .from('budgets')
       .update({
         afip_cae: result.CAE,
-        afip_cae_due: result.CAEFchVto,
-        afip_invoice_number: nextNumber,
-        afip_invoice_type: cbteTipo,
+        afip_cae_vencimiento: result.CAEFchVto,
+        afip_comprobante_numero: nextNumber,
+        afip_comprobante_tipo: cbteTipo,
         status: 'facturado'
       })
       .eq('id', budget_id)
