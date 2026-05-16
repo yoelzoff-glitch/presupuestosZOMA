@@ -29,7 +29,7 @@ export default function FacturaPage() {
          .eq('id', id)
          .single()
 
-      if (error || !data || !data.afip_cae) {
+      if (error || !data) {
          console.error('Error fetching budget for invoice:', error)
       } else {
          setBudget(data)
@@ -49,6 +49,8 @@ export default function FacturaPage() {
    const company = budget.companies
    const items = budget.budget_items || []
 
+   const esBorrador = !budget.afip_cae
+
    // 2. Lógica para el QR de AFIP (Simplificada para Sandbox)
    // Formato oficial: https://www.afip.gob.ar/fe/qr/?p=BASE64_JSON
    const qrData = {
@@ -56,17 +58,17 @@ export default function FacturaPage() {
       fecha: budget.budget_date,
       cuit: company?.cuit || 20412886128,
       ptoVta: 2,
-      tipoCmp: budget.afip_comprobante_tipo,
-      nroCmp: budget.afip_comprobante_numero,
+      tipoCmp: budget.afip_comprobante_tipo || 11,
+      nroCmp: budget.afip_comprobante_numero || 0,
       importe: budget.total_amount,
       moneda: "PES",
       ctz: 1,
       tipoDocRec: 99,
       nroDocRec: 0,
       tipoCodAut: "E",
-      codAut: budget.afip_cae
+      codAut: budget.afip_cae || "00000000000000"
    }
-   const qrBase64 = Buffer.from(JSON.stringify(qrData)).toString('base64')
+   const qrBase64 = typeof window !== 'undefined' ? btoa(JSON.stringify(qrData)) : ''
    const qrUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`
 
    return (
@@ -87,7 +89,13 @@ export default function FacturaPage() {
          </div>
 
          {/* Factura Layout */}
-         <div className="mx-auto max-w-4xl border border-slate-300 bg-white p-10 pt-14 shadow-xl print:shadow-none print:border-none print:p-0 print:pt-10">
+         <div className={`mx-auto max-w-4xl border border-slate-300 bg-white p-10 pt-14 shadow-xl print:shadow-none print:border-none print:p-0 print:pt-10 relative overflow-hidden ${esBorrador ? 'bg-slate-50/50' : ''}`}>
+            
+            {esBorrador && (
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.07] z-0">
+                  <p className="text-[120px] font-black tracking-tighter whitespace-nowrap">BORRADOR</p>
+               </div>
+            )}
 
             {/* Cabecera */}
             <div className="flex border-2 border-slate-900 relative">
@@ -115,8 +123,8 @@ export default function FacturaPage() {
                <div className="flex-1 p-6 border-l-2 border-slate-900">
                   <h2 className="text-2xl font-black uppercase text-slate-900">Factura</h2>
                   <div className="mt-4 space-y-1 text-sm font-black text-slate-900">
-                     <p>Punto de Venta: 00002</p>
-                     <p>Comp. Nro: {String(budget.afip_comprobante_numero).padStart(8, '0')}</p>
+                     <p>Punto de Venta: {String(qrData.ptoVta).padStart(5, '0')}</p>
+                     <p>Comp. Nro: {budget.afip_comprobante_numero ? String(budget.afip_comprobante_numero).padStart(8, '0') : '---'}</p>
                      <p>Fecha: {new Date(budget.budget_date).toLocaleDateString('es-AR')}</p>
                      <div className="mt-4 text-[10px] text-slate-500 uppercase">
                         <p>CUIT: {company?.cuit || '20-41288612-8'}</p>
@@ -183,10 +191,10 @@ export default function FacturaPage() {
                   <div className="text-[10px] font-black uppercase text-slate-900 space-y-1">
                      <p className="flex items-center gap-2 mb-2">
                         <img src="https://www.afip.gob.ar/images/logo_afip.png" className="h-4 grayscale" alt="AFIP" />
-                        Comprobante Autorizado
+                        {esBorrador ? 'Documento no legalizado' : 'Comprobante Autorizado'}
                      </p>
-                     <p>CAE: <span className="font-black text-base ml-1 tracking-tight">{budget.afip_cae}</span></p>
-                     <p>Vencimiento CAE: {new Date(budget.afip_cae_vencimiento).toLocaleDateString('es-AR')}</p>
+                     <p>CAE: <span className="font-black text-base ml-1 tracking-tight">{budget.afip_cae || "00000000000000"}</span></p>
+                     <p>Vencimiento CAE: {budget.afip_cae_vencimiento ? new Date(budget.afip_cae_vencimiento).toLocaleDateString('es-AR') : '--/--/----'}</p>
                   </div>
                </div>
 

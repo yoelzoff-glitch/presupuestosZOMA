@@ -127,6 +127,7 @@ export default function PresupuestosClient({
         client: Array.isArray(p.clients) ? p.clients[0] || null : p.clients || null,
         seller: Array.isArray(p.seller) ? p.seller[0] || null : p.seller || null
       }))
+      console.log('Presupuestos cargados:', normalizados.map(p => ({ id: p.id, code: p.budget_code, invoices: p.invoices })))
       setPresupuestos(normalizados)
     }
     setCargando(false)
@@ -260,7 +261,7 @@ export default function PresupuestosClient({
                             Ver Borrador
                           </Link>
                         )}
-                        {p.afip_cae && (
+                        {(p.afip_cae || (p.invoices && p.invoices.length > 0)) && (
                           <Link
                             href={`/presupuestos/factura/${p.id}`}
                             target="_blank"

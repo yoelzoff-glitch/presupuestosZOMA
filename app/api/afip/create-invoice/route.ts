@@ -148,6 +148,7 @@ export async function POST(request: Request) {
       ImpOpEx: 0,
       ImpIVA: cbteTipo === 1 || cbteTipo === 6 ? parseFloat((montoTotal - (montoTotal / 1.21)).toFixed(2)) : 0,
       ImpTrib: 0,
+      CondicionIVAReceptorId: condicionIvaReceptor,
       MonId: 'PES',
       MonCotiz: 1
     }
