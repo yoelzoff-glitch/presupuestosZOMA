@@ -54,12 +54,17 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error ARCA SDK:', error)
     
-    // Si el error es que ya estamos autenticados, ¡es un éxito!
-    if (error.message?.includes('alreadyAuthenticated') || error.message?.includes('CEE ya posee un TA valido')) {
+    const errorString = JSON.stringify(error) || error.message || ''
+    const isAlreadyAuth = 
+      errorString.includes('alreadyAuthenticated') || 
+      errorString.includes('CEE ya posee un TA valido') ||
+      (error.message && (error.message.includes('alreadyAuthenticated') || error.message.includes('CEE ya posee un TA valido')))
+
+    if (isAlreadyAuth) {
       return NextResponse.json({
         success: true,
-        status: { appserver: 'OK', dbserver: 'OK', authserver: 'OK' }, // Simulamos OK ya que el TA es válido
-        message: 'Conexión activa y válida con ARCA'
+        status: { appserver: 'OK', dbserver: 'OK', authserver: 'OK' },
+        message: 'Conexión activa y válida con ARCA (Sesión reutilizada)'
       })
     }
 
