@@ -21,6 +21,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Presupuesto no encontrado' }, { status: 404 })
     }
 
+    // NUEVO: Chequear si ya existe una factura para este presupuesto
+    const { data: existingInvoice } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('budget_id', budget_id)
+      .maybeSingle()
+
+    if (existingInvoice) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Ya existe una factura o borrador para este presupuesto',
+        invoice_id: existingInvoice.id 
+      }, { status: 400 })
+    }
+
     // 2. Crear la factura en estado 'draft'
     const { data: invoice, error: iError } = await supabase
       .from('invoices')

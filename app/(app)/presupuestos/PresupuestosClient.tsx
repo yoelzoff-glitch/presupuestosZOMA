@@ -107,7 +107,7 @@ export default function PresupuestosClient({
 
     let consulta = supabase
       .from('budgets')
-      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, viewed_at, seller_id, afip_cae, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
+      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, viewed_at, seller_id, afip_cae, clients ( name, cuit ), invoices(id), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
       .eq('company_id', idEmpresa)
       .order('budget_number', { ascending: false })
 
@@ -240,7 +240,7 @@ export default function PresupuestosClient({
                     <td className="px-6 py-4"><EtiquetaEstado estado={p.status} tieneCAE={!!p.afip_cae} /></td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {p.status === 'approved' && !p.afip_cae && (
+                        {p.status === 'approved' && !p.afip_cae && (!p.invoices || p.invoices.length === 0) && (
                           <button
                             onClick={() => abrirPreview(p)}
                             disabled={!!emitiendoId}
@@ -249,6 +249,15 @@ export default function PresupuestosClient({
                             <DollarSign size={14} />
                             Facturar
                           </button>
+                        )}
+                        {p.status === 'approved' && !p.afip_cae && (p.invoices && p.invoices.length > 0) && (
+                          <Link
+                            href="/facturas"
+                            className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white hover:bg-amber-600 transition"
+                          >
+                            <Clock3 size={14} />
+                            Ver Borrador
+                          </Link>
                         )}
                         {p.afip_cae && (
                           <Link
