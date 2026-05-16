@@ -89,7 +89,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         if (user) {
           const { data, error } = await supabase
             .from('users_profiles')
-            .select('role, company:companies(name, plan_type, enable_stock_module)')
+            .select('role, company:companies(name, plan_type, enable_stock_module, logo_url)')
             .eq('id', user.id)
             .single()
           
@@ -135,8 +135,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex h-full flex-col">
       <div className="flex h-20 items-center px-6">
         <div className="flex items-center gap-3.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-xl shadow-blue-500/20">
-            <Sparkles size={20} />
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 p-1 shadow-xl ring-1 ring-white/10">
+            {profile?.company?.logo_url ? (
+              <img 
+                src={profile.company.logo_url} 
+                alt="Logo" 
+                className="h-full w-full object-contain rounded-lg"
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg">
+                <Sparkles size={20} />
+              </div>
+            )}
           </div>
 
           <div>
