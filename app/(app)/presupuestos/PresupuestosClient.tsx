@@ -260,7 +260,7 @@ export default function PresupuestosClient({
                             Ver Factura
                           </Link>
                         )}
-                        {p.status !== 'cancelled' && !p.afip_cae && (
+                        {p.status === 'issued' && !p.afip_cae && (
                           <Link 
                             href={`/presupuestos/${p.id}/edit`}
                             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"

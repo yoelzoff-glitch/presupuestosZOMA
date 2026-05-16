@@ -520,7 +520,7 @@ export default function PresupuestoDetallePage() {
                 <MessageCircle size={18} /> Compartir WhatsApp
               </button>
 
-              {budget.status !== 'cancelled' && !budget.afip_cae && (
+              {budget.status === 'issued' && !budget.afip_cae && (
                 <Link
                   href={`/presupuestos/${id}/edit`}
                   className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 transition active:scale-95 shadow-lg shadow-slate-900/5"
