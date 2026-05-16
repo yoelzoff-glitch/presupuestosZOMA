@@ -54,11 +54,16 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error ARCA SDK:', error)
     
-    const errorString = JSON.stringify(error) || error.message || ''
+    const fullErrorText = (
+      (error.message || '') + 
+      (error.response?.data?.message || '') + 
+      (error.body?.message || '') +
+      JSON.stringify(error)
+    ).toLowerCase()
+
     const isAlreadyAuth = 
-      errorString.includes('alreadyAuthenticated') || 
-      errorString.includes('CEE ya posee un TA valido') ||
-      (error.message && (error.message.includes('alreadyAuthenticated') || error.message.includes('CEE ya posee un TA valido')))
+      fullErrorText.includes('alreadyauthenticated') || 
+      fullErrorText.includes('cee ya posee un ta valido')
 
     if (isAlreadyAuth) {
       return NextResponse.json({
