@@ -205,7 +205,17 @@ export default function PresupuestosClient({
                     </td>
                     <td className="px-6 py-4 text-right font-black text-blue-700">${p.total_amount.toLocaleString('es-AR')}</td>
                     <td className="px-6 py-4"><EtiquetaEstado estado={p.status} /></td>
-                    <td className="px-6 py-4 text-right"><Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link></td>
+                    <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                      {p.status === 'issued' && (
+                        <Link 
+                          href={`/presupuestos/${p.id}/edit`}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                        >
+                          Editar
+                        </Link>
+                      )}
+                      <Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

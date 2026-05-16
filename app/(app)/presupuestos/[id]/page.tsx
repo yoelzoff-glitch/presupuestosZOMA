@@ -21,6 +21,7 @@ import {
   ClipboardList,
   Zap,
   MessageCircle,
+  Plus,
   Eye,
 } from 'lucide-react'
 
@@ -514,6 +515,15 @@ export default function PresupuestoDetallePage() {
               >
                 <MessageCircle size={18} /> Compartir WhatsApp
               </button>
+
+              {budget.status === 'issued' && (
+                <Link
+                  href={`/presupuestos/${id}/edit`}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 transition active:scale-95 shadow-lg shadow-slate-900/5"
+                >
+                  <Plus size={18} className="rotate-45" /> Editar
+                </Link>
+              )}
 
               <button
                 onClick={() => window.print()}
