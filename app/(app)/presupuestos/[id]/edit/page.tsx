@@ -123,9 +123,10 @@ export default function EditarPresupuestoPage() {
 
       if (bError || !budget) throw new Error('Presupuesto no encontrado')
       
-      if (budget.status !== 'issued' && budget.status !== 'pending' && budget.status !== 'draft') {
-          // Si ya está aprobado, facturado o cancelado, quizás no deberíamos editarlo?
-          // Por ahora dejamos pasar pero podrías agregar una restricción aquí.
+      if (budget.status !== 'issued' || !!budget.afip_cae) {
+          toast.warning('Este presupuesto está congelado (es pedido o factura) y no se puede editar.')
+          router.push(`/presupuestos/${budgetId}`)
+          return
       }
 
       setBudgetNumber(budget.budget_number)
@@ -269,7 +270,8 @@ export default function EditarPresupuestoPage() {
         .update({
           client_id: clientId,
           total_amount: total,
-          notes: budgetNotes.trim() || null
+          notes: budgetNotes.trim() || null,
+          updated_at: new Date().toISOString()
         })
         .eq('id', budgetId)
 
