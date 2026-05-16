@@ -30,6 +30,7 @@ type Presupuesto = {
   seller?: { full_name: string } | null
   client: { name: string; cuit: string } | null
   afip_cae?: string | null
+  invoices?: { id: string }[]
 }
 
 type PerfilVendedor = { id: string; full_name: string }
