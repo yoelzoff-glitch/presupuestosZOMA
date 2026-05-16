@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import {
   ArrowLeft,
   FileText,
+  Plus,
   User,
   CalendarDays,
   DollarSign,
@@ -36,6 +37,10 @@ type Budget = {
   seller_id: string | null
   notes: string | null
   viewed_at: string | null
+  afip_cae?: string | null
+  afip_cae_vencimiento?: string | null
+  afip_comprobante_numero?: number | null
+  afip_comprobante_tipo?: number | null
   clients: {
     name: string
     cuit: string
@@ -514,6 +519,15 @@ export default function PresupuestoDetallePage() {
               >
                 <MessageCircle size={18} /> Compartir WhatsApp
               </button>
+
+              {budget.status !== 'cancelled' && !budget.afip_cae && (
+                <Link
+                  href={`/presupuestos/${id}/edit`}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 transition active:scale-95 shadow-lg shadow-slate-900/5"
+                >
+                  <Plus size={18} className="rotate-45" /> Editar
+                </Link>
+              )}
 
               <button
                 onClick={() => window.print()}

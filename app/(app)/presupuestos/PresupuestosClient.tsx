@@ -260,6 +260,14 @@ export default function PresupuestosClient({
                             Ver Factura
                           </Link>
                         )}
+                        {p.status !== 'cancelled' && !p.afip_cae && (
+                          <Link 
+                            href={`/presupuestos/${p.id}/edit`}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                          >
+                            Editar
+                          </Link>
+                        )}
                         <Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link>
                       </div>
                     </td>
