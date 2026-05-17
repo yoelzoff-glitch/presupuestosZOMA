@@ -8,16 +8,11 @@ export default async function PresupuestosPage() {
 
   const supabase = await createServerComponentClient()
 
-  // Obtener presupuestos de los últimos 30 días y vendedores en paralelo — en el servidor
-  const limiteFecha = new Date()
-  limiteFecha.setDate(limiteFecha.getDate() - 30)
-
   const [resPresupuestos, resVendedores] = await Promise.all([
     supabase
       .from('budgets')
       .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, seller_id, afip_cae, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
       .eq('company_id', contexto.idEmpresa)
-      .gte('created_at', limiteFecha.toISOString())
       .order('budget_number', { ascending: false }),
     supabase
       .from('users_profiles')
