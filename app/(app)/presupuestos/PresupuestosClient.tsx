@@ -1,7 +1,7 @@
 'use client'
 import FilterButton from '@/app/components/FilterButton'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
@@ -62,6 +62,8 @@ export default function PresupuestosClient({
   const [filtroVendedor, setFiltroVendedor] = useState<string>('all')
   const [cargando, setCargando] = useState(false)
   const [filtroDias, setFiltroDias] = useState('30')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 15
 
   async function cargarPresupuestos() {
     setCargando(true)
@@ -102,6 +104,16 @@ export default function PresupuestosClient({
       return coincideBusqueda && coincideEstado && coincideVendedor
     })
   }, [presupuestos, busqueda, filtroEstado, filtroVendedor])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [busqueda, filtroEstado, filtroVendedor, filtroDias])
+
+  const totalPages = Math.ceil(presupuestosFiltrados.length / itemsPerPage)
+  const presupuestosPaginados = presupuestosFiltrados.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
 
   const montoTotal = presupuestos.filter(p => p.status !== 'cancelled').reduce((acc, p) => acc + Number(p.total_amount || 0), 0)
 
@@ -182,7 +194,7 @@ export default function PresupuestosClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {presupuestosFiltrados.map(p => (
+                {presupuestosPaginados.map(p => (
                   <tr key={p.id} className="hover:bg-blue-50/30 transition">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -217,6 +229,33 @@ export default function PresupuestosClient({
                 ))}
               </tbody>
             </table>
+            
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between border-t border-slate-100 bg-white p-5">
+                <span className="text-xs font-bold text-slate-500">
+                  Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, presupuestosFiltrados.length)} de {presupuestosFiltrados.length}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <span className="flex items-center justify-center rounded-xl bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>

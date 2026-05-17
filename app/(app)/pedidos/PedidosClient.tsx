@@ -1,7 +1,7 @@
 'use client'
 import FilterButton from '@/app/components/FilterButton'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import {
@@ -57,6 +57,8 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
   const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all')
   const [daysFilter, setDaysFilter] = useState('30')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 15
   const [emitiendoId, setEmitiendoId] = useState<string | null>(null)
   const [modalPreview, setModalPreview] = useState<{
     isOpen: boolean;
@@ -142,6 +144,16 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
     })
   }, [orders, search, statusFilter, sellerFilter])
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, statusFilter, sellerFilter, daysFilter])
+
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+
   return (
     <div className="space-y-6">
       <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl">
@@ -208,7 +220,7 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
                 <tr><th className="px-6 py-4">Pedido</th><th className="px-6 py-4">Origen</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Total</th><th className="px-6 py-4 text-right">Acción</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredOrders.map(order => (
+                {paginatedOrders.map(order => (
                   <tr key={order.id} className="hover:bg-blue-50/30 transition">
                     <td className="px-6 py-4 font-black text-slate-900">{order.order_code || `PED-${order.order_number}`}</td>
                     <td className="px-6 py-4"><SourceBadge source={order.source} /></td>
@@ -251,6 +263,33 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
                 ))}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between border-t border-slate-100 bg-white p-5">
+                <span className="text-xs font-bold text-slate-500">
+                  Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <span className="flex items-center justify-center rounded-xl bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>
