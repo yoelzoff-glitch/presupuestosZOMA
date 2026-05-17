@@ -14,9 +14,10 @@ import {
   Loader2
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
-import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 
 export default function ConfigFiscalPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -65,12 +66,18 @@ export default function ConfigFiscalPage() {
     async function loadConfig() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        // Obtenemos el profile para saber el company_id
+        // Obtenemos el profile para saber el company_id y validar el plan
         const { data: profile } = await supabase
           .from('users_profiles')
-          .select('company_id')
+          .select('company_id, company:companies(plan_type)')
           .eq('id', user.id)
           .single()
+
+        const planType = (profile?.company as any)?.plan_type || 'base'
+        if (planType !== 'ultra') {
+          router.replace('/configuracion/suscripcion')
+          return
+        }
 
         if (profile?.company_id) {
           const { data: afipConfig } = await supabase

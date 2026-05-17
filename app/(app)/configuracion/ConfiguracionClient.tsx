@@ -29,9 +29,10 @@ type MpStatus = {
 
 type Props = {
   companyId: string
+  planType?: string
 }
 
-export default function ConfiguracionClient({ companyId }: Props) {
+export default function ConfiguracionClient({ companyId, planType = 'base' }: Props) {
   const [mpStatus, setMpStatus] = useState<MpStatus | null>(null)
   const [loadingMp, setLoadingMp] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
@@ -266,28 +267,66 @@ export default function ConfiguracionClient({ companyId }: Props) {
         </Link>
 
         {/* Configuración Fiscal (AFIP/ARCA) */}
-        <Link
-          href="/configuracion/fiscal"
-          className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
-              <Gavel size={22} />
+        {planType === 'ultra' ? (
+          <Link
+            href="/configuracion/fiscal"
+            className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
+                <Gavel size={22} />
+              </div>
+
+              <h2 className="text-lg font-black text-slate-900">
+                Configuración Fiscal
+              </h2>
             </div>
 
-            <h2 className="text-lg font-black text-slate-900">
-              Configuración Fiscal
-            </h2>
+            <p className="mt-3 text-sm text-slate-500">
+              Vinculá tu CUIT y certificados de ARCA para emitir facturas electrónicas legales.
+            </p>
+
+            <p className="mt-4 text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
+              Configurar AFIP →
+            </p>
+          </Link>
+        ) : (
+          <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
+            {/* Contenido Difuminado */}
+            <div className="blur-[2px] pointer-events-none select-none">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
+                  <Gavel size={22} />
+                </div>
+                <h2 className="text-lg font-black text-slate-900">
+                  Configuración Fiscal
+                </h2>
+              </div>
+              <p className="mt-3 text-sm text-slate-500">
+                Vinculá tu CUIT y certificados de ARCA para emitir facturas electrónicas legales.
+              </p>
+            </div>
+
+            {/* Overlay Premium ULTRA */}
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-955/70 p-4 text-center backdrop-blur-[1px]">
+              <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-blue-500 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-lg shadow-blue-500/20">
+                Plan Ultra
+              </span>
+              <h3 className="text-sm font-black text-white">
+                Facturación Electrónica AFIP
+              </h3>
+              <p className="mt-1 text-[11px] text-slate-300 max-w-[200px]">
+                Requerido para emitir comprobantes legales A y B.
+              </p>
+              <Link
+                href="/configuracion/suscripcion"
+                className="mt-3 inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-xs font-black text-slate-950 shadow-md transition-all hover:scale-105"
+              >
+                Obtener Ultra
+              </Link>
+            </div>
           </div>
-
-          <p className="mt-3 text-sm text-slate-500">
-            Vinculá tu CUIT y certificados de ARCA para emitir facturas electrónicas legales.
-          </p>
-
-          <p className="mt-4 text-xs font-bold text-blue-600 opacity-0 transition group-hover:opacity-100">
-            Configurar AFIP →
-          </p>
-        </Link>
+        )}
 
         {/* Mercado Pago */}
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

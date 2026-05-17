@@ -7,6 +7,6 @@ export default async function ConfiguracionPage() {
   if (!context) redirect('/auth/login')
 
   return (
-    <ConfiguracionClient companyId={context.idEmpresa} />
+    <ConfiguracionClient companyId={context.idEmpresa} planType={context.tipoPlan} />
   )
 }
