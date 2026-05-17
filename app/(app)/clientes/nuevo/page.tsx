@@ -106,18 +106,26 @@ export default function NuevoCliente() {
           normalizedRow[normalizedKey] = r[key]
         })
 
-        const name = normalizedRow.nombre || normalizedRow.name || normalizedRow.razonsocial || normalizedRow.cliente || ''
+        const name = normalizedRow.nombre || normalizedRow.name || normalizedRow.razonsocial || normalizedRow.cliente || normalizedRow.empresa || ''
         if (!name) return null
+
+        // Detección inteligente de tipo de cliente
+        const tipoStr = String(normalizedRow.tipo || normalizedRow.type || normalizedRow.categoria || normalizedRow.clasificacion || '').toLowerCase()
+        let detectedType: 'consumidor_final' | 'distribuidor' = 'consumidor_final'
+        
+        if (tipoStr.includes('dist') || tipoStr.includes('mayo') || tipoStr.includes('revend')) {
+          detectedType = 'distribuidor'
+        }
 
         return {
           company_id: companyId,
-          cuit: String(normalizedRow.cuit || normalizedRow.dni || '').replace(/\D/g, '') || null,
+          cuit: String(normalizedRow.cuit || normalizedRow.dni || normalizedRow.cuil || normalizedRow.identificacion || '').replace(/\D/g, '') || null,
           name: String(name).trim(),
-          address: String(normalizedRow.direccion || normalizedRow.address || normalizedRow.domicilio || ''),
-          email: String(normalizedRow.email || normalizedRow.mail || ''),
-          phone: String(normalizedRow.telefono || normalizedRow.phone || normalizedRow.celular || ''),
+          address: String(normalizedRow.direccion || normalizedRow.address || normalizedRow.domicilio || normalizedRow.calle || normalizedRow.ubicacion || ''),
+          email: String(normalizedRow.email || normalizedRow.mail || normalizedRow.correo || normalizedRow['e-mail'] || ''),
+          phone: String(normalizedRow.telefono || normalizedRow.phone || normalizedRow.celular || normalizedRow.whatsapp || normalizedRow.tel || ''),
           seller_id: selectedSellerId || null,
-          client_type: String(normalizedRow.tipo || normalizedRow.type || '').toLowerCase().includes('dist') ? 'distribuidor' : 'consumidor_final'
+          client_type: detectedType
         }
       }).filter(Boolean) as any[]
 

@@ -63,52 +63,33 @@ export default function BudgetPublicClient() {
 
   async function loadPublicData() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('budgets')
-      .select(`
-        id,
-        company_id,
-        budget_number,
-        budget_code,
-        budget_date,
-        total_amount,
-        notes,
-        clients (
-          name,
-          cuit,
-          address
-        )
-      `)
-      .eq('id', id)
-      .single()
+    
+    try {
+      const res = await fetch(`/api/budgets/public/${id}`)
+      if (!res.ok) {
+        console.error("Error al cargar presupuesto público:", await res.text())
+        setLoading(false)
+        return
+      }
 
-    if (error || !data) {
+      const { budget: data, company: companyData, items: itemsData } = await res.json()
+
+      setBudget(data as Budget)
+      if (companyData) setCompany(companyData as Company)
+      setItems(itemsData || [])
+
+      // Registrar la visita silenciosamente (Fire and forget)
+      fetch('/api/budgets/track-view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ budgetId: data.id })
+      }).catch(e => console.error('Error tracking view:', e))
+
+    } catch (error) {
+      console.error("Error en petición:", error)
+    } finally {
       setLoading(false)
-      return
     }
-
-    const normalizedBudget = {
-      ...data,
-      clients: Array.isArray(data.clients) ? data.clients[0] : data.clients,
-    }
-    setBudget(normalizedBudget as Budget)
-
-    const { data: companyData } = await supabase
-      .from('companies')
-      .select('name, cuit, address, phone, email, logo_url, default_notes')
-      .eq('id', data.company_id)
-      .single()
-
-    if (companyData) setCompany(companyData as Company)
-
-    const { data: itemsData } = await supabase
-      .from('budget_items')
-      .select('id, product_code, product_name, quantity, unit_price, discount_str')
-      .eq('budget_id', id)
-      .order('created_at', { ascending: true })
-
-    setItems(itemsData || [])
-    setLoading(false)
   }
 
   if (loading) return (

@@ -109,7 +109,7 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
               <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/20 text-emerald-400 shadow-inner"><Wallet size={32} /></div>
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400">Saldo Global Cuenta Corriente</p>
-                <h2 className="mt-1 text-4xl font-black tracking-tight lg:text-5xl">{`$${stats.balance.toLocaleString('es-AR')}`}</h2>
+                <h2 className="mt-1 text-4xl font-black tracking-tight lg:text-5xl">{`$${(stats?.balance ?? 0).toLocaleString('es-AR')}`}</h2>
               </div>
             </div>
             <Link href="/cuenta-corriente" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-emerald-950 shadow-xl transition hover:bg-emerald-50 active:scale-95">Ver detalle completo <ArrowRight size={18} /></Link>
@@ -124,24 +124,24 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div>
                   <p className="text-sm font-bold text-slate-400">Total Presupuestado</p>
-                  <h3 className="text-3xl font-black mt-1">${stats.totalBudgeted.toLocaleString('es-AR')}</h3>
+                  <h3 className="text-3xl font-black mt-1">${(stats?.totalBudgeted ?? 0).toLocaleString('es-AR')}</h3>
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-400">Total Convertido</p>
-                  <h3 className="text-3xl font-black mt-1 text-indigo-400">${stats.totalConverted.toLocaleString('es-AR')}</h3>
+                  <h3 className="text-3xl font-black mt-1 text-indigo-400">${(stats?.totalConverted ?? 0).toLocaleString('es-AR')}</h3>
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-400">Rentabilidad Bruta</p>
                   <h3 className="text-3xl font-black mt-1 text-emerald-400">
-                    ${stats.profitability.toLocaleString('es-AR')}
+                    ${(stats?.profitability ?? 0).toLocaleString('es-AR')}
                     <span className="ml-2 text-sm font-bold opacity-60">
-                      ({stats.totalConverted > 0 ? ((stats.profitability / stats.totalConverted) * 100).toFixed(1) : 0}%)
+                      ({(stats?.totalConverted ?? 0) > 0 ? (((stats?.profitability ?? 0) / (stats?.totalConverted ?? 1)) * 100).toFixed(1) : 0}%)
                     </span>
                   </h3>
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-400">Tasa de Cierre </p>
-                  <h3 className="text-3xl font-black mt-1 text-blue-400">{stats.conversionRate.toFixed(1)}%</h3>
+                  <h3 className="text-3xl font-black mt-1 text-blue-400">{(stats?.conversionRate ?? 0).toFixed(1)}%</h3>
                 </div>
               </div>
             </div>
@@ -175,7 +175,7 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
           </div>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.salesHistory}>
+              <BarChart data={stats?.salesHistory ?? []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} tickFormatter={(value) => `$${value / 1000}k`} />
@@ -197,15 +197,15 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
                 <div className="h-full w-1/2">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={stats.paymentStatus} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={5} dataKey="value">
-                        {stats.paymentStatus.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                      <Pie data={stats?.paymentStatus ?? []} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={5} dataKey="value">
+                        {(stats?.paymentStatus ?? []).map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                       </Pie>
                       <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="w-1/2 space-y-2">
-                  {stats.paymentStatus.map((s) => (
+                  {(stats?.paymentStatus ?? []).map((s) => (
                     <div key={s.name} className="flex items-center justify-between">
                       <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} /><span className="text-xs font-bold text-slate-600">{s.name}</span></div>
                       <span className="text-xs font-black text-slate-900">{s.value}</span>

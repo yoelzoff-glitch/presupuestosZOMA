@@ -31,22 +31,24 @@ export default async function InventarioPage() {
   const planType = (profile.company as any)?.plan_type || 'base'
   const enableStockModule = (profile.company as any)?.enable_stock_module || false
 
-  if (planType === 'base' || !enableStockModule) {
-    redirect('/configuracion/empresa?error=module_disabled')
+  // Load products (only if planType !== 'base' && enableStockModule)
+  let products = []
+  if (planType !== 'base' && enableStockModule) {
+    const { data } = await supabase
+      .from('products')
+      .select('id, name, internal_code, stock_quantity, min_stock_level, track_stock, category, is_bundle')
+      .eq('company_id', profile.company_id)
+      .eq('active', true)
+      .order('name')
+    products = data || []
   }
-
-  // Load products that have track_stock enabled or are relevant for inventory
-  const { data: products } = await supabase
-    .from('products')
-    .select('*')
-    .eq('company_id', profile.company_id)
-    .eq('active', true)
-    .order('name')
 
   return (
     <InventarioClient 
-      initialProducts={products || []} 
+      initialProducts={products} 
       companyId={profile.company_id} 
+      planType={planType}
+      enableStockModule={enableStockModule}
     />
   )
 }

@@ -20,6 +20,7 @@ import {
   Target,
   CheckCircle2,
   Clock3,
+  Percent,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -40,6 +41,8 @@ export default function VendedorDetallePage() {
   const [clients, setClients] = useState<any[]>([])
   const [daysFilter, setDaysFilter] = useState('30')
   const [loading, setLoading] = useState(true)
+  const [commissionPercentage, setCommissionPercentage] = useState(0)
+  const [isUpdating, setIsUpdating] = useState(false)
 
   useEffect(() => {
     if (sellerId) loadSellerData()
@@ -57,6 +60,7 @@ export default function VendedorDetallePage() {
 
       if (pError) throw pError
       setSeller(profile)
+      setCommissionPercentage(profile.commission_percentage || 0)
 
       // 2. Stats de Presupuestos (con filtro de fecha)
       let budgetsQuery = supabase
@@ -122,6 +126,23 @@ export default function VendedorDetallePage() {
       setLoading(false)
     }
   }
+  
+  async function saveCommission() {
+    setIsUpdating(true)
+    try {
+      const { error } = await supabase
+        .from('users_profiles')
+        .update({ commission_percentage: commissionPercentage })
+        .eq('id', sellerId)
+        
+      if (error) throw error
+      toast.success('Porcentaje de comisión actualizado.')
+    } catch (err: any) {
+      toast.error('Error al actualizar comisión.')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   const conversionRate = useMemo(() => {
     if (stats.totalBudgets === 0) return 0
@@ -182,6 +203,47 @@ export default function VendedorDetallePage() {
                  <ContactItem icon={MapPin} label="Dirección" value={seller.address || 'No especificada'} />
               </div>
            </div>
+
+           <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Comisión</h3>
+                 <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <Percent size={14} />
+                 </div>
+              </div>
+              
+              <div className="space-y-4">
+                 <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5 ml-1">Porcentaje (%)</label>
+                    <div className="flex gap-2">
+                       <input 
+                          type="number" 
+                          value={commissionPercentage}
+                          onChange={(e) => setCommissionPercentage(Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 focus:border-blue-500 outline-none transition"
+                          placeholder="0"
+                       />
+                       <button 
+                          onClick={saveCommission}
+                          disabled={isUpdating}
+                          className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white hover:bg-slate-800 transition disabled:opacity-50 shrink-0"
+                       >
+                          {isUpdating ? <Loader2 size={14} className="animate-spin" /> : 'Guardar'}
+                       </button>
+                    </div>
+                 </div>
+
+                 <div className="pt-2 border-t border-slate-50">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">A Liquidar ({daysFilter === 'all' ? 'Histórico' : `Últimos ${daysFilter}D`})</p>
+                    <p className="text-2xl font-black text-emerald-600">
+                       ${((stats.totalConfirmedAmount * commissionPercentage) / 100).toLocaleString('es-AR')}
+                     </p>
+                     <p className="text-[9px] font-bold text-slate-400 mt-1 italic">
+                        Calculado sobre ${stats.totalConfirmedAmount.toLocaleString('es-AR')} confirmados.
+                     </p>
+                  </div>
+               </div>
+            </div>
 
            <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-7 rounded-[2rem] text-white shadow-xl shadow-blue-600/20">
               <div className="flex items-center gap-3 mb-4">

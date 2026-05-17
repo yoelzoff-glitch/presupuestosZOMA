@@ -17,6 +17,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  Lock,
+  MessageSquare,
+  Sparkles,
+  CheckCircle2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -35,9 +39,16 @@ type Product = {
 type Props = {
   initialProducts: Product[]
   companyId: string
+  planType?: string
+  enableStockModule?: boolean
 }
 
-export default function InventarioClient({ initialProducts, companyId }: Props) {
+export default function InventarioClient({ 
+  initialProducts, 
+  companyId,
+  planType = 'base',
+  enableStockModule = false,
+}: Props) {
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
@@ -50,6 +61,155 @@ export default function InventarioClient({ initialProducts, companyId }: Props) 
   const [adjustQty, setAdjustQty] = useState('0')
   const [adjustReason, setAdjustReason] = useState('')
   const [isAdjusting, setIsAdjusting] = useState(false)
+  const [activating, setActivating] = useState(false)
+
+  async function handleActivateStock() {
+    setActivating(true)
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({ enable_stock_module: true })
+        .eq('id', companyId)
+      if (error) throw error
+      toast.success('Módulo de stock activado correctamente!')
+      window.location.reload()
+    } catch (err: any) {
+      toast.error('Error al activar: ' + err.message)
+    } finally {
+      setActivating(false)
+    }
+  }
+
+  if (planType === 'base') {
+    const messageText = `Hola! Quiero actualizar mi cuenta del Plan BASE al Plan PRO ($110.000/mes) para activar el módulo de Inventario y Control de Stock en ZOMA.`
+    const encodedText = encodeURIComponent(messageText)
+
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center p-4 text-center animate-in fade-in zoom-in-95 duration-500">
+        <div className="relative mb-8">
+          <div className="absolute inset-0 bg-blue-500/20 blur-[60px] rounded-full animate-pulse" />
+          <div className="relative flex h-24 w-24 items-center justify-center rounded-[2rem] bg-slate-950 text-blue-500 shadow-2xl">
+            <Boxes size={48} strokeWidth={2.5} />
+          </div>
+        </div>
+        
+        <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-500/10 text-blue-600 text-xs font-black uppercase tracking-widest ring-1 ring-blue-500/20 animate-bounce">
+            <Sparkles size={14} /> Función Exclusiva PRO
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-wider border border-slate-200 shadow-sm">
+            Tu plan actual: BASE
+          </span>
+        </div>
+        
+        <h2 className="text-4xl font-black tracking-tight text-slate-900 mb-4 max-w-lg">
+          Controlá tu Stock y Productos al <span className="text-blue-600 underline decoration-blue-600/20 underline-offset-8">máximo.</span>
+        </h2>
+        
+        <p className="max-w-md text-lg font-bold text-slate-500 leading-relaxed mb-6">
+          El módulo de Inventario te permite llevar el control físico de stock, alertas críticas y recetas de insumos/productos.
+        </p>
+
+        <div className="rounded-3xl bg-blue-50/70 border border-blue-100 p-5 max-w-xs mx-auto shadow-sm mb-10 w-full">
+          <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Inversión Plan PRO</p>
+          <div className="mt-1 flex items-baseline justify-center gap-1">
+            <span className="text-3xl font-black text-slate-900">$110.000</span>
+            <span className="text-xs font-bold text-slate-400">/ mes</span>
+          </div>
+        </div>
+        
+        <div className="grid gap-6 sm:grid-cols-2 max-w-2xl mb-12 text-left">
+          <div className="flex gap-4 p-5 rounded-3xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><Boxes size={20}/></div>
+            <div>
+              <p className="font-black text-slate-900 text-sm">Control Físico de Stock</p>
+              <p className="text-xs font-bold text-slate-500 mt-1">Registrá ingresos y egresos de mercadería y controlá niveles mínimos de stock.</p>
+            </div>
+          </div>
+          <div className="flex gap-4 p-5 rounded-3xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600"><AlertTriangle size={20}/></div>
+            <div>
+              <p className="font-black text-slate-900 text-sm">Alertas de Stock Crítico</p>
+              <p className="text-xs font-bold text-slate-500 mt-1">Recibí notificaciones automáticas cuando tus productos se estén agotando.</p>
+            </div>
+          </div>
+        </div>
+ 
+        <div className="flex flex-col sm:flex-row gap-3">
+          <a
+            href={`https://wa.me/5491100000000?text=${encodedText}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-3 rounded-2xl bg-slate-950 px-8 py-4.5 text-sm font-black text-white shadow-2xl transition-all hover:bg-slate-900 active:scale-95 animate-in fade-in"
+          >
+            Mejorar mi Plan a PRO
+            <ChevronRight size={18} />
+          </a>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-8 py-4.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition"
+          >
+            Volver al Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (!enableStockModule) {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center p-4 text-center animate-in fade-in zoom-in-95 duration-500">
+        <div className="relative mb-8">
+          <div className="absolute inset-0 bg-emerald-500/20 blur-[60px] rounded-full animate-pulse" />
+          <div className="relative flex h-24 w-24 items-center justify-center rounded-[2rem] bg-slate-950 text-emerald-500 shadow-2xl">
+            <Boxes size={48} strokeWidth={2.5} />
+          </div>
+        </div>
+        
+        <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 text-xs font-black uppercase tracking-widest ring-1 ring-emerald-500/20">
+            <CheckCircle2 size={14} /> Módulo Incluido en tu Plan
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-wider border border-slate-200 shadow-sm">
+            Plan {planType.toUpperCase()}
+          </span>
+        </div>
+        
+        <h2 className="text-4xl font-black tracking-tight text-slate-900 mb-4 max-w-lg">
+          ¡Tu plan incluye el módulo de Inventario!
+        </h2>
+        
+        <p className="max-w-md text-lg font-bold text-slate-500 leading-relaxed mb-10">
+          El módulo de Stock está desactivado en la configuración de tu empresa actual. Habilitalo a continuación con un solo clic para empezar a usarlo inmediatamente.
+        </p>
+ 
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={handleActivateStock}
+            disabled={activating}
+            className="inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-8 py-4.5 text-sm font-black text-white shadow-2xl hover:bg-emerald-500 transition active:scale-95 disabled:opacity-50"
+          >
+            {activating ? (
+              <>
+                <Loader2 className="animate-spin" size={18} /> Activando módulo...
+              </>
+            ) : (
+              <>
+                Activar Módulo de Stock Ahora
+                <ChevronRight size={18} />
+              </>
+            )}
+          </button>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-8 py-4.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition"
+          >
+            Volver al Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   const ITEMS_PER_PAGE = 20
 

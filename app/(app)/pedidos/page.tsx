@@ -14,7 +14,7 @@ export default async function PedidosPage() {
   const [ordersRes, sellersRes] = await Promise.all([
     supabase
       .from('orders')
-      .select(`id, order_number, order_code, order_date, status, source, total_amount, seller_id, clients ( name, cuit )`)
+      .select(`id, order_number, order_code, order_date, status, source, total_amount, seller_id, budget_id, clients ( name, cuit ), budget:budgets ( afip_cae, invoices ( id ) )`)
       .eq('company_id', context.idEmpresa)
       .gte('created_at', dateLimit.toISOString())
       .order('created_at', { ascending: false }),
@@ -28,6 +28,7 @@ export default async function PedidosPage() {
   const orders = (ordersRes.data || []).map((item: any) => ({
     ...item,
     clients: Array.isArray(item.clients) ? item.clients[0] || null : item.clients || null,
+    budget: Array.isArray(item.budget) ? item.budget[0] || null : item.budget || null
   }))
 
   return (

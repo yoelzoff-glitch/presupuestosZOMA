@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { GenerarRemito } from '@/lib/generarRemito'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -19,7 +18,6 @@ import {
   Package,
   Printer,
   Tag,
-  Truck,
   User,
   XCircle,
   Wallet,
@@ -71,6 +69,7 @@ type Product = {
   sale_price: number | null
   track_stock: boolean | null
   stock_quantity: number | null
+  is_bundle?: boolean | null
 }
 
 type BudgetItemPreview = {
@@ -245,97 +244,12 @@ export default function PedidoDetallePage(): any {
   const [converting, setConverting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showStockWarningModal, setShowStockWarningModal] = useState(false)
+  const [stockWarningMessage, setStockWarningMessage] = useState('')
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [sendingToAccount, setSendingToAccount] = useState(false)
   const [alreadyInAccount, setAlreadyInAccount] = useState(false)
   const [enableStockModule, setEnableStockModule] = useState(false)
-
-  // Remito Integration
-  const [showRemitoModal, setShowRemitoModal] = useState(false)
-  const [generatingRemito, setGeneratingRemito] = useState(false)
-  const [remitoFormData, setRemitoFormData] = useState({
-    numeroRemito: '',
-    clienteIva: 'Consumidor Final',
-    clienteLocalidad: '',
-    condicionVenta: 'Contado',
-    transporteEmpresa: '',
-    transporteCuit: '',
-    transporteDomicilio: '',
-    transporteCamion: '',
-    transportePatente: '',
-    transporteChofer: '',
-    transporteDni: '',
-    globalOffsetX: 0,
-    globalOffsetY: 0
-  })
-
-  function handleOpenRemitoModal() {
-    if (!order) return
-    setRemitoFormData({
-      numeroRemito: String(order.order_number).padStart(8, '0'),
-      clienteIva: 'Consumidor Final',
-      clienteLocalidad: '',
-      condicionVenta: alreadyInAccount ? 'Cta. Cte.' : 'Contado',
-      transporteEmpresa: '',
-      transporteCuit: '',
-      transporteDomicilio: '',
-      transporteCamion: '',
-      transportePatente: '',
-      transporteChofer: '',
-      transporteDni: '',
-      globalOffsetX: 0,
-      globalOffsetY: 0
-    })
-    setShowRemitoModal(true)
-  }
-
-  async function handleGenerateRemito() {
-    if (!order) return
-    setGeneratingRemito(true)
-    try {
-      const remitoItems = items.map(item => ({
-        cantidad: item.quantity,
-        detalle: item.product_name
-      }))
-
-      const pdfBytes = await GenerarRemito({
-        numeroRemito: remitoFormData.numeroRemito,
-        fecha: order.order_date || order.created_at || new Date(),
-        cliente: {
-          nombre: order.clients?.name || '',
-          domicilio: order.clients?.address || '',
-          localidad: remitoFormData.clienteLocalidad,
-          cuit: order.clients?.cuit || '',
-          iva: remitoFormData.clienteIva
-        },
-        condicionVenta: remitoFormData.condicionVenta,
-        productos: remitoItems,
-        transporte: {
-          empresa: remitoFormData.transporteEmpresa,
-          cuit: remitoFormData.transporteCuit,
-          domicilio: remitoFormData.transporteDomicilio,
-          camion: remitoFormData.transporteCamion,
-          patente: remitoFormData.transportePatente,
-          chofer: remitoFormData.transporteChofer,
-          dni: remitoFormData.transporteDni
-        }
-      }, {
-        globalOffsetX: remitoFormData.globalOffsetX,
-        globalOffsetY: remitoFormData.globalOffsetY
-      })
-
-      const blob = new Blob([pdfBytes as any], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
-      toast.success('Remito generado exitosamente.')
-      setShowRemitoModal(false)
-    } catch (error) {
-      console.error('Error al generar remito:', error)
-      toast.error('Error al generar el PDF del remito.')
-    } finally {
-      setGeneratingRemito(false)
-    }
-  }
 
   useEffect(() => {
     if (orderId) {
@@ -446,7 +360,7 @@ export default function PedidoDetallePage(): any {
     if (productIds.length > 0) {
       const { data, error } = await supabase
         .from('products')
-        .select('id, internal_code, name, category, cost_price, sale_price, track_stock, stock_quantity')
+        .select('id, internal_code, name, category, cost_price, sale_price, track_stock, stock_quantity, is_bundle')
         .eq('company_id', currentCompanyId)
         .in('id', productIds)
 
@@ -597,12 +511,67 @@ export default function PedidoDetallePage(): any {
     setShowConfirmModal(true)
   }
 
-  async function confirmPortalOrder() {
+  async function confirmPortalOrder(ignoreStockWarning: boolean = false) {
     if (!companyId || !order) return
 
     setConverting(true)
 
     try {
+      // 0. PRE-CHECK DE STOCK (Advertencia si baja de 0)
+      if (enableStockModule && !ignoreStockWarning) {
+        let hasWarning = false
+        let warningMsg = ''
+
+        for (const item of items) {
+          if (!item.product_id) continue
+          const product = products.find((p) => p.id === item.product_id)
+          
+          if (product?.is_bundle) {
+            const { data: recipe } = await supabase
+              .from('product_recipes')
+              .select('component_id, quantity')
+              .eq('parent_id', product.id)
+              
+            if (recipe && recipe.length > 0) {
+               for (const r of recipe) {
+                 const qtyNeeded = Number(item.quantity) * Number(r.quantity)
+                 const { data: compProduct } = await supabase.from('products').select('name, stock_quantity, track_stock').eq('id', r.component_id).single()
+                 if (compProduct?.track_stock) {
+                   const currentStock = compProduct.stock_quantity || 0
+                   if (currentStock - qtyNeeded < 0) {
+                     hasWarning = true
+                     warningMsg = `El stock de "${compProduct.name}" (insumo de ${product.name}) es de ${currentStock} unidades. Quedará en 0 si continuás.`
+                     break
+                   }
+                 }
+               }
+            }
+          } else if (product?.track_stock) {
+            const { data: latestProduct } = await supabase
+              .from('products')
+              .select('stock_quantity')
+              .eq('id', item.product_id)
+              .single()
+
+            const currentStock = latestProduct?.stock_quantity || 0
+            if (currentStock - (item.quantity || 0) < 0) {
+              hasWarning = true
+              warningMsg = `El stock de "${item.product_name}" es de ${currentStock} unidades. Quedará en 0 si continuás.`
+            }
+          }
+
+          if (hasWarning) break
+        }
+
+        if (hasWarning) {
+          setStockWarningMessage(warningMsg)
+          setShowStockWarningModal(true)
+          setConverting(false)
+          setShowConfirmModal(false)
+          return
+        }
+      }
+
       let budgetId = order.budget_id
 
       // 1. Si no tiene presupuesto (ej: pedido directo), lo creamos
@@ -680,42 +649,72 @@ export default function PedidoDetallePage(): any {
 
       // 4. DESCUENTO DE STOCK AUTOMÁTICO (Solo si el módulo está activo)
       if (enableStockModule) {
-        // Iteramos sobre los ítems del pedido que tienen un producto vinculado
         for (const item of items) {
-        if (!item.product_id) continue
+          if (!item.product_id) continue
 
-        // Buscamos el producto en nuestra lista cargada para ver si trackea stock
-        const product = products.find((p) => p.id === item.product_id)
+          const product = products.find((p) => p.id === item.product_id)
+          if (!product) continue
 
-        if (product?.track_stock) {
-          // Consultamos el stock actual en la base de datos por seguridad (concurrencia)
-          const { data: latestProduct } = await supabase
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.product_id)
-            .single()
+          if (product.is_bundle) {
+            const { data: recipe } = await supabase
+              .from('product_recipes')
+              .select('component_id, quantity')
+              .eq('parent_id', product.id)
 
-          const currentStock = latestProduct?.stock_quantity || 0
-          const newStock = currentStock - (item.quantity || 0)
+            if (recipe && recipe.length > 0) {
+              for (const r of recipe) {
+                const qtyToSubtract = Number(item.quantity) * Number(r.quantity)
+                const { data: compProduct } = await supabase.from('products').select('stock_quantity').eq('id', r.component_id).single()
+                const currentStock = compProduct?.stock_quantity || 0
+                
+                // NUNCA descontar más del stock actual para evitar negativos
+                const actualSubtracted = Math.min(currentStock, qtyToSubtract)
+                
+                if (actualSubtracted > 0) {
+                  await supabase.rpc('increment_stock', { 
+                    row_id: r.component_id, 
+                    amount: -actualSubtracted 
+                  })
 
-          // Actualizamos el stock en la tabla de productos
-          await supabase
-            .from('products')
-            .update({ stock_quantity: newStock })
-            .eq('id', item.product_id)
+                  await supabase.from('stock_movements').insert({
+                    company_id: companyId,
+                    product_id: r.component_id,
+                    type: 'out',
+                    quantity: actualSubtracted,
+                    reason: `Venta (Componente) - Pedido ${orderLabel}`,
+                    reference_id: order.id,
+                    notes: `Venta de ${product.name} (Cantidad pedida: ${item.quantity}).`
+                  })
+                }
+              }
+            }
+          } else if (product.track_stock) {
+            const { data: latestProduct } = await supabase.from('products').select('stock_quantity').eq('id', product.id).single()
+            const currentStock = latestProduct?.stock_quantity || 0
+            
+            // NUNCA descontar más del stock actual para evitar negativos
+            const qtyToSubtract = Number(item.quantity)
+            const actualSubtracted = Math.min(currentStock, qtyToSubtract)
+            
+            if (actualSubtracted > 0) {
+              await supabase.rpc('increment_stock', { 
+                row_id: product.id, 
+                amount: -actualSubtracted 
+              })
 
-          // Registramos el movimiento en el historial
-          await supabase.from('stock_movements').insert({
-            company_id: companyId,
-            product_id: item.product_id,
-            type: 'out',
-            quantity: item.quantity,
-            reason: `Venta - Pedido ${orderLabel}`,
-            notes: `Descuento automático al confirmar pedido.`
-          })
+              await supabase.from('stock_movements').insert({
+                company_id: companyId,
+                product_id: product.id,
+                type: 'out',
+                quantity: actualSubtracted,
+                reason: `Venta - Pedido ${orderLabel}`,
+                reference_id: order.id,
+                notes: `Descuento automático al confirmar pedido.`
+              })
+            }
+          }
         }
       }
-    }
 
       toast.success('Pedido confirmado correctamente. Ahora podés pasarlo a cuenta corriente cuando desees.')
 
@@ -991,16 +990,6 @@ export default function PedidoDetallePage(): any {
                 En Cuenta Corriente
               </div>
             )}
-
-            {role === 'admin' && isConverted && (
-              <button
-                onClick={handleOpenRemitoModal}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800 px-6 py-3 text-sm font-black text-white shadow-lg transition hover:bg-slate-700 active:scale-95"
-              >
-                <Printer size={18} />
-                Emitir Remito
-              </button>
-            )}
           </div>
         </div>
       </section>
@@ -1230,10 +1219,56 @@ export default function PedidoDetallePage(): any {
                 Cancelar
               </button>
               <button
-                onClick={confirmPortalOrder}
+                onClick={() => confirmPortalOrder()}
                 className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Advertencia Stock */}
+      {showStockWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md animate-in zoom-in-95 rounded-[2rem] bg-white p-8 shadow-2xl">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <Package size={32} />
+            </div>
+
+            <h3 className="text-center text-2xl font-black text-slate-900">
+              ¡Stock Insuficiente!
+            </h3>
+
+            <p className="mt-3 text-center font-medium leading-relaxed text-slate-500">
+              {stockWarningMessage}
+            </p>
+            
+            <p className="mt-3 text-center text-sm font-black text-slate-700 bg-amber-50 p-3 rounded-xl border border-amber-100">
+              El stock no bajará a números negativos. Quedará en cero. ¿Deseas aceptar el pedido de todas formas?
+            </p>
+
+            <div className="mt-8 flex gap-3">
+              <button
+                onClick={() => setShowStockWarningModal(false)}
+                className="flex-1 rounded-2xl border border-slate-200 bg-white py-3.5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setShowStockWarningModal(false)
+                  confirmPortalOrder(true)
+                }}
+                disabled={converting}
+                className="flex-1 rounded-2xl bg-amber-600 py-3.5 text-sm font-black text-white shadow-lg shadow-amber-900/30 transition hover:bg-amber-500 disabled:opacity-50 inline-flex items-center justify-center"
+              >
+                {converting ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  'Continuar de todos modos'
+                )}
               </button>
             </div>
           </div>
@@ -1260,218 +1295,6 @@ export default function PedidoDetallePage(): any {
                 className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-black text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500"
               >
                 Anular ahora
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE REMITO PARA PRE-IMPRESO */}
-      {showRemitoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-3xl my-8 rounded-3xl bg-white p-6 sm:p-8 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-                <Truck size={24} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-black text-slate-950">Emitir Remito</h2>
-                <p className="text-sm font-bold text-slate-500">Completá los datos del despacho de mercadería.</p>
-              </div>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* DATOS GENERALES Y CLIENTE */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 border-b border-slate-50 pb-2">Cliente & Venta</h3>
-                
-                <div className="grid gap-3 grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-black text-slate-700 mb-1">N° de Remito</label>
-                    <input
-                      type="text"
-                      value={remitoFormData.numeroRemito}
-                      onChange={(e) => setRemitoFormData(p => ({ ...p, numeroRemito: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-xs font-black text-slate-700 mb-1">Cond. de Venta</label>
-                    <select
-                      value={remitoFormData.condicionVenta}
-                      onChange={(e) => setRemitoFormData(p => ({ ...p, condicionVenta: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                    >
-                      <option value="Contado">Contado</option>
-                      <option value="Cta. Cte.">Cta. Cte.</option>
-                      <option value="Tarjeta">Tarjeta</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-700 mb-1">Condición de IVA</label>
-                  <select
-                    value={remitoFormData.clienteIva}
-                    onChange={(e) => setRemitoFormData(p => ({ ...p, clienteIva: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                  >
-                    <option value="Consumidor Final">Consumidor Final</option>
-                    <option value="Resp. Inscripto">Responsable Inscripto</option>
-                    <option value="Monotributo">Monotributo</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-700 mb-1">Localidad</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Rosario, Santa Fe"
-                    value={remitoFormData.clienteLocalidad}
-                    onChange={(e) => setRemitoFormData(p => ({ ...p, clienteLocalidad: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                  />
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 p-3 border border-slate-100">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Datos precargados:</p>
-                  <p className="text-xs font-black text-slate-700">{order.clients?.name}</p>
-                  <p className="text-xs font-bold text-slate-500">CUIT: {order.clients?.cuit}</p>
-                  <p className="text-xs font-bold text-slate-500">{order.clients?.address || 'Sin dirección registrada'}</p>
-                </div>
-              </div>
-
-              {/* DATOS TRANSPORTE */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 border-b border-slate-50 pb-2">Transporte / Chofer</h3>
-                
-                <div className="grid gap-3 grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-black text-slate-700 mb-1">Empresa Transp.</label>
-                    <input
-                      type="text"
-                      value={remitoFormData.transporteEmpresa}
-                      onChange={(e) => setRemitoFormData(p => ({ ...p, transporteEmpresa: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black text-slate-700 mb-1">CUIT Transp.</label>
-                    <input
-                      type="text"
-                      value={remitoFormData.transporteCuit}
-                      onChange={(e) => setRemitoFormData(p => ({ ...p, transporteCuit: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-700 mb-1">Domicilio Transp.</label>
-                  <input
-                    type="text"
-                    value={remitoFormData.transporteDomicilio}
-                    onChange={(e) => setRemitoFormData(p => ({ ...p, transporteDomicilio: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                  />
-                </div>
-
-                <div className="grid gap-3 grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-black text-slate-700 mb-1">Camión / Modelo</label>
-                    <input
-                      type="text"
-                      value={remitoFormData.transporteCamion}
-                      onChange={(e) => setRemitoFormData(p => ({ ...p, transporteCamion: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black text-slate-700 mb-1">Patente</label>
-                    <input
-                      type="text"
-                      value={remitoFormData.transportePatente}
-                      onChange={(e) => setRemitoFormData(p => ({ ...p, transportePatente: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-3 grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-black text-slate-700 mb-1">Nombre Chofer</label>
-                    <input
-                      type="text"
-                      value={remitoFormData.transporteChofer}
-                      onChange={(e) => setRemitoFormData(p => ({ ...p, transporteChofer: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black text-slate-700 mb-1">DNI Chofer</label>
-                    <input
-                      type="text"
-                      value={remitoFormData.transporteDni}
-                      onChange={(e) => setRemitoFormData(p => ({ ...p, transporteDni: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold outline-none focus:border-slate-500 focus:bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* AJUSTE DE IMPRESORA */}
-            <details className="group mt-6 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <summary className="flex cursor-pointer items-center justify-between font-black text-xs uppercase tracking-widest text-slate-500 outline-none list-none">
-                <span>Ajuste de Calibración de Impresora (opcional)</span>
-                <span className="text-lg transition group-open:rotate-180">▾</span>
-              </summary>
-              <div className="grid gap-4 mt-4 grid-cols-2 border-t border-slate-200/50 pt-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-600 mb-1">Desplazamiento Horizontal (X) en mm</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={remitoFormData.globalOffsetX}
-                    onChange={(e) => setRemitoFormData(p => ({ ...p, globalOffsetX: parseFloat(e.target.value) || 0 }))}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold outline-none focus:border-slate-500"
-                  />
-                  <span className="text-[10px] font-bold text-slate-400 mt-1 block">Positivo desplaza a la derecha, negativo a la izquierda.</span>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-600 mb-1">Desplazamiento Vertical (Y) en mm</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={remitoFormData.globalOffsetY}
-                    onChange={(e) => setRemitoFormData(p => ({ ...p, globalOffsetY: parseFloat(e.target.value) || 0 }))}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold outline-none focus:border-slate-500"
-                  />
-                  <span className="text-[10px] font-bold text-slate-400 mt-1 block">Positivo desplaza hacia abajo, negativo hacia arriba.</span>
-                </div>
-              </div>
-            </details>
-
-            <div className="mt-8 flex gap-3 border-t border-slate-100 pt-6">
-              <button
-                onClick={() => setShowRemitoModal(false)}
-                disabled={generatingRemito}
-                className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleGenerateRemito}
-                disabled={generatingRemito}
-                className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-slate-950 py-3.5 text-sm font-black text-white shadow-xl shadow-slate-950/20 transition hover:bg-slate-800 active:scale-95 disabled:opacity-50"
-              >
-                {generatingRemito ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Printer size={18} />
-                )}
-                Generar & Abrir Remito
               </button>
             </div>
           </div>
