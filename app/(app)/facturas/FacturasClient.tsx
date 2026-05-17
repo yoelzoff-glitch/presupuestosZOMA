@@ -414,11 +414,11 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right font-black text-slate-900">
-                    ${f.total_amount.toLocaleString('es-AR')}
+                    {f.total_amount < 0 ? `-$${Math.abs(f.total_amount).toLocaleString('es-AR')}` : `$${f.total_amount.toLocaleString('es-AR')}`}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex justify-center">
-                      <EtiquetaEstado estado={f.status} />
+                      <EtiquetaEstado estado={f.status} tipoComprobante={f.afip_comprobante_tipo} monto={f.total_amount} />
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -485,25 +485,29 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                                   >
                                     <Printer size={14} /> Re-imprimir
                                   </button>
-                                  <div className="h-[1px] bg-slate-100 my-1" />
-                                  <button
-                                    onClick={() => {
-                                      setMenuAbierto(null)
-                                      setModalConfirmacion({ isOpen: true, tipo: 'credito', factura: f })
-                                    }}
-                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
-                                  >
-                                    <FileMinus size={14} /> Nota de Crédito
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setMenuAbierto(null)
-                                      setModalConfirmacion({ isOpen: true, tipo: 'debito', factura: f })
-                                    }}
-                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 transition"
-                                  >
-                                    <FilePlus size={14} /> Nota de Débito
-                                  </button>
+                                  {f.total_amount > 0 && [1, 6, 11].includes(f.afip_comprobante_tipo || 11) && (
+                                    <>
+                                      <div className="h-[1px] bg-slate-100 my-1" />
+                                      <button
+                                        onClick={() => {
+                                          setMenuAbierto(null)
+                                          setModalConfirmacion({ isOpen: true, tipo: 'credito', factura: f })
+                                        }}
+                                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
+                                      >
+                                        <FileMinus size={14} /> Nota de Crédito
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setMenuAbierto(null)
+                                          setModalConfirmacion({ isOpen: true, tipo: 'debito', factura: f })
+                                        }}
+                                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 transition"
+                                      >
+                                        <FilePlus size={14} /> Nota de Débito
+                                      </button>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </div>
@@ -681,7 +685,27 @@ function TarjetaEstado({ titulo, valor, icon: Icon, color }: { titulo: string; v
   )
 }
 
-function EtiquetaEstado({ estado }: { estado: 'draft' | 'emitted' | 'cancelled' }) {
+function EtiquetaEstado({ estado, tipoComprobante, monto }: { estado: 'draft' | 'emitted' | 'cancelled'; tipoComprobante?: number | null; monto: number }) {
+  const isCredit = tipoComprobante ? [3, 8, 13].includes(tipoComprobante) : monto < 0
+  const isDebit = tipoComprobante ? [2, 7, 12].includes(tipoComprobante) : false
+
+  if (estado === 'emitted') {
+    if (isCredit) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border-rose-100">
+          <FileMinus size={12} /> Nota de Crédito
+        </span>
+      )
+    }
+    if (isDebit) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border-blue-100">
+          <FilePlus size={12} /> Nota de Débito
+        </span>
+      )
+    }
+  }
+
   const configs = {
     draft: { etiqueta: 'No emitida', icon: Clock3, className: 'bg-amber-50 text-amber-600 border-amber-100' },
     emitted: { etiqueta: 'Emitida', icon: ShieldCheck, className: 'bg-emerald-50 text-emerald-600 border-emerald-100' },

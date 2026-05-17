@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createServerComponentClient, getServerUserContext } from '@/lib/supabase/server'
 import ContadorClient from './ContadorClient'
 
-export default async function StandaloneContadorPage() {
+export default async function AccountantPage() {
   const contexto = await getServerUserContext()
   if (!contexto) redirect('/auth/login')
 

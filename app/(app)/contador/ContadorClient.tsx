@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react'
 import { 
-  ShieldCheck, 
   FileText, 
   Download, 
   Search, 
@@ -72,16 +71,14 @@ export default function ContadorClient({
   movements,
   userRole
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'iva' | 'cc' | 'config'>(
-    userRole === 'admin' ? 'iva' : 'iva'
-  )
+  const [activeTab, setActiveTab] = useState<'iva' | 'cc' | 'config'>('iva')
   const [invoices] = useState<Invoice[]>(invoicesIniciales)
   
   // Estados para Búsqueda
   const [busquedaIva, setBusquedaIva] = useState('')
   const [busquedaCc, setBusquedaCc] = useState('')
 
-  // 1. Generador de meses históricos (los últimos 12 meses)
+  // Generador de meses históricos (los últimos 12 meses)
   const mesesHistoricos = useMemo(() => {
     const lista = []
     const hoy = new Date()
@@ -97,7 +94,7 @@ export default function ContadorClient({
 
   const [mesSeleccionado, setMesSeleccionado] = useState(mesesHistoricos[0].value)
 
-  // 2. Filtrar facturas por mes seleccionado e input de búsqueda
+  // Filtrar facturas por mes seleccionado e input de búsqueda
   const facturasFiltradas = useMemo(() => {
     const [selYear, selMonth] = mesSeleccionado.split('-')
     
@@ -115,7 +112,7 @@ export default function ContadorClient({
     })
   }, [invoices, mesSeleccionado, busquedaIva])
 
-  // 3. KPIs Financieros de Facturación
+  // KPIs Financieros de Facturación
   const kpis = useMemo(() => {
     let totalFacturado = 0
     let totalIva = 0
@@ -153,7 +150,7 @@ export default function ContadorClient({
     }
   }, [facturasFiltradas])
 
-  // 4. Calcular saldos de Cuenta Corriente por Cliente
+  // Calcular saldos de Cuenta Corriente por Cliente
   const saldosClientes = useMemo(() => {
     return clients.map(c => {
       const ms = movements.filter(m => m.client_id === c.id)
@@ -175,7 +172,7 @@ export default function ContadorClient({
     })
   }, [clients, movements, busquedaCc])
 
-  // Lógica para descargar el Libro de IVA Digital
+  // Descargar el Libro de IVA Digital
   const [exportando, setExportando] = useState(false)
 
   async function exportarIvaDigital() {
@@ -228,7 +225,7 @@ export default function ContadorClient({
     }
   }
 
-  // Creación de Usuario de Estudio Contable (Solo disponible para Administradores)
+  // Creación de Usuario de Estudio Contable (Solo para Admins)
   const [emailContador, setEmailContador] = useState('')
   const [nombreContador, setNombreContador] = useState('')
   const [passContador, setPassContador] = useState('')

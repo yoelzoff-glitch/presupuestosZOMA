@@ -284,6 +284,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [planType, setPlanType] = useState<string | null>(null)
   const [diasRestantes, setDiasRestantes] = useState<number | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     async function checkAccess() {
@@ -294,6 +295,8 @@ export default function AppShell({ children }: AppShellProps) {
           .select('role, company_id, company:companies(plan_type, subscription_expiry)')
           .eq('id', user.id)
           .single()
+        
+        setUserRole(data?.role || null)
         
         if (data?.role === 'vendedor') {
           // Si es vendedor, FUERA de (app)
@@ -397,13 +400,15 @@ export default function AppShell({ children }: AppShellProps) {
                 </Link>
               )}
 
-              <Link
-                href="/configuracion"
-                className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-all duration-300 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
-                title="Configuración"
-              >
-                <Settings size={20} />
-              </Link>
+              {userRole !== 'contador' && (
+                <Link
+                  href="/configuracion"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-all duration-300 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
+                  title="Configuración"
+                >
+                  <Settings size={20} />
+                </Link>
+              )}
 
               <NotificationsBell />
 
