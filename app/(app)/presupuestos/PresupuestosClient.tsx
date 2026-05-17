@@ -11,7 +11,6 @@ import {
   CheckCircle2, XCircle, Loader2, Clock3, Lock, ShieldCheck, Printer
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
 
 type EstadoPresupuesto = 'all' | 'issued' | 'approved' | 'draft' | 'cancelled'
 
@@ -63,45 +62,6 @@ export default function PresupuestosClient({
   const [filtroVendedor, setFiltroVendedor] = useState<string>('all')
   const [cargando, setCargando] = useState(false)
   const [filtroDias, setFiltroDias] = useState('30')
-  const [emitiendoId, setEmitiendoId] = useState<string | null>(null)
-  
-  // Estado para el modal de previsualización
-  const [showPreview, setShowPreview] = useState(false)
-  const [presupuestoSeleccionado, setPresupuestoSeleccionado] = useState<Presupuesto | null>(null)
-
-  function abrirPreview(p: Presupuesto) {
-    setPresupuestoSeleccionado(p)
-    setShowPreview(true)
-  }
-
-  async function emitirFacturaFinal(tipo: number) {
-    if (!presupuestoSeleccionado) return
-    
-    setEmitiendoId(presupuestoSeleccionado.id)
-    try {
-      const response = await fetch('/api/invoices/create-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          budget_id: presupuestoSeleccionado.id,
-          cbteTipo: tipo
-        })
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        toast.success('¡Borrador de factura generado con éxito!')
-        setShowPreview(false)
-        router.push('/facturas') // Ir a ver la factura
-      } else {
-        throw new Error(data.error)
-      }
-    } catch (error: any) {
-      toast.error('Error al generar factura: ' + error.message)
-    } finally {
-      setEmitiendoId(null)
-    }
-  }
 
   async function cargarPresupuestos() {
     setCargando(true)
@@ -242,35 +202,6 @@ export default function PresupuestosClient({
                     <td className="px-6 py-4"><EtiquetaEstado estado={p.status} tieneCAE={!!p.afip_cae} /></td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {p.status === 'approved' && !p.afip_cae && (!p.invoices || p.invoices.length === 0) && (
-                          <button
-                            onClick={() => abrirPreview(p)}
-                            disabled={!!emitiendoId}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50"
-                          >
-                            <DollarSign size={14} />
-                            Facturar
-                          </button>
-                        )}
-                        {p.status === 'approved' && !p.afip_cae && (p.invoices && p.invoices.length > 0) && (
-                          <Link
-                            href="/facturas"
-                            className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white hover:bg-amber-600 transition"
-                          >
-                            <Clock3 size={14} />
-                            Ver Borrador
-                          </Link>
-                        )}
-                        {(p.afip_cae || (p.invoices && p.invoices.length > 0)) && (
-                          <Link
-                            href={`/presupuestos/factura/${p.id}`}
-                            target="_blank"
-                            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition"
-                          >
-                            <Printer size={14} />
-                            Ver Factura
-                          </Link>
-                        )}
                         {p.status === 'issued' && !p.afip_cae && (
                           <Link 
                             href={`/presupuestos/${p.id}/edit`}
@@ -289,17 +220,6 @@ export default function PresupuestosClient({
           </div>
         )}
       </section>
-
-      {/* Modal de Previsualización */}
-      <InvoicePreviewModal 
-        isOpen={showPreview}
-        onClose={() => setShowPreview(false)}
-        onConfirm={(tipo) => emitirFacturaFinal(tipo)}
-        budgetId={presupuestoSeleccionado?.id || ''}
-        clientName={presupuestoSeleccionado?.client?.name || ''}
-        totalAmount={presupuestoSeleccionado?.total_amount || 0}
-        isEmitting={!!emitiendoId}
-      />
     </div>
   )
 }

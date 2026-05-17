@@ -71,6 +71,7 @@ type Product = {
   sale_price: number | null
   track_stock: boolean | null
   stock_quantity: number | null
+  is_bundle?: boolean | null
 }
 
 type BudgetItemPreview = {
@@ -245,6 +246,8 @@ export default function PedidoDetallePage(): any {
   const [converting, setConverting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showStockWarningModal, setShowStockWarningModal] = useState(false)
+  const [stockWarningMessage, setStockWarningMessage] = useState('')
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [sendingToAccount, setSendingToAccount] = useState(false)
   const [alreadyInAccount, setAlreadyInAccount] = useState(false)
@@ -446,7 +449,7 @@ export default function PedidoDetallePage(): any {
     if (productIds.length > 0) {
       const { data, error } = await supabase
         .from('products')
-        .select('id, internal_code, name, category, cost_price, sale_price, track_stock, stock_quantity')
+        .select('id, internal_code, name, category, cost_price, sale_price, track_stock, stock_quantity, is_bundle')
         .eq('company_id', currentCompanyId)
         .in('id', productIds)
 
@@ -597,12 +600,67 @@ export default function PedidoDetallePage(): any {
     setShowConfirmModal(true)
   }
 
-  async function confirmPortalOrder() {
+  async function confirmPortalOrder(ignoreStockWarning: boolean = false) {
     if (!companyId || !order) return
 
     setConverting(true)
 
     try {
+      // 0. PRE-CHECK DE STOCK (Advertencia si baja de 0)
+      if (enableStockModule && !ignoreStockWarning) {
+        let hasWarning = false
+        let warningMsg = ''
+
+        for (const item of items) {
+          if (!item.product_id) continue
+          const product = products.find((p) => p.id === item.product_id)
+          
+          if (product?.is_bundle) {
+            const { data: recipe } = await supabase
+              .from('product_recipes')
+              .select('component_id, quantity')
+              .eq('parent_id', product.id)
+              
+            if (recipe && recipe.length > 0) {
+               for (const r of recipe) {
+                 const qtyNeeded = Number(item.quantity) * Number(r.quantity)
+                 const { data: compProduct } = await supabase.from('products').select('name, stock_quantity, track_stock').eq('id', r.component_id).single()
+                 if (compProduct?.track_stock) {
+                   const currentStock = compProduct.stock_quantity || 0
+                   if (currentStock - qtyNeeded < 0) {
+                     hasWarning = true
+                     warningMsg = `El stock de "${compProduct.name}" (insumo de ${product.name}) es de ${currentStock} unidades. Quedará en 0 si continuás.`
+                     break
+                   }
+                 }
+               }
+            }
+          } else if (product?.track_stock) {
+            const { data: latestProduct } = await supabase
+              .from('products')
+              .select('stock_quantity')
+              .eq('id', item.product_id)
+              .single()
+
+            const currentStock = latestProduct?.stock_quantity || 0
+            if (currentStock - (item.quantity || 0) < 0) {
+              hasWarning = true
+              warningMsg = `El stock de "${item.product_name}" es de ${currentStock} unidades. Quedará en 0 si continuás.`
+            }
+          }
+
+          if (hasWarning) break
+        }
+
+        if (hasWarning) {
+          setStockWarningMessage(warningMsg)
+          setShowStockWarningModal(true)
+          setConverting(false)
+          setShowConfirmModal(false)
+          return
+        }
+      }
+
       let budgetId = order.budget_id
 
       // 1. Si no tiene presupuesto (ej: pedido directo), lo creamos
@@ -680,42 +738,72 @@ export default function PedidoDetallePage(): any {
 
       // 4. DESCUENTO DE STOCK AUTOMÁTICO (Solo si el módulo está activo)
       if (enableStockModule) {
-        // Iteramos sobre los ítems del pedido que tienen un producto vinculado
         for (const item of items) {
-        if (!item.product_id) continue
+          if (!item.product_id) continue
 
-        // Buscamos el producto en nuestra lista cargada para ver si trackea stock
-        const product = products.find((p) => p.id === item.product_id)
+          const product = products.find((p) => p.id === item.product_id)
+          if (!product) continue
 
-        if (product?.track_stock) {
-          // Consultamos el stock actual en la base de datos por seguridad (concurrencia)
-          const { data: latestProduct } = await supabase
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.product_id)
-            .single()
+          if (product.is_bundle) {
+            const { data: recipe } = await supabase
+              .from('product_recipes')
+              .select('component_id, quantity')
+              .eq('parent_id', product.id)
 
-          const currentStock = latestProduct?.stock_quantity || 0
-          const newStock = currentStock - (item.quantity || 0)
+            if (recipe && recipe.length > 0) {
+              for (const r of recipe) {
+                const qtyToSubtract = Number(item.quantity) * Number(r.quantity)
+                const { data: compProduct } = await supabase.from('products').select('stock_quantity').eq('id', r.component_id).single()
+                const currentStock = compProduct?.stock_quantity || 0
+                
+                // NUNCA descontar más del stock actual para evitar negativos
+                const actualSubtracted = Math.min(currentStock, qtyToSubtract)
+                
+                if (actualSubtracted > 0) {
+                  await supabase.rpc('increment_stock', { 
+                    row_id: r.component_id, 
+                    amount: -actualSubtracted 
+                  })
 
-          // Actualizamos el stock en la tabla de productos
-          await supabase
-            .from('products')
-            .update({ stock_quantity: newStock })
-            .eq('id', item.product_id)
+                  await supabase.from('stock_movements').insert({
+                    company_id: companyId,
+                    product_id: r.component_id,
+                    type: 'out',
+                    quantity: actualSubtracted,
+                    reason: `Venta (Componente) - Pedido ${orderLabel}`,
+                    reference_id: order.id,
+                    notes: `Venta de ${product.name} (Cantidad pedida: ${item.quantity}).`
+                  })
+                }
+              }
+            }
+          } else if (product.track_stock) {
+            const { data: latestProduct } = await supabase.from('products').select('stock_quantity').eq('id', product.id).single()
+            const currentStock = latestProduct?.stock_quantity || 0
+            
+            // NUNCA descontar más del stock actual para evitar negativos
+            const qtyToSubtract = Number(item.quantity)
+            const actualSubtracted = Math.min(currentStock, qtyToSubtract)
+            
+            if (actualSubtracted > 0) {
+              await supabase.rpc('increment_stock', { 
+                row_id: product.id, 
+                amount: -actualSubtracted 
+              })
 
-          // Registramos el movimiento en el historial
-          await supabase.from('stock_movements').insert({
-            company_id: companyId,
-            product_id: item.product_id,
-            type: 'out',
-            quantity: item.quantity,
-            reason: `Venta - Pedido ${orderLabel}`,
-            notes: `Descuento automático al confirmar pedido.`
-          })
+              await supabase.from('stock_movements').insert({
+                company_id: companyId,
+                product_id: product.id,
+                type: 'out',
+                quantity: actualSubtracted,
+                reason: `Venta - Pedido ${orderLabel}`,
+                reference_id: order.id,
+                notes: `Descuento automático al confirmar pedido.`
+              })
+            }
+          }
         }
       }
-    }
 
       toast.success('Pedido confirmado correctamente. Ahora podés pasarlo a cuenta corriente cuando desees.')
 
@@ -1230,10 +1318,56 @@ export default function PedidoDetallePage(): any {
                 Cancelar
               </button>
               <button
-                onClick={confirmPortalOrder}
+                onClick={() => confirmPortalOrder()}
                 className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Advertencia Stock */}
+      {showStockWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md animate-in zoom-in-95 rounded-[2rem] bg-white p-8 shadow-2xl">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <Package size={32} />
+            </div>
+
+            <h3 className="text-center text-2xl font-black text-slate-900">
+              ¡Stock Insuficiente!
+            </h3>
+
+            <p className="mt-3 text-center font-medium leading-relaxed text-slate-500">
+              {stockWarningMessage}
+            </p>
+            
+            <p className="mt-3 text-center text-sm font-black text-slate-700 bg-amber-50 p-3 rounded-xl border border-amber-100">
+              El stock no bajará a números negativos. Quedará en cero. ¿Deseas aceptar el pedido de todas formas?
+            </p>
+
+            <div className="mt-8 flex gap-3">
+              <button
+                onClick={() => setShowStockWarningModal(false)}
+                className="flex-1 rounded-2xl border border-slate-200 bg-white py-3.5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setShowStockWarningModal(false)
+                  confirmPortalOrder(true)
+                }}
+                disabled={converting}
+                className="flex-1 rounded-2xl bg-amber-600 py-3.5 text-sm font-black text-white shadow-lg shadow-amber-900/30 transition hover:bg-amber-500 disabled:opacity-50 inline-flex items-center justify-center"
+              >
+                {converting ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  'Continuar de todos modos'
+                )}
               </button>
             </div>
           </div>

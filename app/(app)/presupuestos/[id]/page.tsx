@@ -97,6 +97,11 @@ export default function PresupuestoDetallePage() {
   }[]>([])
   const [isCheckingPrices, setIsCheckingPrices] = useState(false)
 
+  // Estados para advertencia de stock
+  const [showStockWarningModal, setShowStockWarningModal] = useState(false)
+  const [stockWarningMessage, setStockWarningMessage] = useState('')
+  const [pendingUseNewPrices, setPendingUseNewPrices] = useState(false)
+
   useEffect(() => {
     if (id) loadBudget()
   }, [id])
@@ -223,11 +228,75 @@ export default function PresupuestoDetallePage() {
     }
   }
 
-  async function convertToOrder(useNewPrices: boolean = false) {
+  async function convertToOrder(useNewPrices: boolean = false, ignoreStockWarning: boolean = false) {
     if (!budget || !role || associatedOrderId) return
     try {
       setConvertingToOrder(true)
       setShowPriceAlert(false)
+
+      // PRE-CHECK DE STOCK (Advertencia si baja de 0, solo para admins que confirman)
+      if (company?.enable_stock_module && role === 'admin' && !ignoreStockWarning) {
+        let hasWarning = false
+        let warningMsg = ''
+
+        const productIds = items.map(i => i.product_id).filter(Boolean) as string[]
+        if (productIds.length > 0) {
+          const { data: dbProducts } = await supabase
+            .from('products')
+            .select('id, track_stock, is_bundle, name')
+            .in('id', productIds)
+
+          if (dbProducts) {
+            for (const item of items) {
+              const product = dbProducts.find((p) => p.id === item.product_id)
+              
+              if (product?.is_bundle) {
+                const { data: recipe } = await supabase
+                  .from('product_recipes')
+                  .select('component_id, quantity')
+                  .eq('parent_id', product.id)
+                  
+                if (recipe && recipe.length > 0) {
+                   for (const r of recipe) {
+                     const qtyNeeded = Number(item.quantity) * Number(r.quantity)
+                     const { data: compProduct } = await supabase.from('products').select('name, stock_quantity, track_stock').eq('id', r.component_id).single()
+                     if (compProduct?.track_stock) {
+                       const currentStock = compProduct.stock_quantity || 0
+                       if (currentStock - qtyNeeded < 0) {
+                         hasWarning = true
+                         warningMsg = `El stock de "${compProduct.name}" (insumo de ${product.name}) es de ${currentStock} unidades. Quedará en 0 si continuás.`
+                         break
+                       }
+                     }
+                   }
+                }
+              } else if (product?.track_stock) {
+                const { data: latestProduct } = await supabase
+                  .from('products')
+                  .select('stock_quantity')
+                  .eq('id', item.product_id)
+                  .single()
+
+                const currentStock = latestProduct?.stock_quantity || 0
+                if (currentStock - (item.quantity || 0) < 0) {
+                  hasWarning = true
+                  warningMsg = `El stock de "${item.product_name}" es de ${currentStock} unidades. Quedará en 0 si continuás.`
+                }
+              }
+
+              if (hasWarning) break
+            }
+          }
+        }
+
+        if (hasWarning) {
+          setStockWarningMessage(warningMsg)
+          setPendingUseNewPrices(useNewPrices)
+          setShowStockWarningModal(true)
+          setConvertingToOrder(false)
+          return
+        }
+      }
 
       const nextOrderNumber = await fetchNextNumber('order')
       
@@ -362,45 +431,55 @@ export default function PresupuestoDetallePage() {
           if (recipe && recipe.length > 0) {
             for (const r of recipe) {
               const qtyToSubtract = Number(item.quantity) * Number(r.quantity)
+              const { data: compProduct } = await supabase.from('products').select('stock_quantity').eq('id', r.component_id).single()
+              const currentStock = compProduct?.stock_quantity || 0
               
-              // Restar del componente
-              const { data: comp } = await supabase.rpc('increment_stock', { 
-                row_id: r.component_id, 
-                amount: -qtyToSubtract 
-              })
+              const actualSubtracted = Math.min(currentStock, qtyToSubtract)
 
-              // Registrar movimiento
-              await supabase.from('stock_movements').insert({
-                company_id: budget?.company_id,
-                product_id: r.component_id,
-                type: 'out',
-                quantity: qtyToSubtract,
-                reason: 'Venta (Componente)',
-                reference_id: orderId,
-                notes: `Venta de ${product.name} (ID: ${item.order_id})`
-              })
+              if (actualSubtracted > 0) {
+                await supabase.rpc('increment_stock', { 
+                  row_id: r.component_id, 
+                  amount: -actualSubtracted 
+                })
+
+                await supabase.from('stock_movements').insert({
+                  company_id: budget?.company_id,
+                  product_id: r.component_id,
+                  type: 'out',
+                  quantity: actualSubtracted,
+                  reason: 'Venta (Componente)',
+                  reference_id: orderId,
+                  notes: `Venta de ${product.name} (ID: ${item.order_id}). Cantidad pedida: ${item.quantity}`
+                })
+              }
             }
           }
         } 
         
         // Caso B: Es un producto simple con track_stock activo
-        if (product.track_stock) {
+        else if (product.track_stock) {
           const qtyToSubtract = Number(item.quantity)
+          const { data: latestProduct } = await supabase.from('products').select('stock_quantity').eq('id', product.id).single()
+          const currentStock = latestProduct?.stock_quantity || 0
           
-          await supabase.rpc('increment_stock', { 
-            row_id: product.id, 
-            amount: -qtyToSubtract 
-          })
+          const actualSubtracted = Math.min(currentStock, qtyToSubtract)
 
-          await supabase.from('stock_movements').insert({
-            company_id: budget?.company_id,
-            product_id: product.id,
-            type: 'out',
-            quantity: qtyToSubtract,
-            reason: 'Venta',
-            reference_id: orderId,
-            notes: `Pedido #${associatedOrderId || 'Confirmado'}`
-          })
+          if (actualSubtracted > 0) {
+            await supabase.rpc('increment_stock', { 
+              row_id: product.id, 
+              amount: -actualSubtracted 
+            })
+
+            await supabase.from('stock_movements').insert({
+              company_id: budget?.company_id,
+              product_id: product.id,
+              type: 'out',
+              quantity: actualSubtracted,
+              reason: 'Venta',
+              reference_id: orderId,
+              notes: `Pedido #${associatedOrderId || 'Confirmado'}`
+            })
+          }
         }
       }
     } catch (error) {
@@ -712,6 +791,53 @@ export default function PresupuestoDetallePage() {
           </div>
         </div>
       )}
+
+      {/* Modal Advertencia Stock */}
+      {showStockWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md animate-in zoom-in-95 rounded-[2rem] bg-white p-8 shadow-2xl">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <Package size={32} />
+            </div>
+
+            <h3 className="text-center text-2xl font-black text-slate-900">
+              ¡Stock Insuficiente!
+            </h3>
+
+            <p className="mt-3 text-center font-medium leading-relaxed text-slate-500">
+              {stockWarningMessage}
+            </p>
+            
+            <p className="mt-3 text-center text-sm font-black text-slate-700 bg-amber-50 p-3 rounded-xl border border-amber-100">
+              El stock no bajará a números negativos. Quedará en cero. ¿Deseas convertir a pedido de todas formas?
+            </p>
+
+            <div className="mt-8 flex gap-3">
+              <button
+                onClick={() => setShowStockWarningModal(false)}
+                className="flex-1 rounded-2xl border border-slate-200 bg-white py-3.5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setShowStockWarningModal(false)
+                  convertToOrder(pendingUseNewPrices, true)
+                }}
+                disabled={convertingToOrder}
+                className="flex-1 rounded-2xl bg-amber-600 py-3.5 text-sm font-black text-white shadow-lg shadow-amber-900/30 transition hover:bg-amber-500 disabled:opacity-50 inline-flex items-center justify-center"
+              >
+                {convertingToOrder ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  'Continuar de todos modos'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   )
 }

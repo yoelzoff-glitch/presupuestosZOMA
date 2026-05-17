@@ -8,9 +8,10 @@ export default async function FacturasPage() {
 
   const supabase = await createServerComponentClient()
 
-  // Obtener facturas de los últimos 30 días
+  // Obtener facturas del mes vigente (desde el día 1)
   const limiteFecha = new Date()
-  limiteFecha.setDate(limiteFecha.getDate() - 30)
+  limiteFecha.setDate(1)
+  limiteFecha.setHours(0, 0, 0, 0)
 
   const { data: facturas, error } = await supabase
     .from('invoices')

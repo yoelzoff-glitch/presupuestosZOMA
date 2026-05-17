@@ -36,9 +36,10 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
   const [facturas, setFacturas] = useState<Factura[]>(facturasIniciales)
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'all' | 'draft' | 'emitted'>('all')
-  const [filtroTiempo, setFiltroTiempo] = useState<number | 'all'>(30) // 30 días por defecto
+  const [filtroTiempo, setFiltroTiempo] = useState<number | 'all' | 'month'>('month') // Mes vigente por defecto
   const [cargando, setCargando] = useState(false)
   const [procesandoId, setProcesandoId] = useState<string | null>(null)
+  const [menuAbierto, setMenuAbierto] = useState<string | null>(null)
   const [modalPreview, setModalPreview] = useState<{
     isOpen: boolean;
     budgetId: string | null;
@@ -51,7 +52,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
     totalAmount: 0
   })
 
-  async function cargarFacturas(dias: number | 'all' = filtroTiempo) {
+  async function cargarFacturas(dias: number | 'all' | 'month' = filtroTiempo) {
     setCargando(true)
     
     let query = supabase
@@ -66,7 +67,12 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
 
     if (dias !== 'all') {
       const fechaLimite = new Date()
-      fechaLimite.setDate(fechaLimite.getDate() - (dias as number))
+      if (dias === 'month') {
+        fechaLimite.setDate(1)
+        fechaLimite.setHours(0, 0, 0, 0)
+      } else {
+        fechaLimite.setDate(fechaLimite.getDate() - (dias as number))
+      }
       query = query.gte('created_at', fechaLimite.toISOString())
     }
 
@@ -77,9 +83,37 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
     setCargando(false)
   }
 
-  const cambiarFiltroTiempo = (nuevoRango: number | 'all') => {
+  const cambiarFiltroTiempo = (nuevoRango: number | 'all' | 'month') => {
     setFiltroTiempo(nuevoRango)
     cargarFacturas(nuevoRango)
+  }
+
+  async function eliminarBorrador(id: string) {
+    if (!confirm('¿Estás seguro de que querés eliminar este borrador? Esta acción no se puede deshacer.')) return
+
+    setProcesandoId(id)
+    try {
+      console.log('Solicitando eliminación permanente del borrador:', id)
+      
+      const response = await fetch('/api/invoices/delete-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) throw new Error(result.error || 'Fallo en la eliminación')
+
+      toast.success('Borrador eliminado permanentemente')
+      setFacturas(facturas.filter(f => f.id !== id))
+    } catch (error: any) {
+      console.error('Error al eliminar borrador:', error)
+      toast.error('No se pudo eliminar: ' + error.message)
+    } finally {
+      setProcesandoId(null)
+      setMenuAbierto(null)
+    }
   }
 
   async function legalizarFactura(id: string, cbteTipoOverride?: number) {
@@ -164,6 +198,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
             <div className="flex flex-wrap gap-2">
               <div className="flex gap-1 rounded-2xl bg-slate-100 p-1">
                 {[
+                  { label: 'Mes Vigente', value: 'month' },
                   { label: '7D', value: 7 },
                   { label: '14D', value: 14 },
                   { label: '30D', value: 30 },
@@ -259,9 +294,48 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
                           <Printer size={18} />
                         </Link>
                       )}
-                      <button className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition">
-                        <MoreVertical size={16} />
-                      </button>
+                      <div className="relative">
+                        <button 
+                          onClick={() => setMenuAbierto(menuAbierto === f.id ? null : f.id)}
+                          className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+
+                        {menuAbierto === f.id && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(null)} />
+                            <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white p-2 shadow-xl border border-slate-100 z-20">
+                              <Link
+                                href={`/presupuestos/factura/${f.budget_id}`}
+                                target="_blank"
+                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                              >
+                                <Eye size={14} /> Previsualizar
+                              </Link>
+                              
+                              {f.status === 'draft' && (
+                                <button
+                                  onClick={() => eliminarBorrador(f.id)}
+                                  disabled={!!procesandoId}
+                                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition"
+                                >
+                                  <Trash2 size={14} /> Eliminar Borrador
+                                </button>
+                              )}
+
+                              {f.status === 'emitted' && (
+                                <button
+                                  onClick={() => window.open(`/facturas/ver/${f.budget_id}`, '_blank')}
+                                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                                >
+                                  <Printer size={14} /> Re-imprimir
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>

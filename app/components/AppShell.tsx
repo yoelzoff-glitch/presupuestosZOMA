@@ -37,8 +37,8 @@ const navItems = [
   { href: '/productos', label: 'Productos', icon: Package },
   { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
-  { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
+  { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
 ]
 
@@ -165,7 +165,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-2 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20">
+      <nav className="flex-1 space-y-0.5 px-3 py-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {loading ? (
           <div className="flex justify-center p-8">
             <Loader2 className="animate-spin text-slate-700" size={20} />
@@ -180,7 +180,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
-                className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2 text-sm font-bold transition-all duration-300 ${
+                className={`group relative flex items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-bold transition-all duration-300 ${
                   active
                     ? 'bg-blue-600/10 text-white'
                     : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
@@ -191,13 +191,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 )}
 
                 <span
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 ${
                     active
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                       : 'bg-white/[0.03] text-slate-500 group-hover:bg-white/[0.08] group-hover:text-slate-300'
                   }`}
                 >
-                  <Icon size={18} strokeWidth={2.5} />
+                  <Icon size={16} strokeWidth={2.5} />
                 </span>
 
                 <span className="flex-1 tracking-tight">{item.label}</span>
@@ -213,18 +213,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </nav>
 
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-2">
         <a
           href="https://wa.me/5491100000000?text=Hola,%20necesito%20ayuda%20o%20soporte%20técnico%20con%20el%20sistema" // TODO: Reemplazar con número real de soporte
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full rounded-xl bg-white/[0.03] border border-white/5 text-slate-300 px-4 py-2.5 text-xs font-bold transition hover:bg-blue-600 hover:text-white hover:border-blue-600"
+          className="flex items-center justify-center gap-2 w-full rounded-xl bg-white/[0.03] border border-white/5 text-slate-300 px-3 py-2 text-xs font-bold transition hover:bg-blue-600 hover:text-white hover:border-blue-600"
         >
           <LifeBuoy size={16} />
           Soporte Técnico
         </a>
 
-        <div className="rounded-2xl border border-white/5 bg-gradient-to-b from-white/[0.03] to-transparent p-4">
+        <div className="rounded-2xl border border-white/5 bg-gradient-to-b from-white/[0.03] to-transparent p-3">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
               Estado
