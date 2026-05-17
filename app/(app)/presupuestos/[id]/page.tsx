@@ -672,7 +672,7 @@ export default function PresupuestoDetallePage() {
             )}
             <div className="text-[10px] font-bold text-slate-500">
               <p>{company?.address}</p>
-              <p>CUIT: {company?.cuit} | {company?.phone}</p>
+              <p>CUIT:  {company?.cuit} | {company?.phone}</p>
             </div>
           </div>
           <div className="text-right">
