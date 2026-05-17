@@ -22,7 +22,6 @@ import {
   ClipboardList,
   Zap,
   MessageCircle,
-  Plus,
   Eye,
 } from 'lucide-react'
 
