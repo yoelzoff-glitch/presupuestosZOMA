@@ -13,8 +13,9 @@ import {
   Database,
   Loader2
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase/client'
 
 export default function ConfigFiscalPage() {
   const router = useRouter()
