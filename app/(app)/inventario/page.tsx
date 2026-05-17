@@ -32,7 +32,7 @@ export default async function InventarioPage() {
   const enableStockModule = (profile.company as any)?.enable_stock_module || false
 
   // Load products (only if planType !== 'base' && enableStockModule)
-  let products = []
+  let products: any[] = []
   if (planType !== 'base' && enableStockModule) {
     const { data } = await supabase
       .from('products')
