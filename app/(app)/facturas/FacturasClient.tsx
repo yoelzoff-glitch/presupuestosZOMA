@@ -6,7 +6,8 @@ import { toast } from 'sonner'
 import {
   Receipt, Search, RefreshCw, Eye, User, DollarSign,
   CheckCircle2, XCircle, Loader2, Clock3, FileText,
-  Printer, ShieldCheck, MoreVertical, Trash2, Send, Lock, Sparkles, MessageSquare
+  Printer, ShieldCheck, MoreVertical, Trash2, Send, Lock, Sparkles, MessageSquare,
+  FileMinus, FilePlus
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
@@ -36,12 +37,15 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
   const [facturas, setFacturas] = useState<Factura[]>(facturasIniciales)
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'all' | 'draft' | 'emitted'>('all')
-  const [filtroTiempo, setFiltroTiempo] = useState<number | 'all' | 'month'>('month') // Mes vigente por defecto
+  const [filtroTiempo, setFiltroTiempo] = useState<number | 'all' | 'month' | 'custom'>('month') // Mes vigente por defecto
   const [cargando, setCargando] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 15
   const [procesandoId, setProcesandoId] = useState<string | null>(null)
   const [menuAbierto, setMenuAbierto] = useState<string | null>(null)
+  const [exportando, setExportando] = useState(false)
+  const [fechaDesdeCustom, setFechaDesdeCustom] = useState('')
+  const [fechaHastaCustom, setFechaHastaCustom] = useState('')
   const [modalPreview, setModalPreview] = useState<{
     isOpen: boolean;
     budgetId: string | null;
@@ -54,7 +58,21 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     totalAmount: 0
   })
 
-  async function cargarFacturas(dias: number | 'all' | 'month' = filtroTiempo) {
+  const [modalConfirmacion, setModalConfirmacion] = useState<{
+    isOpen: boolean;
+    tipo: 'credito' | 'debito' | null;
+    factura: Factura | null;
+  }>({
+    isOpen: false,
+    tipo: null,
+    factura: null
+  })
+
+  async function cargarFacturas(
+    dias: number | 'all' | 'month' | 'custom' = filtroTiempo,
+    customDesde = fechaDesdeCustom,
+    customHasta = fechaHastaCustom
+  ) {
     setCargando(true)
     
     let query = supabase
@@ -67,7 +85,14 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
       .eq('company_id', idEmpresa)
       .order('created_at', { ascending: false })
 
-    if (dias !== 'all') {
+    if (dias === 'custom') {
+      if (customDesde) {
+        query = query.gte('invoice_date', customDesde)
+      }
+      if (customHasta) {
+        query = query.lte('invoice_date', customHasta)
+      }
+    } else if (dias !== 'all') {
       const fechaLimite = new Date()
       if (dias === 'month') {
         fechaLimite.setDate(1)
@@ -85,9 +110,83 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     setCargando(false)
   }
 
-  const cambiarFiltroTiempo = (nuevoRango: number | 'all' | 'month') => {
+  const cambiarFiltroTiempo = (nuevoRango: number | 'all' | 'month' | 'custom') => {
     setFiltroTiempo(nuevoRango)
-    cargarFacturas(nuevoRango)
+    if (nuevoRango !== 'custom') {
+      cargarFacturas(nuevoRango)
+    }
+  }
+
+  useEffect(() => {
+    if (filtroTiempo === 'custom') {
+      cargarFacturas('custom', fechaDesdeCustom, fechaHastaCustom)
+    }
+  }, [fechaDesdeCustom, fechaHastaCustom])
+
+  async function exportarIvaDigital() {
+    setExportando(true)
+    try {
+      let fechaHasta = new Date().toISOString().split('T')[0]
+      let fechaDesde = ''
+      
+      const hoy = new Date()
+      if (filtroTiempo === 'month') {
+        hoy.setDate(1)
+        fechaDesde = hoy.toISOString().split('T')[0]
+      } else if (filtroTiempo === 'all') {
+        fechaDesde = `${hoy.getFullYear()}-01-01`
+      } else if (filtroTiempo === 'custom') {
+        if (!fechaDesdeCustom || !fechaHastaCustom) {
+          throw new Error('Por favor selecciona los campos "Desde" y "Hasta" para exportar.')
+        }
+        fechaDesde = fechaDesdeCustom
+        fechaHasta = fechaHastaCustom
+      } else {
+        const dias = Number(filtroTiempo)
+        hoy.setDate(hoy.getDate() - dias)
+        fechaDesde = hoy.toISOString().split('T')[0]
+      }
+
+      const response = await fetch('/api/reports/libro-iva-digital', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_id: idEmpresa,
+          fecha_desde: fechaDesde,
+          fecha_hasta: fechaHasta
+        })
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Error al generar los reportes')
+      }
+
+      if (!data.cabecera && !data.alicuotas) {
+        toast.info('No hay facturas legalizadas en el período seleccionado para exportar.')
+        return
+      }
+
+      // Descargar Ventas.txt
+      const blobCabecera = new Blob([data.cabecera], { type: 'text/plain;charset=utf-8' })
+      const linkCabecera = document.createElement('a')
+      linkCabecera.href = URL.createObjectURL(blobCabecera)
+      linkCabecera.download = `REGINFO_CV_VENTAS_${fechaDesde.replace(/-/g, '')}_A_${fechaHasta.replace(/-/g, '')}.txt`
+      linkCabecera.click()
+
+      // Descargar Alicuotas.txt
+      const blobAlicuotas = new Blob([data.alicuotas], { type: 'text/plain;charset=utf-8' })
+      const linkAlicuotas = document.createElement('a')
+      linkAlicuotas.href = URL.createObjectURL(blobAlicuotas)
+      linkAlicuotas.download = `REGINFO_CV_ALICUOTAS_${fechaDesde.replace(/-/g, '')}_A_${fechaHasta.replace(/-/g, '')}.txt`
+      linkAlicuotas.click()
+
+      toast.success('¡Libro de IVA Digital descargado con éxito! Compartilo con tu contador.')
+    } catch (err: any) {
+      toast.error('Error al exportar: ' + err.message)
+    } finally {
+      setExportando(false)
+    }
   }
 
   async function eliminarBorrador(id: string) {
@@ -163,64 +262,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     currentPage * itemsPerPage
   )
 
-  if (planType !== 'ultra') {
-    const planName = planType === 'pro' ? 'Plan PRO' : 'Plan BASE'
-    const messageText = `Hola! Soy usuario del ${planName} y quiero hacer un upgrade al Plan ULTRA para activar la facturación electrónica con AFIP (ARCA) en ZOMA.`
-    const encodedText = encodeURIComponent(messageText)
 
-    return (
-      <div className="flex flex-col items-center justify-center p-8 py-20 text-center min-h-[70vh]">
-        <div className="relative mb-6">
-          <div className="absolute inset-0 rounded-3xl bg-purple-500/20 blur-xl animate-pulse" />
-          <div className="relative h-20 w-20 rounded-3xl bg-gradient-to-br from-purple-600 to-indigo-700 text-white flex items-center justify-center shadow-xl">
-            <Lock size={36} className="animate-wiggle" />
-          </div>
-        </div>
-        
-        <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-[10px] font-black uppercase tracking-wider border border-purple-100 shadow-sm animate-pulse">
-            <Sparkles size={12} /> Plan ULTRA Requerido
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wider border border-slate-200 shadow-sm">
-            Tu plan actual: {planType.toUpperCase()}
-          </span>
-        </div>
-        
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight max-w-xl">
-          Automatizá tu Facturación con ARCA (AFIP)
-        </h2>
-        
-        <p className="mt-3 text-slate-500 max-w-lg text-sm leading-relaxed font-bold">
-          Emití facturas electrónicas de forma oficial, obtené el CAE y el código QR de ARCA automáticamente desde el visor, y controlá todos tus comprobantes legales desde un solo lugar.
-        </p>
-
-        <div className="mt-6 rounded-3xl bg-purple-50/70 border border-purple-100 p-5 max-w-xs mx-auto shadow-sm">
-          <p className="text-[10px] font-black text-purple-700 uppercase tracking-widest">Inversión Plan ULTRA</p>
-          <div className="mt-1 flex items-baseline justify-center gap-1">
-            <span className="text-3xl font-black text-slate-900">$180.000</span>
-            <span className="text-xs font-bold text-slate-400">/ mes</span>
-          </div>
-        </div>
-
-        <div className="mt-8 flex flex-col sm:flex-row gap-3">
-          <a
-            href={`https://wa.me/5491100000000?text=${encodedText}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-indigo-900/20 hover:from-purple-500 hover:to-indigo-500 transition active:scale-95"
-          >
-            <MessageSquare size={16} /> Solicitar Plan ULTRA
-          </a>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition"
-          >
-            Volver al Dashboard
-          </Link>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -234,6 +276,23 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
             <h1 className="text-3xl font-black tracking-tight">Gestión de Facturas</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Administra tus comprobantes, borradores y autorizaciones de ARCA.</p>
           </div>
+          <button
+            onClick={exportarIvaDigital}
+            disabled={exportando}
+            className="inline-flex items-center gap-2.5 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-98 transition text-white px-5 py-3.5 text-xs font-black uppercase tracking-wider border border-white/10 shadow-lg disabled:opacity-50 shrink-0 self-start lg:self-center"
+          >
+            {exportando ? (
+              <>
+                <Loader2 size={15} className="animate-spin text-indigo-300" />
+                <span>Generando...</span>
+              </>
+            ) : (
+              <>
+                <FileText size={15} className="text-indigo-300" />
+                <span>Exportar IVA Digital (AFIP)</span>
+              </>
+            )}
+          </button>
         </div>
       </section>
 
@@ -274,7 +333,8 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                   { label: '14D', value: 14 },
                   { label: '30D', value: 30 },
                   { label: '60D', value: 60 },
-                  { label: 'Todo', value: 'all' }
+                  { label: 'Todo', value: 'all' },
+                  { label: 'Personalizado 📅', value: 'custom' }
                 ].map((r) => (
                   <button
                     key={r.label}
@@ -291,6 +351,28 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
               <button onClick={() => setFiltroEstado('emitted')} className={`px-4 py-2 rounded-full text-xs font-black transition ${filtroEstado === 'emitted' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>Legalizadas</button>
             </div>
           </div>
+          {filtroTiempo === 'custom' && (
+            <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-200/60 animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase text-slate-400">Desde:</span>
+                <input
+                  type="date"
+                  value={fechaDesdeCustom}
+                  onChange={(e) => setFechaDesdeCustom(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 shadow-sm"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase text-slate-400">Hasta:</span>
+                <input
+                  type="date"
+                  value={fechaHastaCustom}
+                  onChange={(e) => setFechaHastaCustom(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 shadow-sm"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -313,7 +395,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
               ) : paginatedFacturas.map(f => (
                 <tr key={f.id} className="hover:bg-indigo-50/30 transition group">
                   <td className="px-6 py-4 text-sm font-black text-slate-900">
-                    {f.status === 'emitted' ? (
+                    {f.status !== 'draft' ? (
                       <div className="flex flex-col">
                         <span>{String(f.afip_comprobante_numero).padStart(8, '0')}</span>
                         <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider">Pto. Venta 00002</span>
@@ -396,12 +478,33 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                               )}
 
                               {f.status === 'emitted' && (
-                                <button
-                                  onClick={() => window.open(`/facturas/ver/${f.budget_id}`, '_blank')}
-                                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
-                                >
-                                  <Printer size={14} /> Re-imprimir
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => window.open(`/facturas/ver/${f.budget_id}`, '_blank')}
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                                  >
+                                    <Printer size={14} /> Re-imprimir
+                                  </button>
+                                  <div className="h-[1px] bg-slate-100 my-1" />
+                                  <button
+                                    onClick={() => {
+                                      setMenuAbierto(null)
+                                      setModalConfirmacion({ isOpen: true, tipo: 'credito', factura: f })
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
+                                  >
+                                    <FileMinus size={14} /> Nota de Crédito
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setMenuAbierto(null)
+                                      setModalConfirmacion({ isOpen: true, tipo: 'debito', factura: f })
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 transition"
+                                  >
+                                    <FilePlus size={14} /> Nota de Débito
+                                  </button>
+                                </>
                               )}
                             </div>
                           </>
@@ -455,6 +558,111 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
         totalAmount={modalPreview.totalAmount}
         isEmitting={!!procesandoId}
       />
+
+      {modalConfirmacion.isOpen && modalConfirmacion.factura && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative overflow-hidden animate-scaleUp">
+            
+            {/* Header / Icon */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                modalConfirmacion.tipo === 'credito' 
+                  ? 'bg-rose-50 text-rose-600 border border-rose-100' 
+                  : 'bg-blue-50 text-blue-600 border border-blue-105'
+              }`}>
+                {modalConfirmacion.tipo === 'credito' ? <FileMinus size={22} /> : <FilePlus size={22} />}
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  Confirmar Nota de {modalConfirmacion.tipo === 'credito' ? 'Crédito' : 'Débito'}
+                </h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                  Acción Oficial de AFIP / ARCA
+                </p>
+              </div>
+            </div>
+
+            {/* Warning Message */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 mb-6 text-xs text-slate-650 leading-relaxed font-semibold">
+              <p>
+                Estás por emitir un comprobante oficial de corrección ante la AFIP por la Factura 
+                <span className="font-black text-slate-900"> N° {String(modalConfirmacion.factura.afip_comprobante_numero).padStart(8, '0')}</span>.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-200/60 pt-3 text-[10px] font-black uppercase tracking-wider text-slate-450">
+                <div>
+                  <span className="block text-slate-400">Cliente:</span>
+                  <span className="text-slate-800 text-[11px] font-bold">{modalConfirmacion.factura.client?.name}</span>
+                </div>
+                <div>
+                  <span className="block text-slate-400">Importe total:</span>
+                  <span className="text-slate-800 text-[11px] font-bold">${modalConfirmacion.factura.total_amount.toLocaleString('es-AR')}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Disclaimer */}
+            <p className="text-[10px] text-slate-450 font-bold leading-relaxed mb-8">
+              ⚠️ Esta acción es irreversible. Se conectará con los servidores de ARCA en tiempo real y modificará la cuenta corriente del cliente.
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setModalConfirmacion({ isOpen: false, tipo: null, factura: null })}
+                className="flex-1 rounded-2xl border border-slate-200 bg-white py-3.5 text-xs font-bold text-slate-650 hover:bg-slate-50 transition active:scale-98"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  const num = String(modalConfirmacion.factura?.afip_comprobante_numero).padStart(8, '0');
+                  const tipo = modalConfirmacion.tipo === 'credito' ? 'Nota de Crédito' : 'Nota de Débito';
+                  const facturaId = modalConfirmacion.factura?.id;
+                  const isCredito = modalConfirmacion.tipo === 'credito';
+                  
+                  setModalConfirmacion({ isOpen: false, tipo: null, factura: null });
+                  
+                  // Ejecutar la autorización real llamando al backend oficial
+                  toast.promise(
+                    (async () => {
+                      const response = await fetch('/api/afip/create-invoice', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          budget_id: modalConfirmacion.factura?.budget_id,
+                          isCreditNote: isCredito,
+                          isDebitNote: !isCredito
+                        })
+                      });
+                      
+                      const result = await response.json();
+                      if (!response.ok) throw new Error(result.error || 'Error al conectar con AFIP (ARCA)');
+                      
+                      // Recargar la lista completa de facturas desde la base de datos
+                      await cargarFacturas();
+                      
+                      return result;
+                    })(),
+                    {
+                      loading: `Conectando con ARCA y emitiendo ${tipo} oficial...`,
+                      success: `¡${tipo} para la Factura N° ${num} autorizada con éxito en AFIP!`,
+                      error: (err) => err.message || 'Error al conectar con AFIP.'
+                    }
+                  );
+                }}
+                className={`flex-1 rounded-2xl py-3.5 text-xs font-black uppercase tracking-wider text-white shadow-lg transition active:scale-98 ${
+                  modalConfirmacion.tipo === 'credito'
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-950/15'
+                    : 'bg-blue-600 hover:bg-blue-700 shadow-blue-950/15'
+                }`}
+              >
+                Emitir Comprobante
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   )
 }

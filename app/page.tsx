@@ -441,7 +441,7 @@ export default function LandingPage() {
                     </p>
                   </div>
                   <div className="bg-indigo-500/10 text-indigo-300 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-indigo-500/20 w-fit">
-                    Plan ULTRA
+                    Homologado AFIP
                   </div>
                 </div>
                 {/* Visual grid blur effect */}
@@ -1123,18 +1123,20 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
+            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto items-stretch">
               
               {/* PLAN BASE */}
               <PricingCard 
                 title="Plan Base"
                 price="80.000"
-                description="Organiza tus presupuestos y cuentas corrientes sin demoras."
+                description="Organiza tus presupuestos, deudas y facturación fiscal al instante."
                 features={[
+                  "Facturación electrónica AFIP (A, B y C)",
+                  "Buscador automático de clientes por CUIT",
                   "Presupuestos profesionales en PDF o Web",
                   "Control de deudas y pagos (Cuentas Corrientes)",
-                  "Saber si abrieron tus presupuestos",
-                  "Cobrar por Mercado Pago",
+                  "Saber si abrieron tus presupuestos (Aviso de lectura)",
+                  "Cobrar por Mercado Pago integrado",
                   "1 Sucursal y 2 Vendedores",
                   "Soporte rápido por Tickets"
                 ]}
@@ -1144,36 +1146,18 @@ export default function LandingPage() {
               <PricingCard 
                 title="Plan PRO"
                 price="110.000"
-                description="La suite de control completa para pymes en crecimiento."
+                description="La suite de control completa para pymes que manejan stock y equipos."
                 features={[
                   "Todo lo del Plan Base",
-                  "Control de Stock e Inventario",
-                  "Recetas para armar productos (Stock inteligente)",
-                  "Acceso exclusivo para vendedores",
-                  "Cálculo de comisiones automático",
-                  "Soporte Prioritario",
-                  "3 Sucursales"
-                ]}
-                badge="Muy Elegido"
-              />
-
-              {/* PLAN ULTRA */}
-              <PricingCard 
-                title="Plan ULTRA"
-                price="155.000"
-                originalPrice="170.000"
-                description="Automatización total con Facturación AFIP directa y homologada."
-                features={[
-                  "Todo lo del Plan PRO",
-                  "Facturación electrónica AFIP",
-                  "Facturas A, B y C oficiales",
-                  "Modo de pruebas seguro",
-                  "Alineación de remitos impresos",
-                  "Buscador de clientes por CUIT automático",
-                  "Soporte Dedicado por Teléfono 24/7"
+                  "Control de Stock e Inventario inteligente",
+                  "Recetas para armar productos (Insumos)",
+                  "Alineación milimétrica de remitos impresos",
+                  "Hasta 5 Vendedores con comisiones automáticas",
+                  "3 Sucursales comerciales",
+                  "Soporte Prioritario dedicado"
                 ]}
                 popular
-                badge="Facturación Integrada"
+                badge="Muy Recomendado"
               />
 
             </div>
@@ -1200,7 +1184,7 @@ export default function LandingPage() {
               />
               <FaqItem 
                 question="¿La facturación directa de AFIP requiere que yo suba mi certificado digital?"
-                answer="Sí. Para poder emitir facturas electrónicas oficiales en el Plan Ultra, AFIP exige asociar un certificado digital (archivos .crt y .key) que generás de forma gratuita en su web. ZOMA se encarga de conectar esos archivos de forma segura para autorizar tus facturas al instante y sin dar vueltas."
+                answer="Sí. Para poder emitir facturas electrónicas oficiales en ZOMA, AFIP exige asociar un certificado digital (archivos .crt y .key) que generás de forma gratuita en su web. ZOMA se encarga de conectar esos archivos de forma segura para autorizar tus facturas al instante y sin dar vueltas."
                 isOpen={openFaqIndex === 1}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 1 ? null : 1)}
               />

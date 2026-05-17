@@ -38,6 +38,7 @@ export default function GlobalChatBubble() {
   const [unreadChannels, setUnreadChannels] = useState<Set<string | null>>(new Set())
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
   const [isProPlan, setIsProPlan] = useState<boolean>(false) // Por defecto false para evitar flash en plan base
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const selectedUserRef = useRef<ChatUser | null>(null)
@@ -123,6 +124,7 @@ export default function GlobalChatBubble() {
     const { data: profile } = await supabase.from('users_profiles').select('company_id, role').eq('id', userData.user.id).single()
     if (profile?.company_id) {
       setCompanyId(profile.company_id)
+      setCurrentUserRole(profile.role)
       
       // Validar plan de la empresa
       const { data: company } = await supabase.from('companies').select('plan_type').eq('id', profile.company_id).single()
@@ -130,14 +132,32 @@ export default function GlobalChatBubble() {
       setIsProPlan(isPro)
       
       if (isPro) {
-        loadUsers(profile.company_id, userData.user.id)
+        loadUsers(profile.company_id, userData.user.id, profile.role)
       }
     }
   }
 
-  async function loadUsers(cid: string, myId: string) {
-    const { data } = await supabase.from('users_profiles').select('id, full_name, role').eq('company_id', cid).neq('id', myId).order('full_name')
-    setUsers(data as ChatUser[] || [])
+  async function loadUsers(cid: string, myId: string, myRole: string) {
+    let query = supabase
+      .from('users_profiles')
+      .select('id, full_name, role')
+      .eq('company_id', cid)
+      .neq('id', myId)
+
+    if (myRole === 'contador') {
+      // El contador solo puede chatear con administradores
+      query = query.eq('role', 'admin')
+    }
+
+    const { data } = await query.order('full_name')
+    let filteredUsers = data as ChatUser[] || []
+
+    if (myRole !== 'admin') {
+      // Los no-admins (preventistas/vendedores) no deben ver al contador
+      filteredUsers = filteredUsers.filter(u => u.role !== 'contador')
+    }
+
+    setUsers(filteredUsers)
   }
 
   async function loadMessages(targetUserId: string | null) {
@@ -218,13 +238,17 @@ export default function GlobalChatBubble() {
 
           {view === 'contacts' && (
             <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4 space-y-2">
-              <p className="px-2 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Canales</p>
-              <button onClick={() => openConversation(null)} className="relative flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white p-4 text-left shadow-sm transition hover:border-blue-500/30 hover:bg-blue-50 group">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white transition group-hover:scale-110"><Users size={22} /></div>
-                <div className="flex-1 min-w-0"><h4 className="text-sm font-black text-slate-900">Muro General</h4><p className="text-xs font-semibold text-slate-500 truncate">Chat abierto para toda la empresa</p></div>
-                {unreadChannels.has(null) && <div className="h-3 w-3 rounded-full bg-red-600 shadow-sm animate-pulse" />}
-              </button>
-              <p className="px-2 mt-6 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Mensajes Directos</p>
+              {currentUserRole !== 'contador' && (
+                <>
+                  <p className="px-2 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Canales</p>
+                  <button onClick={() => openConversation(null)} className="relative flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white p-4 text-left shadow-sm transition hover:border-blue-500/30 hover:bg-blue-50 group mb-4">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white transition group-hover:scale-110"><Users size={22} /></div>
+                    <div className="flex-1 min-w-0"><h4 className="text-sm font-black text-slate-900">Muro General</h4><p className="text-xs font-semibold text-slate-500 truncate">Chat abierto para toda la empresa</p></div>
+                    {unreadChannels.has(null) && <div className="h-3 w-3 rounded-full bg-red-600 shadow-sm animate-pulse" />}
+                  </button>
+                </>
+              )}
+              <p className="px-2 mt-2 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Mensajes Directos</p>
               {users.map(user => (
                 <button key={user.id} onClick={() => openConversation(user)} className="relative flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white p-4 text-left shadow-sm transition hover:border-blue-500/30 hover:bg-blue-50 group">
                   <div className="relative">

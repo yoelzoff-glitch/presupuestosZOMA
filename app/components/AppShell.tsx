@@ -40,6 +40,7 @@ const navItems = [
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
+  { href: '/contador', label: 'Portal del Contador 👔', icon: ShieldCheck },
 ]
 
 function getPageTitle(pathname: string) {
@@ -53,6 +54,7 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
   if (pathname.startsWith('/notificaciones')) return 'Notificaciones'
   if (pathname.startsWith('/configuracion')) return 'Configuración'
+  if (pathname.startsWith('/contador')) return 'Portal del Contador'
 
   return 'Panel principal'
 }
@@ -68,6 +70,7 @@ function getPageDescription(pathname: string) {
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
   if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'
+  if (pathname.startsWith('/contador')) return 'Espacio fiscal y reportes para tu estudio contable'
 
   return 'Sistema de gestión'
 }
@@ -107,11 +110,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   const isSuperAdmin = profile?.email?.toLowerCase() === 'yoel.zoff@gmail.com'
   const isAdmin = profile?.role === 'admin' || isSuperAdmin
+  const isContador = profile?.role === 'contador'
+
   const planType = profile?.company?.plan_type || 'base'
   const isPro = planType === 'pro' || planType === 'pro_plus' || planType === 'ultra'
   const stockEnabled = profile?.company?.enable_stock_module || false
 
-  // Filtrat navItems based on stock module activation
+  // Filtrar navItems based on stock module activation
   let baseNavItems = navItems.filter(item => {
     // If it's the inventory link, check if it's enabled OR if user is base (upsell)
     if (item.href === '/inventario') {
@@ -121,14 +126,23 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     return true
   })
 
-  // Admin sees all. We show Vendedores even if not PRO to encourage upgrade.
-  let finalNavItems = isAdmin 
-    ? [...baseNavItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users, isProFeature: true }, ...baseNavItems.slice(2)]
-    : baseNavItems
+  // Final sidebar list based on role
+  let finalNavItems = []
+  if (isContador) {
+    finalNavItems = [
+      { href: '/contador', label: 'Portal del Contador 👔', icon: ShieldCheck },
+      { href: '/facturas', label: 'Facturas', icon: Receipt },
+      { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
+    ]
+  } else if (isAdmin) {
+    finalNavItems = [...baseNavItems.slice(0, 2), { href: '/vendedores', label: 'Vendedores', icon: Users, isProFeature: true }, ...baseNavItems.slice(2)]
+  } else {
+    finalNavItems = baseNavItems
+  }
 
   // Only Yoel sees Super Admin
   if (isSuperAdmin) {
-    finalNavItems = [...finalNavItems, { href: '/superadmin', label: 'Super Admin', icon: ShieldCheck }]
+    finalNavItems = [...finalNavItems.filter(i => i.href !== '/superadmin'), { href: '/superadmin', label: 'Super Admin', icon: ShieldCheck }]
   }
 
   return (

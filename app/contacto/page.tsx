@@ -86,7 +86,7 @@ export default function ContactoPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">Mesa de Ayuda</h3>
-                  <p className="text-slate-400 text-xs font-bold mt-1">Soporte prioritario 24/7 en Plan Ultra</p>
+                  <p className="text-slate-400 text-xs font-bold mt-1">Soporte prioritario 24/7 en Plan PRO</p>
                 </div>
               </div>
 

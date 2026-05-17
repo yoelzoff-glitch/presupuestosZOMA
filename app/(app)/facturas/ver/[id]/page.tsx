@@ -28,7 +28,7 @@ export default function VerFacturaPage() {
         clients ( name, cuit, address, email ),
         budget_items ( * ),
         companies ( name, cuit, address, logo_url ),
-        invoices ( afip_comprobante_tipo )
+        invoices ( afip_comprobante_tipo, status )
       `)
          .eq('id', id)
          .single()
@@ -76,9 +76,11 @@ export default function VerFacturaPage() {
    const items = budget.budget_items || []
 
    const esBorrador = !budget.afip_cae
+   const invoice = budget.invoices && budget.invoices.length > 0 ? budget.invoices[0] : null
+   const esAnulada = invoice?.status === 'cancelled'
 
    // Obtener el tipo de comprobante. Si está emitido, usa el del budget. Si es borrador, usa el de la tabla invoices. Si no, default a 11.
-   const comprobanteTipo = budget.afip_comprobante_tipo || (budget.invoices && budget.invoices.length > 0 ? budget.invoices[0].afip_comprobante_tipo : 11)
+   const comprobanteTipo = budget.afip_comprobante_tipo || (invoice ? invoice.afip_comprobante_tipo : 11)
 
    const qrData = {
       ver: 1,
@@ -142,9 +144,26 @@ export default function VerFacturaPage() {
                <FileText size={200} />
             </div>
 
+            {esAnulada && (
+               <div className="mb-6 rounded-2xl bg-rose-50 border border-rose-200 p-4 text-xs font-black text-rose-700 flex items-center justify-between print:hidden">
+                  <span className="flex items-center gap-2">
+                     ⚠️ Este comprobante ha sido ANULADO mediante una Nota de Crédito.
+                  </span>
+                  <span className="bg-rose-600 text-white px-2.5 py-1 rounded-md text-[9px] uppercase tracking-wider">
+                     Documento sin validez comercial
+                  </span>
+               </div>
+            )}
+
             {esBorrador && (
                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.05] z-0">
                   <p className="text-[140px] font-black tracking-tighter whitespace-nowrap text-slate-900">BORRADOR</p>
+               </div>
+            )}
+
+            {esAnulada && (
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.08] z-10">
+                  <p className="text-[120px] font-black tracking-tighter whitespace-nowrap text-rose-600 border-8 border-rose-600 px-10 rounded-3xl uppercase">ANULADA</p>
                </div>
             )}
 
