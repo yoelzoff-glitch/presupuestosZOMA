@@ -38,7 +38,7 @@ const navItems = [
   { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
-  { href: '/facturas', label: 'Facturas', icon: Receipt, isUltraFeature: true },
+  { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
 ]
 
