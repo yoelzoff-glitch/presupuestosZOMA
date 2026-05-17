@@ -8,11 +8,15 @@ export default async function PedidosPage() {
 
   const supabase = await createServerComponentClient()
 
+  const dateLimit = new Date()
+  dateLimit.setDate(dateLimit.getDate() - 30)
+
   const [ordersRes, sellersRes] = await Promise.all([
     supabase
       .from('orders')
       .select(`id, order_number, order_code, order_date, status, source, total_amount, seller_id, budget_id, clients ( name, cuit ), budget:budgets ( afip_cae, invoices ( id ) )`)
       .eq('company_id', context.idEmpresa)
+      .gte('created_at', dateLimit.toISOString())
       .order('created_at', { ascending: false }),
     supabase
       .from('users_profiles')
