@@ -71,9 +71,9 @@ export default function LandingPage() {
   // Interactive Tour Slides
   const tourSlides = [
     {
-      title: "1. Generación Veloz",
-      description: "Cargá el cliente, seleccioná los productos o materias primas y armá un presupuesto impecable en menos de 10 segundos. Sin planillas lentas ni errores de tipeo.",
-      badge: "Cero Esfuerzo",
+      title: "1. Presupuestos al Instante",
+      description: "Elegí el cliente, sumá los productos y creá un presupuesto impecable en menos de 10 segundos. Sin planillas lentas ni errores al escribir.",
+      badge: "Fácil y Rápido",
       icon: Layers,
       color: "from-blue-600 to-indigo-600",
       element: (
@@ -122,9 +122,9 @@ export default function LandingPage() {
       )
     },
     {
-      title: "2. Envío con Trazabilidad",
-      description: "Generá un enlace público profesional para tu cliente. Compartilo instantáneamente por WhatsApp o mail directamente desde Zoma.",
-      badge: "WhatsApp Ready",
+      title: "2. Aviso de Apertura",
+      description: "Creá un link profesional para tu cliente y compartilo al instante por WhatsApp o mail directamente desde ZOMA.",
+      badge: "WhatsApp Integrado",
       icon: Eye,
       color: "from-emerald-600 to-teal-600",
       element: (
@@ -141,9 +141,9 @@ export default function LandingPage() {
           <div className="bg-slate-950 rounded-xl p-3 border border-slate-850 font-mono text-[10px] text-slate-400 space-y-2">
             <div className="text-emerald-400 font-bold flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-              [HISTORIAL DE RASTREO]
+              [HISTORIAL DE LECTURA]
             </div>
-            <p className="text-slate-200">12:38 - El cliente abrió el enlace público (Dispositivo Móvil, CABA)</p>
+            <p className="text-slate-200">12:38 - El cliente abrió el presupuesto (desde celular)</p>
             <p className="text-slate-500">12:35 - Presupuesto compartido por WhatsApp</p>
             <p className="text-slate-500">12:34 - Presupuesto creado por vendedor Martin</p>
           </div>
@@ -153,8 +153,8 @@ export default function LandingPage() {
     },
     {
       title: "3. Factura Electrónica AFIP",
-      description: "Con el Plan Ultra, no cargues dos veces la información. Presioná un botón y Zoma se conecta de forma segura con ARCA/AFIP para generar el CAE y facturar al instante.",
-      badge: "100% Homologado",
+      description: "¡No escribas dos veces la información! Con un solo clic, ZOMA se conecta de forma segura con la AFIP para autorizar y generar tu factura electrónica al instante.",
+      badge: "100% Legal",
       icon: ShieldCheck,
       color: "from-violet-600 to-purple-600",
       element: (
@@ -164,7 +164,7 @@ export default function LandingPage() {
               <h4 className="font-black text-slate-950 text-sm tracking-tight">FACTURA A</h4>
               <p className="text-[9px] text-slate-400 font-mono">N° 0002-00003418</p>
             </div>
-            <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-2 py-0.5 rounded uppercase">AFIP Aprobada</span>
+            <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-2 py-0.5 rounded uppercase">Factura Aprobada</span>
           </div>
           <div className="space-y-2 font-mono text-[9px] text-slate-600">
             <div className="flex justify-between"><span className="font-bold text-slate-800">Emisor CUIT:</span> <span>30-71458921-9</span></div>
@@ -183,25 +183,25 @@ export default function LandingPage() {
       )
     },
     {
-      title: "4. Calibración y Remito Físico",
-      description: "Imprimí sobre tus propios talonarios preimpresos sin perder papel. Calibrá los campos al milímetro con compensación X/Y para una precisión absoluta.",
-      badge: "Precisión Milimétrica",
+      title: "4. Impresión de Remito Físico",
+      description: "Imprimí directo sobre tus propias hojas de remito sin desperdiciar papel. Ajustá los campos milímetro a milímetro para que todo salga en el lugar exacto.",
+      badge: "Alineación Fácil",
       icon: Printer,
       color: "from-amber-600 to-orange-600",
       element: (
         <div className="bg-slate-950 border border-slate-850 rounded-2xl p-6 text-left font-sans text-xs text-slate-400 shadow-2xl relative">
           <div className="mb-4">
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-1">Calibrador Activo</p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-1">Alineación de Hoja</p>
             <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-2 text-white font-mono text-[10px]">
-              <span className="text-amber-500">Offset X:</span> <span className="bg-slate-950 px-1.5 py-0.5 rounded font-bold">+1.2 mm</span>
-              <span className="text-amber-500 ml-2">Offset Y:</span> <span className="bg-slate-950 px-1.5 py-0.5 rounded font-bold">-0.8 mm</span>
+              <span className="text-amber-500">Mover Horizontal:</span> <span className="bg-slate-950 px-1.5 py-0.5 rounded font-bold">+1.2 mm</span>
+              <span className="text-amber-500 ml-2">Mover Vertical:</span> <span className="bg-slate-950 px-1.5 py-0.5 rounded font-bold">-0.8 mm</span>
             </div>
           </div>
           <div className="border border-amber-500/20 bg-amber-500/5 rounded-xl p-3 text-[10px] text-amber-200/90 leading-relaxed font-mono">
-            <span className="font-bold text-amber-400 block mb-1">🛡️ Control de C.A.I. Validado</span>
-            El remito se genera con posicionamiento en base a coordenadas absolutas (2.83465 pt/mm) asegurando que calce justo en las celdas físicas de tu talonario.
+            <span className="font-bold text-amber-400 block mb-1">🛡️ Remito Listo para Imprimir</span>
+            El texto se acomoda automáticamente para encajar de forma exacta en los casilleros de tus hojas preimpresas.
           </div>
-          <p className="text-[9px] text-slate-500 mt-4 text-center italic">Adaptado a impresoras de matriz de puntos y láser.</p>
+          <p className="text-[9px] text-slate-500 mt-4 text-center italic">Adaptado a todo tipo de impresoras.</p>
         </div>
       )
     }
@@ -226,7 +226,7 @@ export default function LandingPage() {
             </div>
             <div className="flex flex-col">
               <span className="text-xl font-black tracking-tighter text-white leading-none">ZOMA</span>
-              <span className="text-[9px] font-black tracking-widest text-indigo-400 uppercase">Hub Comercial</span>
+              <span className="text-[9px] font-black tracking-widest text-indigo-400 uppercase">Gestión de Ventas</span>
             </div>
           </Link>
           
@@ -274,25 +274,25 @@ export default function LandingPage() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                 </span>
-                <span>{budgetsCreated.toLocaleString('es-AR')} Presupuestos Gestionados</span>
+                <span>{budgetsCreated.toLocaleString('es-AR')} Presupuestos Creados</span>
               </div>
               
               {/* Mega Title */}
               <h1 
                 className="text-5xl md:text-8xl font-black tracking-tight text-white mb-8 leading-[0.98]"
               >
-                El ERP comercial de <br/>
+                Controlá tus presupuestos <br/>
+                y facturas sin <br/>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-indigo-500">
-                  alto rendimiento
-                </span> <br/>
-                para tu Pyme.
+                  complicarte la vida.
+                </span>
               </h1>
               
               {/* Copy Persuasivo */}
               <p 
                 className="text-lg md:text-xl text-slate-400 font-medium max-w-3xl mx-auto mb-12 leading-relaxed"
               >
-                ZOMA unifica presupuestos con rastreo de vistas, facturación directa AFIP, calibración milimétrica de remitos físicos y gestión de vendedores en una plataforma hiper-veloz.
+                ZOMA une todo lo que tu negocio necesita: hacé presupuestos profesionales, sabé cuándo los leen, generá facturas electrónicas AFIP en un clic e imprimí tus remitos físicos a la perfección.
               </p>
 
               {/* Call to Actions */}
@@ -324,19 +324,19 @@ export default function LandingPage() {
               >
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
                   <ShieldCheck size={16} className="text-emerald-400" />
-                  <span>Factura AFIP Directa</span>
+                  <span>Facturas AFIP en 1 clic</span>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
                   <Eye size={16} className="text-indigo-400" />
-                  <span>Rastreo "Doble Check"</span>
+                  <span>Sabé cuándo leen tus presupuestos</span>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
                   <Printer size={16} className="text-amber-400" />
-                  <span>Remitos Calibrados</span>
+                  <span>Remitos impresos alineados</span>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
                   <Users size={16} className="text-blue-400" />
-                  <span>Comisiones de Venta</span>
+                  <span>Control de comisiones</span>
                 </div>
               </div>
 
@@ -372,10 +372,10 @@ export default function LandingPage() {
         <section className="py-16 bg-slate-950/70 border-y border-slate-900 relative">
           <div className="container mx-auto px-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-10 items-center text-center">
-              <StatBlock label="Emitidos sin Errores" value="+450.000" />
-              <StatBlock label="Empresas Registradas" value="+1.200" />
-              <StatBlock label="Uptime Garantizado" value="99.9%" />
-              <StatBlock label="Ahorro en Procesos" value="14h/semana" />
+              <StatBlock label="Presupuestos sin errores" value="+450.000" />
+              <StatBlock label="Negocios Registrados" value="+1.200" />
+              <StatBlock label="Siempre Online" value="99.9%" />
+              <StatBlock label="Horas administrativas ahorradas" value="14 hs/sem" />
             </div>
           </div>
         </section>
@@ -385,10 +385,10 @@ export default function LandingPage() {
           <div className="container mx-auto px-6">
             
             <div className="text-center mb-24">
-              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-5">Eficiencia Absoluta</h2>
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-5">Eficiencia y Simplicidad</h2>
               <p className="text-4xl md:text-6xl font-black tracking-tight text-white animate-fadeIn">
                 Todo lo que necesitás <br/>
-                para tu flujo de ventas.
+                para tu día a día.
               </p>
             </div>
 
@@ -405,12 +405,12 @@ export default function LandingPage() {
                     </div>
                     <h3 className="text-3xl font-black mb-4 tracking-tight">Presupuestos que Venden</h3>
                     <p className="text-slate-400 font-medium text-base leading-relaxed">
-                      Armá presupuestos con recetas de stock complejas. Tus clientes los leen en un portal dinámico público adaptado para móviles, con doble check en tiempo real.
+                      Creá presupuestos hermosos y profesionales en segundos. Tus clientes los reciben directamente por WhatsApp y pueden verlos al instante desde cualquier celular.
                     </p>
                   </div>
                   <div className="mt-8">
                     <span className="inline-flex items-center gap-2 text-indigo-400 font-black text-xs uppercase tracking-widest group-hover:text-indigo-300 transition-colors">
-                      Trazabilidad Total <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                      Seguimiento en Vivo <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
                     </span>
                   </div>
                 </div>
@@ -435,9 +435,9 @@ export default function LandingPage() {
                     <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center mb-8">
                       <ShieldCheck size={22} />
                     </div>
-                    <h3 className="text-2xl font-black mb-4 tracking-tight">Facturación AFIP</h3>
+                    <h3 className="text-2xl font-black mb-4 tracking-tight">Facturación en 1 Clic</h3>
                     <p className="text-slate-400 font-medium text-sm leading-relaxed">
-                      Olvidate de duplicar datos en la web de AFIP. Generá facturas A, B y C firmadas directamente por ARCA en un click.
+                      Olvidate de ingresar a la lenta web de AFIP. Generá facturas oficiales A, B y C firmadas directamente por el sistema en un solo clic.
                     </p>
                   </div>
                   <div className="bg-indigo-500/10 text-indigo-300 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-indigo-500/20 w-fit">
@@ -457,13 +457,13 @@ export default function LandingPage() {
                     <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center mb-8">
                       <Printer size={22} />
                     </div>
-                    <h3 className="text-2xl font-black mb-4 tracking-tight">Remito Milimétrico</h3>
+                    <h3 className="text-2xl font-black mb-4 tracking-tight">Remitos sin Desvíos</h3>
                     <p className="text-slate-400 font-medium text-sm leading-relaxed">
-                      Imprimí directo sobre tus remitos preimpresos físicos. Calibrá los offsets exactos en milímetros para alineación perfecta y evitá desperdicios.
+                      Imprimí directo sobre tus hojas o talonarios físicos de remitos. Ajustá los textos al milímetro para que caigan en el lugar exacto y no desperdicies papel.
                     </p>
                   </div>
                   <div className="text-[10px] font-mono text-slate-500">
-                    Posicionamiento absoluto PDF-Lib
+                    Alineación exacta para impresoras
                   </div>
                 </div>
               </div>
@@ -478,13 +478,13 @@ export default function LandingPage() {
                       <div className="h-12 w-12 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center mb-8">
                         <Users size={22} />
                       </div>
-                      <h3 className="text-3xl font-black mb-4 tracking-tight">Fuerza de Ventas</h3>
+                      <h3 className="text-3xl font-black mb-4 tracking-tight">Control de Vendedores</h3>
                       <p className="text-slate-400 font-medium text-base leading-relaxed">
-                        Asigná presupuestos a vendedores específicos. Zoma calcula de forma automática sus comisiones de venta en base a las reglas configuradas.
+                        Asigná presupuestos a cada miembro de tu equipo. El sistema calcula automáticamente la comisión ganada de cada uno al concretarse las ventas.
                       </p>
                     </div>
                     <div className="mt-8 text-slate-400 text-xs font-bold flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-blue-500" /> Panel exclusivo para vendedores (/vendedor)
+                      <span className="h-2 w-2 rounded-full bg-blue-500" /> Acceso exclusivo para vendedores
                     </div>
                   </div>
                   
@@ -525,12 +525,12 @@ export default function LandingPage() {
           <div className="container mx-auto px-6">
             
             <div className="text-center mb-16">
-              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-5">Demostrador en Vivo</h2>
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-5">Demostración Interactiva</h2>
               <p className="text-4xl md:text-5xl font-black tracking-tight text-white animate-fadeIn">
-                Probá las funciones de Zoma.
+                Probá el sistema ahora mismo.
               </p>
               <p className="text-slate-400 max-w-xl mx-auto mt-4 font-medium">
-                Interactuá con los simuladores interactivos basados en el motor de nuestro software.
+                Probá las principales herramientas usando estos simuladores interactivos.
               </p>
             </div>
 
@@ -540,25 +540,25 @@ export default function LandingPage() {
                 active={activeTab === 'tracking'} 
                 onClick={() => setActiveTab('tracking')}
                 icon={Eye} 
-                label="Trazabilidad" 
+                label="Aviso de Apertura" 
               />
               <TabButton 
                 active={activeTab === 'afip'} 
                 onClick={() => setActiveTab('afip')}
                 icon={ShieldCheck} 
-                label="Facturador AFIP" 
+                label="Factura AFIP" 
               />
               <TabButton 
                 active={activeTab === 'remitos'} 
                 onClick={() => setActiveTab('remitos')}
                 icon={Printer} 
-                label="Calibración Remito" 
+                label="Alinear Remitos" 
               />
               <TabButton 
                 active={activeTab === 'vendedores'} 
                 onClick={() => setActiveTab('vendedores')}
                 icon={Users} 
-                label="Vendedores" 
+                label="Comisiones" 
               />
             </div>
 
@@ -572,26 +572,26 @@ export default function LandingPage() {
                 >
                   <div>
                     <span className="bg-indigo-500/10 text-indigo-300 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 mb-4 inline-block">
-                      El "Doble Check" Administrativo
+                      Aviso de Lectura
                     </span>
                     <h3 className="text-3xl font-black text-white mb-5 leading-tight">
-                      Se acabó el "¿Le llegó el correo?"
+                      Sabé en el segundo exacto cuando leen tu presupuesto
                     </h3>
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
-                      Cuando creás un presupuesto, Zoma genera una URL segura única. En el momento en que tu cliente la abre, el backend actualiza de inmediato el registro <code className="text-indigo-400 font-mono">viewed_at</code> sin requerir inicios de sesión.
+                      Cuando le mandás el presupuesto por WhatsApp a tu cliente, el sistema te avisa de forma automática en qué momento abrieron el enlace para leerlo. Sin contraseñas ni demoras para ellos.
                     </p>
                     <ul className="space-y-3.5 text-sm font-bold text-slate-300">
                       <li className="flex items-center gap-3">
                         <CheckCircle2 size={18} className="text-indigo-400 shrink-0" />
-                        <span>Notificación instantánea silenciosa</span>
+                        <span>Aviso al instante cuando lo abren</span>
                       </li>
                       <li className="flex items-center gap-3">
                         <CheckCircle2 size={18} className="text-indigo-400 shrink-0" />
-                        <span>Identificación de dispositivo e IP del receptor</span>
+                        <span>Saber qué tipo de dispositivo usaron</span>
                       </li>
                       <li className="flex items-center gap-3">
                         <CheckCircle2 size={18} className="text-indigo-400 shrink-0" />
-                        <span>Optimización del momento ideal de cierre</span>
+                        <span>Llamalos en el mejor momento para cerrar la venta</span>
                       </li>
                     </ul>
                   </div>
@@ -644,13 +644,13 @@ export default function LandingPage() {
                 >
                   <div>
                     <span className="bg-indigo-500/10 text-indigo-300 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 mb-4 inline-block">
-                      Emisión Automática e Inteligente
+                      Facturación en 1 Clic
                     </span>
                     <h3 className="text-3xl font-black text-white mb-5 leading-tight">
-                      Integración Segura con AFIP/ARCA
+                      Facturas oficiales de AFIP sin dar vueltas
                     </h3>
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
-                      Zoma analiza automáticamente el tipo de IVA del emisor y del cliente receptor para definir el comprobante adecuado. Además, controla los límites de identificación fiscal vigentes sin que tengas que estudiar normativas.
+                      El sistema calcula los impuestos y define si corresponde Factura A, B o C según el cliente de forma automática. Además, te avisa si el monto supera el límite permitido por AFIP para facturar a clientes sin registrar.
                     </p>
                     
                     <div className="space-y-4">
@@ -670,7 +670,7 @@ export default function LandingPage() {
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Tu Régimen</label>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Tu Condición Fiscal</label>
                           <select 
                             value={issuerType} 
                             onChange={(e: any) => setIssuerType(e.target.value)}
@@ -688,7 +688,7 @@ export default function LandingPage() {
                             className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl p-2.5 outline-none font-bold cursor-pointer"
                           >
                             <option value="ri_cuit">Empresa (CUIT)</option>
-                            <option value="final">Consumidor Final (S/I)</option>
+                            <option value="final">Consumidor Final (Particular)</option>
                           </select>
                         </div>
                       </div>
@@ -733,11 +733,11 @@ export default function LandingPage() {
                     {/* AFIP Rule Validation Alert */}
                     {invoiceAmount > 191624 && clientType === 'final' ? (
                       <div className="bg-rose-50 border border-rose-200 text-rose-800 font-bold p-3 rounded-2xl text-[10px] leading-relaxed">
-                        ⚠️ **Regla AFIP Activa:** El monto supera los **$191.624**. Por normativa legal, es obligatorio identificar al cliente con DNI o CUIT.
+                        ⚠️ **Alerta AFIP:** El monto supera los **$191.624**. Por normativa legal, es obligatorio identificar al cliente con DNI o CUIT.
                       </div>
                     ) : (
                       <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold p-3 rounded-2xl text-[10px]">
-                        ✓ El presupuesto cumple con las normativas vigentes de AFIP/ARCA.
+                        ✓ El presupuesto cumple con las normas de AFIP para facturar de forma directa.
                       </div>
                     )}
                   </div>
@@ -751,19 +751,19 @@ export default function LandingPage() {
                 >
                   <div>
                     <span className="bg-indigo-500/10 text-indigo-300 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 mb-4 inline-block">
-                      Cero desperdicio de talonarios
+                      Alineación automática de papel
                     </span>
                     <h3 className="text-3xl font-black text-white mb-5 leading-tight">
-                      Calibrador Milimétrico en Ejes X e Y
+                      Alineá tus remitos sin desperdiciar hojas
                     </h3>
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
-                      No pierdas más remitos preimpresos por culpa de la desalineación de tu impresora. Zoma convierte cada milímetro en coordenadas absolutas de PDF. Podés corregir cualquier desvío de alimentación de papel deslizando los controles.
+                      No más textos corridos o fuera de lugar en tus talonarios físicos. Mové los textos milímetro a milímetro usando deslizadores simples para que calcen a la perfección con tu impresora.
                     </p>
                     
                     <div className="space-y-6">
                       <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
-                          <span>Desplazamiento Horizontal (Eje X)</span>
+                          <span>Mover a la izquierda / derecha</span>
                           <span className="font-mono text-amber-400">{offsetX > 0 ? `+${offsetX}` : offsetX} mm</span>
                         </div>
                         <input 
@@ -778,7 +778,7 @@ export default function LandingPage() {
                       
                       <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
-                          <span>Desplazamiento Vertical (Eje Y)</span>
+                          <span>Mover hacia arriba / abajo</span>
                           <span className="font-mono text-amber-400">{offsetY > 0 ? `+${offsetY}` : offsetY} mm</span>
                         </div>
                         <input 
@@ -800,7 +800,7 @@ export default function LandingPage() {
                       <div className="absolute inset-0 bg-[radial-gradient(#f1f5f9_1px,transparent_1.5px)] bg-[size:10px_10px] opacity-70" />
                       
                       <div className="absolute inset-x-0 top-0 bg-amber-500/10 border-b border-amber-500/20 py-1 text-center text-[7px] font-bold text-amber-800 tracking-wider uppercase z-20">
-                        Área del Talonario Físico
+                        Simulación de tu Hoja de Remito
                       </div>
 
                       {/* Animated offset wrapper */}
@@ -855,13 +855,13 @@ export default function LandingPage() {
                 >
                   <div>
                     <span className="bg-indigo-500/10 text-indigo-300 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 mb-4 inline-block">
-                      Incentivo y Control
+                      Control de Vendedores
                     </span>
                     <h3 className="text-3xl font-black text-white mb-5 leading-tight">
-                      Cálculo de Comisiones en Tiempo Real
+                      Cálculo automático de comisiones ganadas
                     </h3>
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
-                      Estimulá a tu equipo de ventas brindándoles un portal dedicado donde pueden armar presupuestos. Zoma calcula la comisión automáticamente al concretarse la venta.
+                      Dale a tus vendedores un acceso exclusivo para crear presupuestos. ZOMA calcula automáticamente la comisión de cada uno al concretarse las ventas, sin que tengas que hacer cuentas a fin de mes.
                     </p>
                     
                     <div className="space-y-4">
@@ -883,7 +883,7 @@ export default function LandingPage() {
 
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
                     <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                      <span className="text-[10px] font-black tracking-widest text-slate-500 uppercase">Fuerza de Ventas</span>
+                      <span className="text-[10px] font-black tracking-widest text-slate-500 uppercase">Tus Vendedores</span>
                       <span className="text-emerald-400 text-[10px] font-bold">Comisión Activa: {commissionRate}%</span>
                     </div>
 
@@ -896,7 +896,7 @@ export default function LandingPage() {
                           <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">6 Ventas</span>
                         </div>
                         <div className="flex justify-between text-xs font-mono">
-                          <span className="text-slate-500">Total Facturado:</span>
+                          <span className="text-slate-500">Total Vendido:</span>
                           <span className="text-slate-300 font-bold">$ 2.200.000,00</span>
                         </div>
                         <div className="flex justify-between text-xs font-mono pt-1.5 border-t border-slate-900 text-emerald-400 font-bold">
@@ -912,7 +912,7 @@ export default function LandingPage() {
                           <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">4 Ventas</span>
                         </div>
                         <div className="flex justify-between text-xs font-mono">
-                          <span className="text-slate-500">Total Facturado:</span>
+                          <span className="text-slate-500">Total Vendido:</span>
                           <span className="text-slate-300 font-bold">$ 1.500.000,00</span>
                         </div>
                         <div className="flex justify-between text-xs font-mono pt-1.5 border-t border-slate-900 text-emerald-400 font-bold">
@@ -946,22 +946,22 @@ export default function LandingPage() {
                   <div>
                     <span className="inline-flex items-center gap-2 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-4.5 py-1.5 text-[10px] font-black uppercase tracking-widest mb-6">
                       <Calculator size={13} />
-                      Calculadora de Retorno (ROI)
+                      Calculadora de Ahorro
                     </span>
                     <h3 className="text-3xl md:text-5xl font-black text-white tracking-tight">
-                      Mirá cuánto tiempo <br/> y costos podés recuperar.
+                      Descubrí cuánto tiempo <br/> y dinero podés recuperar.
                     </h3>
                   </div>
 
                   <p className="text-slate-400 font-medium">
-                    La automatización de procesos no solo reduce errores de IVA o logística, sino que te libera valiosas horas mensuales para enfocarte puramente en vender.
+                    Automatizar tus presupuestos y facturas no solo evita errores de cálculo, sino que te devuelve valiosas horas mensuales para enfocarte plenamente en tus ventas.
                   </p>
 
                   <div className="space-y-6">
                     {/* Budget slider */}
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs font-bold">
-                        <span className="text-slate-400">Presupuestos enviados al mes:</span>
+                        <span className="text-slate-400">Presupuestos que enviás por mes:</span>
                         <span className="text-white font-mono font-black">{monthlyBudgets}</span>
                       </div>
                       <input 
@@ -977,7 +977,7 @@ export default function LandingPage() {
                     {/* Time slider */}
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs font-bold">
-                        <span className="text-slate-400">Minutos manuales por presupuesto (Armar, enviar, AFIP, remito):</span>
+                        <span className="text-slate-400">Minutos que tardás por presupuesto (hacerlo, mandarlo por WhatsApp, facturarlo e imprimir remito):</span>
                         <span className="text-white font-mono font-black">{manualTime} min</span>
                       </div>
                       <input 
@@ -1002,19 +1002,19 @@ export default function LandingPage() {
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Horas Recuperadas</p>
                       <p className="text-5xl font-black tracking-tight font-mono">{hoursSaved} hs <span className="text-sm text-indigo-200">/mes</span></p>
-                      <p className="text-[10px] text-indigo-100/80 mt-1 font-medium">Equivalente a más de {Math.round(hoursSaved / 8)} jornadas laborales liberadas.</p>
+                      <p className="text-[10px] text-indigo-100/80 mt-1 font-medium">Equivalente a más de {Math.round(hoursSaved / 8)} días de trabajo recuperados para tu negocio.</p>
                     </div>
 
                     <div className="border-t border-white/10 pt-6">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Ahorro Estimado en Costos</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Dinero que recuperás en tiempo</p>
                       <p className="text-4xl font-black tracking-tight font-mono">$ {moneySaved.toLocaleString('es-AR')}</p>
-                      <p className="text-[10px] text-indigo-100/80 mt-1 font-medium">Basado en eficiencia de procesos administrativos.</p>
+                      <p className="text-[10px] text-indigo-100/80 mt-1 font-medium">Valor estimado del tiempo administrativo ahorrado.</p>
                     </div>
 
                     <div className="border-t border-white/10 pt-6">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Incremento Estimado de Ventas</p>
-                      <p className="text-2xl font-black tracking-tight font-mono">+{conversionIncrease} cierres <span className="text-xs text-indigo-200">/mes</span></p>
-                      <p className="text-[10px] text-indigo-100/80 mt-1 font-medium">Por seguimiento ágil al recibir la alerta de vista.</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Ventas adicionales estimadas</p>
+                      <p className="text-2xl font-black tracking-tight font-mono">+{conversionIncrease} ventas <span className="text-xs text-indigo-200">/mes</span></p>
+                      <p className="text-[10px] text-indigo-100/80 mt-1 font-medium">Al llamar a tus clientes en el momento exacto en que leen tu propuesta.</p>
                     </div>
 
                   </div>
@@ -1035,29 +1035,29 @@ export default function LandingPage() {
             <div className="grid lg:grid-cols-2 gap-24 items-center">
               
               <div>
-                <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-6">Robustez Corporativa</h2>
+                <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-6">Tranquilidad para tu Negocio</h2>
                 <h3 className="text-4xl md:text-5xl font-black tracking-tight mb-8 leading-tight">
-                  Diseñado para las exigencias comerciales de hoy.
+                  Diseñado para que te enfoques en crecer.
                 </h3>
                 <p className="text-slate-400 font-medium text-base mb-10 leading-relaxed">
-                  ZOMA no es solo una interfaz bonita; es un motor transaccional robusto desarrollado sobre estándares de seguridad bancaria, adaptándose sin fallas a las complejidades impositivas vigentes.
+                  ZOMA te acompaña en cada paso de tu negocio, cuidando tus datos y asegurando que cada factura, remito y cuenta corriente esté siempre en regla y libre de errores.
                 </p>
                 
                 <div className="space-y-8">
                   <TechDetailRow 
                     icon={ShieldCheck} 
-                    title="Certificados Fiscales en SandBox y Producción" 
-                    text="Conectá tus archivos crt y key provistos por AFIP. Contamos con entorno Sandbox para pruebas seguras antes de dar de alta comprobantes reales." 
+                    title="Pruebas sin riesgo antes de Facturar" 
+                    text="Hacé pruebas tranquilamente para entender el sistema antes de emitir facturas oficiales a tus clientes de forma real." 
                   />
                   <TechDetailRow 
                     icon={Zap} 
-                    title="Control de C.A.I. Activo" 
-                    text="El software valida automáticamente la fecha límite de tus autorizaciones (ej. vencimiento 09/03/2027) lanzando alertas preventivas antes de imprimir remitos fuera de término." 
+                    title="Aviso de vencimiento de talonarios" 
+                    text="ZOMA te avisa automáticamente antes de que se venzan tus autorizaciones (CAI) para que nunca imprimas un remito inválido sin darte cuenta." 
                   />
                   <TechDetailRow 
                     icon={Cpu} 
-                    title="Límites Automatizados AFIP" 
-                    text="Sincronización de reglas en tiempo real, bloqueando comprobantes a consumidor final sin identificar si superan los montos regulados." 
+                    title="Alertas de montos AFIP" 
+                    text="El sistema te avisa al instante si una factura supera el límite permitido por la AFIP para clientes sin registrar, evitando cualquier infracción." 
                   />
                 </div>
               </div>
@@ -1067,7 +1067,7 @@ export default function LandingPage() {
               >
                 <div className="bg-gradient-to-br from-indigo-600/10 to-slate-900/40 rounded-[3rem] border border-slate-800 p-10 md:p-14 backdrop-blur-sm relative">
                   <div className="absolute top-0 right-0 transform translate-x-3 -translate-y-3 bg-indigo-500 text-slate-950 font-black uppercase text-[9px] tracking-widest px-3.5 py-1.5 rounded-xl">
-                    Especificaciones
+                    Garantías
                   </div>
                   
                   <div className="space-y-8">
@@ -1076,8 +1076,8 @@ export default function LandingPage() {
                         <Check size={18} />
                       </div>
                       <div>
-                        <p className="text-lg font-black text-white">Infraestructura Supabase</p>
-                        <p className="text-sm text-slate-400 mt-1 font-medium">Bases de datos relacionales PostgreSQL con políticas RLS (Row Level Security) activas para protección infranqueable.</p>
+                        <p className="text-lg font-black text-white">Seguridad Blindada</p>
+                        <p className="text-sm text-slate-400 mt-1 font-medium">Tus datos comerciales, listas de clientes y ventas están protegidos con los más altos estándares de seguridad informática.</p>
                       </div>
                     </div>
 
@@ -1086,8 +1086,8 @@ export default function LandingPage() {
                         <Check size={18} />
                       </div>
                       <div>
-                        <p className="text-lg font-black text-white">Precisión Decimal Financiera</p>
-                        <p className="text-sm text-slate-400 mt-1 font-medium">Cálculos exactos en centavos para redondeo legal de IVA (21%) previniendo discrepancias con ARCA.</p>
+                        <p className="text-lg font-black text-white">Cuentas Siempre Exactas</p>
+                        <p className="text-sm text-slate-400 mt-1 font-medium">Calculamos centavo a centavo el IVA y las comisiones para que los números siempre cierren perfectamente.</p>
                       </div>
                     </div>
 
@@ -1096,8 +1096,8 @@ export default function LandingPage() {
                         <Check size={18} />
                       </div>
                       <div>
-                        <p className="text-lg font-black text-white">Uptime Nube del 99.9%</p>
-                        <p className="text-sm text-slate-400 mt-1 font-medium">Respaldos redundantes en la nube para asegurar que tu sistema de ventas siga online, las 24 horas.</p>
+                        <p className="text-lg font-black text-white">Siempre Online y Disponible</p>
+                        <p className="text-sm text-slate-400 mt-1 font-medium">Podés vender y consultar presupuestos en cualquier momento, desde cualquier lugar (PC, tablet o celular).</p>
                       </div>
                     </div>
                   </div>
@@ -1128,29 +1128,29 @@ export default function LandingPage() {
               {/* PLAN BASE */}
               <PricingCard 
                 title="Plan Base"
-                price="100.000"
+                price="80.000"
                 description="Organiza tus presupuestos y cuentas corrientes sin demoras."
                 features={[
-                  "Presupuestos en formato PDF/Web",
-                  "Módulo Cuentas Corrientes",
-                  "Trazabilidad básica de vistas",
-                  "Integración MercadoPago",
+                  "Presupuestos profesionales en PDF o Web",
+                  "Control de deudas y pagos (Cuentas Corrientes)",
+                  "Saber si abrieron tus presupuestos",
+                  "Cobrar por Mercado Pago",
                   "1 Sucursal y 2 Vendedores",
-                  "Soporte vía Tickets"
+                  "Soporte rápido por Tickets"
                 ]}
               />
 
               {/* PLAN PRO */}
               <PricingCard 
                 title="Plan PRO"
-                price="140.000"
+                price="110.000"
                 description="La suite de control completa para pymes en crecimiento."
                 features={[
                   "Todo lo del Plan Base",
-                  "Control de Stock & Inventario",
-                  "Fórmulas de Recetas complejas",
-                  "Liquidación Vendedores (/vendedor)",
-                  "Comisiones Automatizadas",
+                  "Control de Stock e Inventario",
+                  "Recetas para armar productos (Stock inteligente)",
+                  "Acceso exclusivo para vendedores",
+                  "Cálculo de comisiones automático",
                   "Soporte Prioritario",
                   "3 Sucursales"
                 ]}
@@ -1160,16 +1160,17 @@ export default function LandingPage() {
               {/* PLAN ULTRA */}
               <PricingCard 
                 title="Plan ULTRA"
-                price="190.000"
+                price="155.000"
+                originalPrice="170.000"
                 description="Automatización total con Facturación AFIP directa y homologada."
                 features={[
                   "Todo lo del Plan PRO",
-                  "Facturación AFIP directa (ARCA)",
-                  "Emisión Facturas A, B y C",
-                  "Sincronización Sandbox & Producción",
-                  "Calibrador de Remito físico (Offset)",
-                  "Validación CUIT en tiempo real",
-                  "Soporte Telefónico Dedicado 24/7"
+                  "Facturación electrónica AFIP",
+                  "Facturas A, B y C oficiales",
+                  "Modo de pruebas seguro",
+                  "Alineación de remitos impresos",
+                  "Buscador de clientes por CUIT automático",
+                  "Soporte Dedicado por Teléfono 24/7"
                 ]}
                 popular
                 badge="Facturación Integrada"
@@ -1192,32 +1193,32 @@ export default function LandingPage() {
 
             <div className="max-w-4xl mx-auto space-y-4">
               <FaqItem 
-                question="¿Cómo funciona la calibración milimétrica para remitos preimpresos?"
-                answer="Cada talonario físico tiene celdas con coordenadas específicas. Zoma calcula la posición de dibujo de texto usando PDF-Lib con precisión matemática absoluta (2.83465 puntos tipográficos por milímetro). Los parámetros de Compensación (X/Y Offset) en el panel de configuración te permiten ajustar físicamente los textos milímetro a milímetro para compensar el desvío físico del alimentador de papel de tu impresora."
+                question="¿Cómo funciona la alineación para remitos preimpresos?"
+                answer="Es muy fácil: cada imprenta hace los talonarios con distintas medidas. Con ZOMA no necesitás adaptarte a planillas complicadas. En la configuración del sistema, podés mover los textos milímetro a milímetro usando deslizadores simples (hacia arriba, abajo o los lados) para que el texto encaje perfectamente en los casilleros de tus remitos físicos preimpresos."
                 isOpen={openFaqIndex === 0}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 0 ? null : 0)}
               />
               <FaqItem 
-                question="¿La facturación directa de AFIP requiere que yo ponga mi certificado digital?"
-                answer="Sí. Para emitir Facturas A, B o C legales en el Plan Ultra, debés subir tus archivos de credencial fiscal (.crt y .key) provistos por AFIP/ARCA a través de tu clave fiscal. Zoma los almacena de manera encriptada y realiza la autenticación segura para solicitar el CAE directamente al servidor de AFIP."
+                question="¿La facturación directa de AFIP requiere que yo suba mi certificado digital?"
+                answer="Sí. Para poder emitir facturas electrónicas oficiales en el Plan Ultra, AFIP exige asociar un certificado digital (archivos .crt y .key) que generás de forma gratuita en su web. ZOMA se encarga de conectar esos archivos de forma segura para autorizar tus facturas al instante y sin dar vueltas."
                 isOpen={openFaqIndex === 1}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 1 ? null : 1)}
               />
               <FaqItem 
-                question="¿Qué es la trazabilidad de vistas y cómo sé si el cliente abrió el presupuesto?"
-                answer="Cuando envías un presupuesto, el sistema le genera un enlace único público. Cuando el cliente accede a ese enlace, se dispara silenciosamente una llamada segura a nuestra API. Esta función guarda la marca temporal (viewed_at), la dirección IP y el dispositivo del cliente. De esta forma, ves al instante en tu panel un indicador visual verde si tu presupuesto ya fue leído."
+                question="¿Qué es el aviso de lectura y cómo sé si el cliente abrió el presupuesto?"
+                answer="Es una alerta automática que te avisa cuando tu cliente leyó tu propuesta. Al crear un presupuesto en ZOMA, se genera un enlace web para enviarle. En el momento en que tu cliente entra a mirar ese enlace desde su celular o computadora, el sistema te lo marca con un check verde en tu panel y te avisa exactamente cuándo lo vio."
                 isOpen={openFaqIndex === 2}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 2 ? null : 2)}
               />
               <FaqItem 
                 question="¿Puedo probar el sistema de manera gratuita?"
-                answer="Sí, absolutamente. Ofrecemos 14 días de prueba sin cargo y sin compromiso de permanencia en todos nuestros planes. Podés crear presupuestos, gestionar tu stock y probar el sistema libremente."
+                answer="Sí, claro. Todos nuestros planes incluyen 14 días de prueba completamente gratis y sin compromiso. Podés registrarte, probar cómo se crean los presupuestos, controlar el stock y usar todas las funciones libremente para ver si te sirve."
                 isOpen={openFaqIndex === 3}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 3 ? null : 3)}
               />
               <FaqItem 
                 question="¿Qué validez tiene el control de vencimiento del C.A.I. en los remitos?"
-                answer="Por reglamentación legal, los talonarios preimpresos tienen una fecha límite de validez otorgada por AFIP (C.A.I.). El backend de Zoma valida automáticamente la fecha del remito contra la vigencia de tu C.A.I. y te muestra advertencias claras en pantalla para evitar que emitas comprobantes inválidos que puedan traerte sanciones administrativas."
+                answer="Los talonarios de remitos físicos tienen una fecha de vencimiento que te otorga la AFIP (el número de C.A.I.). Si emitís un remito vencido, podés tener problemas legales o multas. ZOMA controla esa fecha por vos de forma automática y te avisa con anticipación para que nunca imprimas un comprobante vencido sin querer."
                 isOpen={openFaqIndex === 4}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 4 ? null : 4)}
               />
@@ -1487,7 +1488,7 @@ function FaqItem({ question, answer, isOpen, toggle }: any) {
 }
 
 /* SUBCOMPONENT: Pricing Plan Card */
-function PricingCard({ title, price, description, features, popular, badge }: any) {
+function PricingCard({ title, price, description, features, popular, badge, originalPrice }: any) {
   return (
     <div 
       className={`p-10 md:p-12 rounded-[2.5rem] border ${
@@ -1506,10 +1507,18 @@ function PricingCard({ title, price, description, features, popular, badge }: an
         <h3 className="text-2xl font-black mb-1.5 text-white tracking-tight">{title}</h3>
         <p className="text-xs font-medium text-slate-500 mb-8">{description}</p>
         
-        <div className="flex items-baseline gap-1 mb-8">
-          <span className="text-sm font-black text-slate-500">$</span>
-          <span className="text-5xl font-black text-white tracking-tighter font-mono">{price}</span>
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">/ mes</span>
+        <div className="mb-8 min-h-[64px] flex flex-col justify-end">
+          {originalPrice && (
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-xs font-bold text-slate-500 line-through">$ {originalPrice}</span>
+              <span className="bg-rose-500/10 text-rose-400 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-rose-500/20">PROMO</span>
+            </div>
+          )}
+          <div className="flex items-baseline gap-1">
+            <span className="text-sm font-black text-slate-500">$</span>
+            <span className="text-5xl font-black text-white tracking-tighter font-mono">{price}</span>
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">/ mes</span>
+          </div>
         </div>
         
         <div className="space-y-4 mb-10">
