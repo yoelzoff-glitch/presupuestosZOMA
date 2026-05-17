@@ -1284,20 +1284,60 @@ export default function LandingPage() {
             <div>
               <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-6">Módulos Core</h4>
               <ul className="space-y-3.5 text-xs font-bold text-slate-400">
-                <li><Link href="#features" className="hover:text-indigo-400 transition">Presupuestos Trazables</Link></li>
-                <li><Link href="#features" className="hover:text-indigo-400 transition">Facturación AFIP (ARCA)</Link></li>
-                <li><Link href="#features" className="hover:text-indigo-400 transition">Calibrador de Remitos</Link></li>
-                <li><Link href="#features" className="hover:text-indigo-400 transition">Gestión Vendedores</Link></li>
+                <li>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('tracking');
+                      document.getElementById('interactive')?.scrollIntoView({ behavior: 'smooth' });
+                    }} 
+                    className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
+                  >
+                    Presupuestos Trazables
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('afip');
+                      document.getElementById('interactive')?.scrollIntoView({ behavior: 'smooth' });
+                    }} 
+                    className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
+                  >
+                    Facturación AFIP (ARCA)
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('remitos');
+                      document.getElementById('interactive')?.scrollIntoView({ behavior: 'smooth' });
+                    }} 
+                    className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
+                  >
+                    Calibrador de Remitos
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('vendedores');
+                      document.getElementById('interactive')?.scrollIntoView({ behavior: 'smooth' });
+                    }} 
+                    className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
+                  >
+                    Gestión Vendedores
+                  </button>
+                </li>
               </ul>
             </div>
 
             <div>
               <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-6">Compañía</h4>
               <ul className="space-y-3.5 text-xs font-bold text-slate-400">
-                <li><Link href="#" className="hover:text-indigo-400 transition duration-200">Sobre Nosotros</Link></li>
-                <li><Link href="#" className="hover:text-indigo-400 transition duration-200">Términos del Servicio</Link></li>
-                <li><Link href="#" className="hover:text-indigo-400 transition duration-200">Políticas de Privacidad</Link></li>
-                <li><Link href="#" className="hover:text-indigo-400 transition duration-200">Contacto Técnico</Link></li>
+                <li><Link href="/sobre-nosotros" className="hover:text-indigo-400 transition duration-200">Sobre Nosotros</Link></li>
+                <li><Link href="/terminos" className="hover:text-indigo-400 transition duration-200">Términos del Servicio</Link></li>
+                <li><Link href="/privacidad" className="hover:text-indigo-400 transition duration-200">Políticas de Privacidad</Link></li>
+                <li><Link href="/contacto" className="hover:text-indigo-400 transition duration-200">Contacto Técnico</Link></li>
               </ul>
             </div>
 
