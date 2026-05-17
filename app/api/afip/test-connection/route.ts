@@ -39,7 +39,8 @@ export async function POST(request: Request) {
       key: fs.readFileSync(keyPath, 'utf8'),
       cert: fs.readFileSync(certPath, 'utf8'),
       cuit: parseInt(config.cuit.replace(/-/g, '')),
-      production: !config.is_sandbox
+      production: !config.is_sandbox,
+      ticketPath: path.join(os.tmpdir(), 'arca-tickets-stable')
     })
 
     // 4. Probar estado del servidor WSFE

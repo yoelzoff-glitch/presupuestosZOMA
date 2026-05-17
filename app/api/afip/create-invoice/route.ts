@@ -177,7 +177,20 @@ export async function POST(request: Request) {
     try {
       result = await arca.electronicBillingService.createNextVoucher(voucherData)
     } catch (error: any) {
-      if (error.message.includes('alreadyAuthenticated')) {
+      console.error('Error al solicitar CAE de forma directa:', error)
+      const fullErrorText = (
+        (error.message || '') + 
+        (error.response?.data?.message || '') + 
+        (error.body?.message || '') +
+        (error.faultstring || '') +
+        (error.toString?.() || '')
+      ).toLowerCase()
+
+      const isAlreadyAuth = 
+        fullErrorText.includes('alreadyauthenticated') || 
+        fullErrorText.includes('cee ya posee un ta valido')
+
+      if (isAlreadyAuth) {
         const arcaRetry = new Arca({
           key: cleanKey,
           cert: cleanCert,
