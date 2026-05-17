@@ -25,6 +25,17 @@ export async function POST(request: Request) {
 
     if (bError || !budget) throw new Error('Presupuesto no encontrado')
     
+    // Validar plan ULTRA
+    const { data: company, error: cPlanError } = await supabaseAdmin
+      .from('companies')
+      .select('plan_type')
+      .eq('id', budget.company_id)
+      .single()
+
+    if (cPlanError || !company || company.plan_type !== 'ultra') {
+      throw new Error('El módulo de facturación electrónica (ARCA/AFIP) requiere una suscripción al Plan ULTRA.')
+    }
+    
     if (budget.afip_cae) {
       // Sincronización automática si ya tiene CAE
       await supabaseAdmin

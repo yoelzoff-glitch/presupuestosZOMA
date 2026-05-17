@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
   Receipt, Search, RefreshCw, Eye, User, DollarSign,
   CheckCircle2, XCircle, Loader2, Clock3, FileText,
-  Printer, ShieldCheck, MoreVertical, Trash2, Send
+  Printer, ShieldCheck, MoreVertical, Trash2, Send, Lock, Sparkles, MessageSquare
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
@@ -29,9 +29,10 @@ type Factura = {
 type Props = {
   facturasIniciales: Factura[]
   idEmpresa: string
+  planType?: string
 }
 
-export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) {
+export default function FacturasClient({ facturasIniciales, idEmpresa, planType = 'base' }: Props) {
   const [facturas, setFacturas] = useState<Factura[]>(facturasIniciales)
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'all' | 'draft' | 'emitted'>('all')
@@ -161,6 +162,48 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   )
+
+  if (planType !== 'ultra') {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 py-20 text-center min-h-[70vh]">
+        <div className="relative mb-6">
+          <div className="absolute inset-0 rounded-3xl bg-purple-500/20 blur-xl animate-pulse" />
+          <div className="relative h-20 w-20 rounded-3xl bg-gradient-to-br from-purple-600 to-indigo-700 text-white flex items-center justify-center shadow-xl">
+            <Lock size={36} className="animate-wiggle" />
+          </div>
+        </div>
+        
+        <span className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-[10px] font-black uppercase tracking-wider border border-purple-100 shadow-sm">
+          <Sparkles size={12} /> Plan ULTRA Requerido
+        </span>
+        
+        <h2 className="text-3xl font-black text-slate-900 tracking-tight max-w-xl">
+          Automatizá tu Facturación con ARCA (AFIP)
+        </h2>
+        
+        <p className="mt-3 text-slate-500 max-w-lg text-sm leading-relaxed font-bold">
+          Emití facturas electrónicas de forma oficial, obtené el CAE y el código QR de ARCA automáticamente desde el visor, y controlá todos tus comprobantes legales desde un solo lugar.
+        </p>
+
+        <div className="mt-8 flex flex-col sm:flex-row gap-3">
+          <a
+            href="https://wa.me/5491100000000?text=Hola!%20Quiero%20actualizar%20mi%20cuenta%20al%20Plan%20ULTRA%20para%20activar%20la%20Facturacion%20AFIP"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-indigo-900/20 hover:from-purple-500 hover:to-indigo-500 transition active:scale-95"
+          >
+            <MessageSquare size={16} /> Solicitar Plan ULTRA
+          </a>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition"
+          >
+            Volver al Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

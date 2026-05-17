@@ -22,6 +22,7 @@ import {
   Lock,
 } from 'lucide-react'
 import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
+import { toast } from 'sonner'
 
 type Order = {
   id: string
@@ -231,11 +232,19 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
                       <div className="flex items-center justify-end gap-2">
                         {order.status === 'confirmed' && order.budget_id && !order.budget?.afip_cae && (!order.budget?.invoices || order.budget.invoices.length === 0) && (
                           <button
-                            onClick={() => abrirPreview(order)}
+                            onClick={() => {
+                              if (planType !== 'ultra') {
+                                toast.error('La facturación electrónica con AFIP (ARCA) requiere el Plan ULTRA. Contactá a soporte para actualizar tu cuenta.')
+                                return
+                              }
+                              abrirPreview(order)
+                            }}
                             disabled={!!emitiendoId}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50"
+                            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white transition disabled:opacity-50 ${
+                              planType === 'ultra' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'
+                            }`}
                           >
-                            <FileText size={14} /> Facturar
+                            {planType === 'ultra' ? <FileText size={14} /> : <Lock size={14} />} Facturar
                           </button>
                         )}
                         {order.status === 'confirmed' && order.budget_id && !order.budget?.afip_cae && (order.budget?.invoices && order.budget.invoices.length > 0) && (

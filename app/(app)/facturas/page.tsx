@@ -30,6 +30,7 @@ export default async function FacturasPage() {
     <FacturasClient 
       facturasIniciales={facturas || []} 
       idEmpresa={contexto.idEmpresa}
+      planType={contexto.tipoPlan}
     />
   )
 }

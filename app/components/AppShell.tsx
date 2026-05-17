@@ -38,7 +38,7 @@ const navItems = [
   { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
-  { href: '/facturas', label: 'Facturas', icon: Receipt },
+  { href: '/facturas', label: 'Facturas', icon: Receipt, isUltraFeature: true },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
 ]
 
@@ -205,6 +205,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 {(item as any).isProFeature && !isPro && (
                   <span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-500 ring-1 ring-blue-500/20">
                     PRO
+                  </span>
+                )}
+
+                {(item as any).isUltraFeature && planType !== 'ultra' && (
+                  <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-purple-400 ring-1 ring-purple-500/20">
+                    ULTRA
                   </span>
                 )}
               </Link>
