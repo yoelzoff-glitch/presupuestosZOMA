@@ -38,7 +38,7 @@ type Product = {
 }
 
 type BudgetItem = {
-  id?: string
+  id?: string // Opcional porque los nuevos no tienen ID todavía
   product_id: string | null
   code: string
   name: string
@@ -123,9 +123,8 @@ export default function EditarPresupuestoPage() {
 
       if (bError || !budget) throw new Error('Presupuesto no encontrado')
       
-      // Bloqueo si ya no es 'issued'
-      if (budget.status !== 'issued') {
-          toast.warning('Este presupuesto ya no se puede editar.')
+      if (budget.status !== 'issued' || !!budget.afip_cae) {
+          toast.warning('Este presupuesto está congelado (es pedido o factura) y no se puede editar.')
           router.push(`/presupuestos/${budgetId}`)
           return
       }
@@ -134,6 +133,7 @@ export default function EditarPresupuestoPage() {
       setClientId(budget.client_id)
       setBudgetNotes(budget.notes || '')
       
+      // Mapear los ítems del presupuesto al estado local
       const mappedItems = budget.budget_items.map((it: any) => ({
         id: it.id,
         product_id: it.product_id,
@@ -172,6 +172,7 @@ export default function EditarPresupuestoPage() {
     }
   }
 
+  // Función para calcular descuentos en cascada
   function calculateCascadingPrice(basePrice: number, discountStr: string): number {
     if (!discountStr.trim()) return basePrice
     const discounts = discountStr.split(/[+\-\s]+/).map(d => parseFloat(d.replace(',', '.'))).filter(d => !isNaN(d) && d !== 0)
@@ -263,6 +264,7 @@ export default function EditarPresupuestoPage() {
     if (!canSave) return
     setSaving(true)
     try {
+      // 1. Actualizar Presupuesto
       const { error: bError } = await supabase
         .from('budgets')
         .update({
@@ -275,7 +277,13 @@ export default function EditarPresupuestoPage() {
 
       if (bError) throw bError
 
-      await supabase.from('budget_items').delete().eq('budget_id', budgetId)
+      // 2. Actualizar Ítems (Borrar viejos e insertar nuevos es lo más limpio)
+      const { error: dError } = await supabase
+        .from('budget_items')
+        .delete()
+        .eq('budget_id', budgetId)
+
+      if (dError) throw dError
 
       const itemsToInsert = items.map((item) => ({
         company_id: companyId,
@@ -289,7 +297,10 @@ export default function EditarPresupuestoPage() {
         discount_str: item.discount_str || null
       }))
 
-      const { error: iError } = await supabase.from('budget_items').insert(itemsToInsert)
+      const { error: iError } = await supabase
+        .from('budget_items')
+        .insert(itemsToInsert)
+
       if (iError) throw iError
 
       toast.success('Presupuesto actualizado correctamente.')
@@ -310,16 +321,19 @@ export default function EditarPresupuestoPage() {
         <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <Link href={`/presupuestos/${budgetId}`} className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-blue-200 transition hover:text-white">
-              <ArrowLeft size={17} /> Volver
+              <ArrowLeft size={17} /> Volver al presupuesto
             </Link>
-            <h1 className="text-3xl font-black tracking-tight">Editar presupuesto #000-{budgetNumber}</h1>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-200">
+              <FileText size={14} /> Editar presupuesto #000-{budgetNumber}
+            </div>
+            <h1 className="text-3xl font-black tracking-tight">Modificar presupuesto</h1>
           </div>
 
           <button
             type="button"
             onClick={updateBudget}
             disabled={!canSave}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg transition hover:bg-blue-500 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/30 transition hover:bg-blue-500 disabled:opacity-60"
           >
             {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
             Guardar cambios
@@ -330,7 +344,7 @@ export default function EditarPresupuestoPage() {
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-xl font-black flex items-center gap-2"><User size={22} className="text-blue-600" /> Cliente</h2>
+            <h2 className="mb-5 text-xl font-black text-slate-950 flex items-center gap-2"><User size={22} className="text-blue-600" /> Cliente</h2>
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
@@ -343,7 +357,7 @@ export default function EditarPresupuestoPage() {
           </section>
 
           <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-xl font-black flex items-center gap-2"><Package size={22} className="text-blue-600" /> Agregar producto</h2>
+            <h2 className="mb-5 text-xl font-black text-slate-950 flex items-center gap-2"><Package size={22} className="text-blue-600" /> Agregar producto</h2>
             <div className="relative">
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input value={search} onChange={(e) => { setSearch(e.target.value); setSelectedProduct(null); }} placeholder="Buscar producto..." className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold outline-none focus:border-blue-500 transition" />
@@ -374,7 +388,7 @@ export default function EditarPresupuestoPage() {
           </section>
 
           <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
-             <h2 className="text-xl font-black mb-4">Notas</h2>
+             <h2 className="text-xl font-black mb-4">Notas del presupuesto</h2>
              <textarea value={budgetNotes} onChange={(e) => setBudgetNotes(e.target.value)} rows={6} className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold outline-none focus:border-blue-500 transition" />
           </section>
         </div>
@@ -398,7 +412,7 @@ export default function EditarPresupuestoPage() {
             </div>
             <div className="p-6 bg-slate-900 text-white">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold uppercase opacity-60">Total</span>
+                <span className="text-sm font-bold uppercase opacity-60">Total final</span>
                 <span className="text-2xl font-black">${total.toLocaleString('es-AR')}</span>
               </div>
             </div>

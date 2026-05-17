@@ -1,23 +1,14 @@
 'use client'
 import FilterButton from '@/app/components/FilterButton'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import {
-  FileText,
-  Plus,
-  Search,
-  RefreshCw,
-  Eye,
-  User,
-  DollarSign,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Clock3,
-  Lock,
+import { 
+  FileText, Plus, Search, RefreshCw, Eye, User, DollarSign, 
+  CheckCircle2, XCircle, Loader2, Clock3, Lock, ShieldCheck, Printer
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -37,6 +28,8 @@ type Presupuesto = {
   seller_id?: string
   seller?: { full_name: string } | null
   client: { name: string; cuit: string } | null
+  afip_cae?: string | null
+  invoices?: { id: string }[]
 }
 
 type PerfilVendedor = { id: string; full_name: string }
@@ -61,6 +54,7 @@ export default function PresupuestosClient({
   idEmpresa,
   planType,
 }: Props) {
+  const router = useRouter()
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>(presupuestosIniciales)
   const [vendedores] = useState<PerfilVendedor[]>(vendedoresIniciales)
   const [busqueda, setBusqueda] = useState('')
@@ -68,13 +62,15 @@ export default function PresupuestosClient({
   const [filtroVendedor, setFiltroVendedor] = useState<string>('all')
   const [cargando, setCargando] = useState(false)
   const [filtroDias, setFiltroDias] = useState('30')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 15
 
   async function cargarPresupuestos() {
     setCargando(true)
 
     let consulta = supabase
       .from('budgets')
-      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, viewed_at, seller_id, clients ( name, cuit ), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
+      .select(`id, budget_number, budget_code, budget_date, total_amount, status, payment_status, paid_amount, created_at, viewed_at, seller_id, afip_cae, clients ( name, cuit ), invoices(id), seller:users_profiles!budgets_seller_id_fkey ( full_name )`)
       .eq('company_id', idEmpresa)
       .order('budget_number', { ascending: false })
 
@@ -93,6 +89,7 @@ export default function PresupuestosClient({
         client: Array.isArray(p.clients) ? p.clients[0] || null : p.clients || null,
         seller: Array.isArray(p.seller) ? p.seller[0] || null : p.seller || null
       }))
+      console.log('Presupuestos cargados:', normalizados.map(p => ({ id: p.id, code: p.budget_code, invoices: p.invoices })))
       setPresupuestos(normalizados)
     }
     setCargando(false)
@@ -107,6 +104,16 @@ export default function PresupuestosClient({
       return coincideBusqueda && coincideEstado && coincideVendedor
     })
   }, [presupuestos, busqueda, filtroEstado, filtroVendedor])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [busqueda, filtroEstado, filtroVendedor, filtroDias])
+
+  const totalPages = Math.ceil(presupuestosFiltrados.length / itemsPerPage)
+  const presupuestosPaginados = presupuestosFiltrados.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
 
   const montoTotal = presupuestos.filter(p => p.status !== 'cancelled').reduce((acc, p) => acc + Number(p.total_amount || 0), 0)
 
@@ -187,7 +194,7 @@ export default function PresupuestosClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {presupuestosFiltrados.map(p => (
+                {presupuestosPaginados.map(p => (
                   <tr key={p.id} className="hover:bg-blue-50/30 transition">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -204,22 +211,51 @@ export default function PresupuestosClient({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right font-black text-blue-700">${p.total_amount.toLocaleString('es-AR')}</td>
-                    <td className="px-6 py-4"><EtiquetaEstado estado={p.status} /></td>
-                    <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
-                      {p.status === 'issued' && (
-                        <Link 
-                          href={`/presupuestos/${p.id}/edit`}
-                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
-                        >
-                          Editar
-                        </Link>
-                      )}
-                      <Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link>
+                    <td className="px-6 py-4"><EtiquetaEstado estado={p.status} tieneCAE={!!p.afip_cae} /></td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {p.status === 'issued' && !p.afip_cae && (
+                          <Link 
+                            href={`/presupuestos/${p.id}/edit`}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                          >
+                            Editar
+                          </Link>
+                        )}
+                        <Link href={`/presupuestos/${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Eye size={14} /> Ver</Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between border-t border-slate-100 bg-white p-5">
+                <span className="text-xs font-bold text-slate-500">
+                  Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, presupuestosFiltrados.length)} de {presupuestosFiltrados.length}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <span className="flex items-center justify-center rounded-xl bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -236,13 +272,16 @@ function TarjetaEstado({ titulo, valor, icon: Icon, cargando }: { titulo: string
   )
 }
 
-function EtiquetaEstado({ estado }: { estado: string }) {
+function EtiquetaEstado({ estado, tieneCAE }: { estado: string; tieneCAE?: boolean }) {
   const configs: any = {
     cancelled: { etiqueta: 'Cancelado', icon: XCircle, className: 'bg-red-50 text-red-600' },
     approved: { etiqueta: 'Aprobado', icon: CheckCircle2, className: 'bg-blue-50 text-blue-600' },
     issued: { etiqueta: 'Emitido', icon: Clock3, className: 'bg-emerald-50 text-emerald-600' },
+    facturado: { etiqueta: 'Facturado', icon: ShieldCheck, className: 'bg-indigo-50 text-indigo-600' },
   }
-  const config = configs[estado] || configs.issued
+  
+  const currentStatus = tieneCAE ? 'facturado' : estado
+  const config = configs[currentStatus] || configs.issued
   return <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ${config.className}`}><config.icon size={12} /> {config.etiqueta}</span>
 }
 

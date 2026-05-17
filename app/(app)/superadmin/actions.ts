@@ -18,7 +18,7 @@ export async function getCompanies() {
   return data
 }
 
-export async function updateCompanyPlan(companyId: string, planType: 'base' | 'pro') {
+export async function updateCompanyPlan(companyId: string, planType: 'base' | 'pro' | 'ultra') {
   const { error } = await supabaseAdmin
     .from('companies')
     .update({ plan_type: planType })

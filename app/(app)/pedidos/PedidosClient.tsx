@@ -1,7 +1,7 @@
 'use client'
 import FilterButton from '@/app/components/FilterButton'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import {
@@ -21,6 +21,8 @@ import {
   UserRoundCog,
   Lock,
 } from 'lucide-react'
+import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
+import { toast } from 'sonner'
 
 type Order = {
   id: string
@@ -32,6 +34,11 @@ type Order = {
   total_amount: number | null
   clients?: { name: string; cuit: string } | null
   seller_id?: string
+  budget_id?: string | null
+  budget?: {
+    afip_cae: string | null
+    invoices: { id: string }[] | null
+  } | null
 }
 
 type SellerProfile = { id: string; full_name: string }
@@ -51,12 +58,26 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
   const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all')
   const [daysFilter, setDaysFilter] = useState('30')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 15
+  const [emitiendoId, setEmitiendoId] = useState<string | null>(null)
+  const [modalPreview, setModalPreview] = useState<{
+    isOpen: boolean;
+    budgetId: string | null;
+    clientName: string;
+    totalAmount: number;
+  }>({
+    isOpen: false,
+    budgetId: null,
+    clientName: '',
+    totalAmount: 0
+  })
 
   async function refreshOrders() {
     setLoading(true)
     let query = supabase
       .from('orders')
-      .select(`id, order_number, order_code, order_date, status, source, total_amount, seller_id, clients ( name, cuit )`)
+      .select(`id, order_number, order_code, order_date, status, source, total_amount, seller_id, budget_id, clients ( name, cuit ), budget:budgets ( afip_cae, invoices ( id ) )`)
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
 
@@ -68,10 +89,49 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
 
     const { data, error } = await query
     if (!error) {
-      const normalized = (data || []).map((item: any) => ({ ...item, clients: Array.isArray(item.clients) ? item.clients[0] || null : item.clients || null }))
+      const normalized = (data || []).map((item: any) => ({ 
+        ...item, 
+        clients: Array.isArray(item.clients) ? item.clients[0] || null : item.clients || null,
+        budget: Array.isArray(item.budget) ? item.budget[0] || null : item.budget || null
+      }))
       setOrders(normalized)
     }
     setLoading(false)
+  }
+
+  async function generarBorrador(budgetId: string, cbteTipo: number) {
+    setEmitiendoId(budgetId)
+    try {
+      const response = await fetch('/api/invoices/create-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ budget_id: budgetId, cbteTipo })
+      })
+      const data = await response.json()
+      if (data.success) {
+        refreshOrders()
+      } else {
+        throw new Error(data.error || 'Error al generar borrador')
+      }
+    } catch (error: any) {
+      console.error(error)
+      alert(error.message)
+    } finally {
+      setEmitiendoId(null)
+    }
+  }
+
+  const abrirPreview = (order: Order) => {
+    if (!order.budget_id) {
+      alert('Este pedido no tiene un presupuesto asociado.')
+      return
+    }
+    setModalPreview({
+      isOpen: true,
+      budgetId: order.budget_id,
+      clientName: order.clients?.name || '',
+      totalAmount: order.total_amount || 0
+    })
   }
 
   const filteredOrders = useMemo(() => {
@@ -84,6 +144,16 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
       return matchesSearch && matchesStatus && matchesSeller
     })
   }, [orders, search, statusFilter, sellerFilter])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, statusFilter, sellerFilter, daysFilter])
+
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
 
   return (
     <div className="space-y-6">
@@ -151,21 +221,99 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
                 <tr><th className="px-6 py-4">Pedido</th><th className="px-6 py-4">Origen</th><th className="px-6 py-4">Cliente</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4 text-right">Total</th><th className="px-6 py-4 text-right">Acción</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredOrders.map(order => (
+                {paginatedOrders.map(order => (
                   <tr key={order.id} className="hover:bg-blue-50/30 transition">
                     <td className="px-6 py-4 font-black text-slate-900">{order.order_code || `PED-${order.order_number}`}</td>
                     <td className="px-6 py-4"><SourceBadge source={order.source} /></td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-700">{order.clients?.name}</td>
                     <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
                     <td className="px-6 py-4 text-right font-black text-slate-950">${(order.total_amount || 0).toLocaleString('es-AR')}</td>
-                    <td className="px-6 py-4 text-right"><Link href={`/pedidos/${order.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><FileText size={14} /> Ver</Link></td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {order.status === 'confirmed' && order.budget_id && !order.budget?.afip_cae && (!order.budget?.invoices || order.budget.invoices.length === 0) && (
+                          <button
+                            onClick={() => {
+                              if (planType !== 'ultra') {
+                                toast.error('La facturación electrónica con AFIP (ARCA) requiere el Plan ULTRA. Contactá a soporte para actualizar tu cuenta.')
+                                return
+                              }
+                              abrirPreview(order)
+                            }}
+                            disabled={!!emitiendoId}
+                            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white transition disabled:opacity-50 ${
+                              planType === 'ultra' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'
+                            }`}
+                          >
+                            {planType === 'ultra' ? <FileText size={14} /> : <Lock size={14} />} Facturar
+                          </button>
+                        )}
+                        {order.status === 'confirmed' && order.budget_id && !order.budget?.afip_cae && (order.budget?.invoices && order.budget.invoices.length > 0) && (
+                          <Link
+                            href={`/facturas/ver/${order.budget_id}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white hover:bg-amber-600 transition"
+                          >
+                            <Clock3 size={14} /> Ver Borrador
+                          </Link>
+                        )}
+                        {order.budget?.afip_cae && (
+                          <Link
+                            href={`/facturas/ver/${order.budget_id}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition"
+                          >
+                            <FileText size={14} /> Ver Factura
+                          </Link>
+                        )}
+                        <Link href={`/pedidos/${order.id}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"><Search size={14} /> Detalle</Link>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between border-t border-slate-100 bg-white p-5">
+                <span className="text-xs font-bold text-slate-500">
+                  Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, filteredOrders.length)} de {filteredOrders.length}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <span className="flex items-center justify-center rounded-xl bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>
+
+      {modalPreview.isOpen && modalPreview.budgetId && (
+        <InvoicePreviewModal
+          isOpen={modalPreview.isOpen}
+          onClose={() => setModalPreview({ isOpen: false, budgetId: null, clientName: '', totalAmount: 0 })}
+          budgetId={modalPreview.budgetId}
+          clientName={modalPreview.clientName}
+          totalAmount={modalPreview.totalAmount}
+          onConfirm={(tipo) => generarBorrador(modalPreview.budgetId!, tipo)}
+          isEmitting={!!emitiendoId}
+        />
+      )}
     </div>
   )
 }
