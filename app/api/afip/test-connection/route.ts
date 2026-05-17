@@ -58,7 +58,8 @@ export async function POST(request: Request) {
       (error.message || '') + 
       (error.response?.data?.message || '') + 
       (error.body?.message || '') +
-      JSON.stringify(error)
+      (error.faultstring || '') +
+      (error.toString?.() || '')
     ).toLowerCase()
 
     const isAlreadyAuth = 
