@@ -307,7 +307,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) 
                             <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(null)} />
                             <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white p-2 shadow-xl border border-slate-100 z-20">
                               <Link
-                                href={`/presupuestos/factura/${f.budget_id}`}
+                                href={`/facturas/ver/${f.budget_id}`}
                                 target="_blank"
                                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                               >

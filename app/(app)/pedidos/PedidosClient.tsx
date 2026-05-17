@@ -228,15 +228,16 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
                         )}
                         {order.status === 'confirmed' && order.budget_id && !order.budget?.afip_cae && (order.budget?.invoices && order.budget.invoices.length > 0) && (
                           <Link
-                            href="/facturas"
+                            href={`/facturas/ver/${order.budget_id}`}
+                            target="_blank"
                             className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white hover:bg-amber-600 transition"
                           >
                             <Clock3 size={14} /> Ver Borrador
                           </Link>
                         )}
-                        {(order.budget?.afip_cae || (order.budget?.invoices && order.budget.invoices.length > 0)) && (
+                        {order.budget?.afip_cae && (
                           <Link
-                            href={`/presupuestos/factura/${order.budget_id}`}
+                            href={`/facturas/ver/${order.budget_id}`}
                             target="_blank"
                             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition"
                           >

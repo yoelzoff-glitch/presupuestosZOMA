@@ -25,12 +25,13 @@ export default function VerFacturaPage() {
         *,
         clients ( name, cuit, address, email ),
         budget_items ( * ),
-        companies ( name, cuit, address, logo_url )
+        companies ( name, cuit, address, logo_url ),
+        invoices ( afip_comprobante_tipo )
       `)
          .eq('id', id)
          .single()
 
-      if (error || !data || !data.afip_cae) {
+      if (error || !data) {
          console.error('Error fetching budget for invoice:', error)
       } else {
          setBudget(data)
@@ -50,22 +51,27 @@ export default function VerFacturaPage() {
    const company = budget.companies
    const items = budget.budget_items || []
 
+   const esBorrador = !budget.afip_cae
+
+   // Obtener el tipo de comprobante. Si está emitido, usa el del budget. Si es borrador, usa el de la tabla invoices. Si no, default a 11.
+   const comprobanteTipo = budget.afip_comprobante_tipo || (budget.invoices && budget.invoices.length > 0 ? budget.invoices[0].afip_comprobante_tipo : 11)
+
    const qrData = {
       ver: 1,
       fecha: budget.budget_date,
       cuit: company?.cuit || 20412886128,
       ptoVta: 2,
-      tipoCmp: budget.afip_comprobante_tipo,
-      nroCmp: budget.afip_comprobante_numero,
+      tipoCmp: comprobanteTipo,
+      nroCmp: budget.afip_comprobante_numero || 0,
       importe: budget.total_amount,
       moneda: "PES",
       ctz: 1,
       tipoDocRec: 99,
       nroDocRec: 0,
       tipoCodAut: "E",
-      codAut: budget.afip_cae
+      codAut: budget.afip_cae || "00000000000000"
    }
-   const qrBase64 = Buffer.from(JSON.stringify(qrData)).toString('base64')
+   const qrBase64 = typeof window !== 'undefined' ? btoa(JSON.stringify(qrData)) : ''
    const qrUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`
 
    return (
@@ -82,7 +88,9 @@ export default function VerFacturaPage() {
                </div>
                <div>
                   <h1 className="font-black text-slate-900 leading-none">Comprobante AFIP</h1>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Legalizado por ARCA</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                     {esBorrador ? 'Documento Borrador' : 'Legalizado por ARCA'}
+                  </p>
                </div>
             </div>
             <div className="flex gap-2">
@@ -100,10 +108,16 @@ export default function VerFacturaPage() {
                <FileText size={200} />
             </div>
 
+            {esBorrador && (
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.05] z-0">
+                  <p className="text-[140px] font-black tracking-tighter whitespace-nowrap text-slate-900">BORRADOR</p>
+               </div>
+            )}
+
             {/* Cabecera */}
             <div className="flex border-2 border-slate-900 relative">
                <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 flex h-16 w-16 items-center justify-center border-2 border-slate-900 bg-white text-4xl font-black z-10 shadow-sm">
-                  {budget.afip_comprobante_tipo === 1 ? 'A' : (budget.afip_comprobante_tipo === 11 ? 'C' : 'B')}
+                  {comprobanteTipo === 1 ? 'A' : (comprobanteTipo === 11 ? 'C' : 'B')}
                </div>
 
                <div className="flex-1 p-6 border-r-2 border-slate-900 bg-slate-50/30">
@@ -116,14 +130,14 @@ export default function VerFacturaPage() {
                </div>
 
                <div className="w-20 flex flex-col items-center justify-end pb-4 bg-white">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cod. {String(budget.afip_comprobante_tipo).padStart(3, '0')}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cod. {String(comprobanteTipo).padStart(3, '0')}</p>
                </div>
 
                <div className="flex-1 p-6 border-l-2 border-slate-900 bg-slate-50/30">
                   <h2 className="text-2xl font-black uppercase text-slate-900 tracking-tighter">Factura</h2>
                   <div className="mt-4 space-y-1 text-sm font-black text-slate-900">
-                     <p>Punto de Venta: 00002</p>
-                     <p>Comp. Nro: {String(budget.afip_comprobante_numero).padStart(8, '0')}</p>
+                     <p>Punto de Venta: {String(qrData.ptoVta).padStart(5, '0')}</p>
+                     <p>Comp. Nro: {budget.afip_comprobante_numero ? String(budget.afip_comprobante_numero).padStart(8, '0') : '---'}</p>
                      <p>Fecha: {new Date(budget.budget_date).toLocaleDateString('es-AR')}</p>
                      <div className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
                         <p>CUIT: {company?.cuit || '20-41288612-8'}</p>
@@ -139,7 +153,7 @@ export default function VerFacturaPage() {
                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs font-bold text-slate-800">
                   <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Apellido y Nombre / Razón Social:</span> {client?.name}</p>
                   <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">CUIT:</span> {client?.cuit || 'Consumidor Final'}</p>
-                  <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Condición IVA:</span> {budget.afip_comprobante_tipo === 1 ? 'Responsable Inscripto' : 'Consumidor Final'}</p>
+                  <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Condición IVA:</span> {comprobanteTipo === 1 ? 'Responsable Inscripto' : 'Consumidor Final'}</p>
                   <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Domicilio:</span> {client?.address || '-'}</p>
                </div>
             </div>
@@ -186,18 +200,18 @@ export default function VerFacturaPage() {
                      />
                   </div>
                   <div className="text-[10px] font-black uppercase text-slate-900 space-y-1">
-                     <p className="flex items-center gap-2 mb-2 bg-slate-900 text-white px-2 py-1 w-fit rounded">
-                        <img src="https://www.afip.gob.ar/images/logo_afip.png" className="h-3 brightness-0 invert" alt="AFIP" />
-                        Comprobante Autorizado
+                     <p className={`flex items-center gap-2 mb-2 px-2 py-1 w-fit rounded ${esBorrador ? 'bg-amber-100 text-amber-700' : 'bg-slate-900 text-white'}`}>
+                        <img src="https://www.afip.gob.ar/images/logo_afip.png" className={`h-3 ${esBorrador ? 'grayscale' : 'brightness-0 invert'}`} alt="AFIP" />
+                        {esBorrador ? 'Borrador sin autorizar' : 'Comprobante Autorizado'}
                      </p>
-                     <p>CAE: <span className="font-black text-base ml-1 tracking-tighter text-indigo-600">{budget.afip_cae}</span></p>
-                     <p>Vencimiento CAE: {new Date(budget.afip_cae_vencimiento).toLocaleDateString('es-AR')}</p>
+                     <p>CAE: <span className={`font-black text-base ml-1 tracking-tighter ${esBorrador ? 'text-slate-400' : 'text-indigo-600'}`}>{budget.afip_cae || "00000000000000"}</span></p>
+                     <p>Vencimiento CAE: {budget.afip_cae_vencimiento ? new Date(budget.afip_cae_vencimiento).toLocaleDateString('es-AR') : '--/--/----'}</p>
                   </div>
                </div>
 
                <div className="w-64 border-2 border-slate-900 bg-slate-50/50">
                   <div className="p-4 space-y-2 text-sm">
-                     {budget.afip_comprobante_tipo === 1 ? (
+                     {comprobanteTipo === 1 ? (
                         <>
                            <div className="flex justify-between font-bold text-slate-500">
                               <span>Subtotal (Neto):</span>
