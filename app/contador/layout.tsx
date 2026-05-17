@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { ShieldCheck, LogOut, User as UserIcon } from 'lucide-react'
+import Link from 'next/link'
+import { ShieldCheck, LogOut, User as UserIcon, LayoutDashboard } from 'lucide-react'
 import GlobalChatBubble from '@/app/components/GlobalChatBubble'
 
 export default function ContadorLayout({
@@ -71,6 +72,15 @@ export default function ContadorLayout({
           </div>
 
           <div className="flex items-center gap-6">
+            {profile?.role === 'admin' && (
+              <Link 
+                href="/dashboard"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 active:scale-98 transition shadow-sm"
+              >
+                <LayoutDashboard size={14} className="text-indigo-600" />
+                <span>Volver al Dashboard</span>
+              </Link>
+            )}
             {/* Perfil Mini */}
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
