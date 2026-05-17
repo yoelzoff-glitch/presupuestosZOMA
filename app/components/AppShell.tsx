@@ -162,6 +162,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <p className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-400/80 mt-0.5">
               SISTEMA ZOMA<span className="text-blue-500">.</span>
             </p>
+            {planType && (
+              <div className="mt-1.5">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${
+                  planType === 'ultra'
+                    ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[0_0_12px_rgba(168,85,247,0.1)]'
+                    : planType === 'pro' || planType === 'pro_plus'
+                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.1)]'
+                      : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                }`}>
+                  PLAN {planType === 'pro_plus' ? 'PRO+' : planType}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
