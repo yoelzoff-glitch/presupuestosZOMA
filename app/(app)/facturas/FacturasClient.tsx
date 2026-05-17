@@ -164,6 +164,10 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
   )
 
   if (planType !== 'ultra') {
+    const planName = planType === 'pro' ? 'Plan PRO' : 'Plan BASE'
+    const messageText = `Hola! Soy usuario del ${planName} y quiero hacer un upgrade al Plan ULTRA para activar la facturación electrónica con AFIP (ARCA) en ZOMA.`
+    const encodedText = encodeURIComponent(messageText)
+
     return (
       <div className="flex flex-col items-center justify-center p-8 py-20 text-center min-h-[70vh]">
         <div className="relative mb-6">
@@ -173,9 +177,14 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
           </div>
         </div>
         
-        <span className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-[10px] font-black uppercase tracking-wider border border-purple-100 shadow-sm">
-          <Sparkles size={12} /> Plan ULTRA Requerido
-        </span>
+        <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-[10px] font-black uppercase tracking-wider border border-purple-100 shadow-sm animate-pulse">
+            <Sparkles size={12} /> Plan ULTRA Requerido
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wider border border-slate-200 shadow-sm">
+            Tu plan actual: {planType.toUpperCase()}
+          </span>
+        </div>
         
         <h2 className="text-3xl font-black text-slate-900 tracking-tight max-w-xl">
           Automatizá tu Facturación con ARCA (AFIP)
@@ -185,9 +194,17 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
           Emití facturas electrónicas de forma oficial, obtené el CAE y el código QR de ARCA automáticamente desde el visor, y controlá todos tus comprobantes legales desde un solo lugar.
         </p>
 
+        <div className="mt-6 rounded-3xl bg-purple-50/70 border border-purple-100 p-5 max-w-xs mx-auto shadow-sm">
+          <p className="text-[10px] font-black text-purple-700 uppercase tracking-widest">Inversión Plan ULTRA</p>
+          <div className="mt-1 flex items-baseline justify-center gap-1">
+            <span className="text-3xl font-black text-slate-900">$180.000</span>
+            <span className="text-xs font-bold text-slate-400">/ mes</span>
+          </div>
+        </div>
+
         <div className="mt-8 flex flex-col sm:flex-row gap-3">
           <a
-            href="https://wa.me/5491100000000?text=Hola!%20Quiero%20actualizar%20mi%20cuenta%20al%20Plan%20ULTRA%20para%20activar%20la%20Facturacion%20AFIP"
+            href={`https://wa.me/5491100000000?text=${encodedText}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-indigo-900/20 hover:from-purple-500 hover:to-indigo-500 transition active:scale-95"

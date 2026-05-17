@@ -12,13 +12,14 @@ import {
   Zap, 
   Crown, 
   Search,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react'
 
 type Company = {
   id: string
   name: string
-  plan_type: 'base' | 'pro'
+  plan_type: 'base' | 'pro' | 'ultra'
   created_at: string
 }
 
@@ -42,8 +43,7 @@ export default function SuperAdminPage() {
     }
   }
 
-  async function handleTogglePlan(companyId: string, currentPlan: 'base' | 'pro') {
-    const nextPlan = currentPlan === 'base' ? 'pro' : 'base'
+  async function handleUpdatePlan(companyId: string, nextPlan: 'base' | 'pro' | 'ultra') {
     try {
       await updateCompanyPlan(companyId, nextPlan)
       setCompanies(companies.map(c => 
@@ -125,7 +125,12 @@ export default function SuperAdminPage() {
                         </div>
                       </td>
                       <td className="px-4 py-5">
-                        {company.plan_type === 'pro' ? (
+                        {company.plan_type === 'ultra' ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-3 py-1 text-xs font-black text-purple-600 ring-1 ring-purple-600/20 animate-pulse">
+                            <Sparkles size={12} />
+                            PLAN ULTRA
+                          </span>
+                        ) : company.plan_type === 'pro' ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-600 ring-1 ring-amber-600/20">
                             <Crown size={12} />
                             PLAN PRO
@@ -140,17 +145,41 @@ export default function SuperAdminPage() {
                         {new Date(company.created_at).toLocaleDateString('es-AR')}
                       </td>
                       <td className="px-4 py-5 text-right">
-                        <button 
-                          onClick={() => handleTogglePlan(company.id, company.plan_type)}
-                          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition-all ${
-                            company.plan_type === 'base' 
-                              ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                              : 'bg-slate-900 text-white hover:bg-slate-800'
-                          }`}
-                        >
-                          <Zap size={14} />
-                          {company.plan_type === 'base' ? 'Pasar a PRO' : 'Bajar a BASE'}
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => handleUpdatePlan(company.id, 'base')}
+                            disabled={company.plan_type === 'base'}
+                            className={`rounded-xl px-3 py-1.5 text-xs font-black transition-all ${
+                              company.plan_type === 'base' 
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                            }`}
+                          >
+                            BASE
+                          </button>
+                          <button 
+                            onClick={() => handleUpdatePlan(company.id, 'pro')}
+                            disabled={company.plan_type === 'pro'}
+                            className={`rounded-xl px-3 py-1.5 text-xs font-black transition-all ${
+                              company.plan_type === 'pro' 
+                                ? 'bg-amber-100 text-amber-700 cursor-not-allowed ring-1 ring-amber-200' 
+                                : 'bg-amber-500 text-white hover:bg-amber-600'
+                            }`}
+                          >
+                            PRO
+                          </button>
+                          <button 
+                            onClick={() => handleUpdatePlan(company.id, 'ultra')}
+                            disabled={company.plan_type === 'ultra'}
+                            className={`rounded-xl px-3 py-1.5 text-xs font-black transition-all ${
+                              company.plan_type === 'ultra' 
+                                ? 'bg-purple-100 text-purple-700 cursor-not-allowed ring-1 ring-purple-200' 
+                                : 'bg-purple-600 text-white hover:bg-purple-700'
+                            }`}
+                          >
+                            ULTRA
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

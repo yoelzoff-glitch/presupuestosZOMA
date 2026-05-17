@@ -108,7 +108,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const isSuperAdmin = profile?.email?.toLowerCase() === 'yoel.zoff@gmail.com'
   const isAdmin = profile?.role === 'admin' || isSuperAdmin
   const planType = profile?.company?.plan_type || 'base'
-  const isPro = planType === 'pro' || planType === 'pro_plus'
+  const isPro = planType === 'pro' || planType === 'pro_plus' || planType === 'ultra'
   const stockEnabled = profile?.company?.enable_stock_module || false
 
   // Filtrat navItems based on stock module activation
@@ -149,18 +149,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             )}
           </div>
 
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400/80">
-              SISTEMA
-            </p>
-            <h1 className="text-xl font-black tracking-tight text-white">
-              ZOMA<span className="text-blue-500">.</span>
-            </h1>
-            {profile?.company?.name && (
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate max-w-[140px]">
+          <div className="min-w-0">
+            {profile?.company?.name ? (
+              <h1 className="text-sm font-black tracking-tight text-white uppercase truncate max-w-[150px]" title={profile.company.name}>
                 {profile.company.name}
-              </p>
+              </h1>
+            ) : (
+              <h1 className="text-sm font-black tracking-tight text-white uppercase">
+                Mi Empresa
+              </h1>
             )}
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-400/80 mt-0.5">
+              SISTEMA ZOMA<span className="text-blue-500">.</span>
+            </p>
           </div>
         </div>
       </div>
