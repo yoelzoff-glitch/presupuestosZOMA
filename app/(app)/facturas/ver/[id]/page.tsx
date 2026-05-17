@@ -2,14 +2,16 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { notFound, useParams } from 'next/navigation'
-import { FileText, Printer, Loader2, ArrowLeft } from 'lucide-react'
+import { FileText, Printer, Loader2, ArrowLeft, Send } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 export default function VerFacturaPage() {
    const params = useParams()
    const id = params.id as string
    const [budget, setBudget] = useState<any>(null)
    const [loading, setLoading] = useState(true)
+   const [emitiendo, setEmitiendo] = useState(false)
 
    useEffect(() => {
       if (id) {
@@ -37,6 +39,28 @@ export default function VerFacturaPage() {
          setBudget(data)
       }
       setLoading(false)
+   }
+
+   async function emitirFactura() {
+      try {
+         setEmitiendo(true)
+         const response = await fetch('/api/afip/create-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ budget_id: budget.id })
+         })
+
+         const result = await response.json()
+         if (!response.ok) throw new Error(result.error || 'Error al emitir factura')
+
+         toast.success('Factura emitida con éxito')
+         fetchBudget() // Recargar para mostrar el CAE
+      } catch (error: any) {
+         console.error(error)
+         toast.error(error.message || 'Error de conexión con AFIP')
+      } finally {
+         setEmitiendo(false)
+      }
    }
 
    if (loading) return (
@@ -94,6 +118,16 @@ export default function VerFacturaPage() {
                </div>
             </div>
             <div className="flex gap-2">
+               {esBorrador && (
+                  <button 
+                     onClick={emitirFactura} 
+                     disabled={emitiendo}
+                     className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-black text-white hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 disabled:opacity-50"
+                  >
+                     {emitiendo ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} 
+                     Emitir Factura
+                  </button>
+               )}
                <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 transition shadow-lg shadow-slate-200">
                   <Printer size={16} /> Imprimir / Guardar PDF
                </button>
