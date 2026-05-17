@@ -46,7 +46,7 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const daysFilter = searchParams.get('days') || '30'
-  
+
   const [heroType, setHeroType] = useState<'balance' | 'performance'>('balance')
 
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
               <FilterButton variant="blue" active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
               <FilterButton variant="blue" active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
             </div>
-            <button 
+            <button
               onClick={toggleHero}
               className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 text-sm font-bold text-white transition hover:bg-white/20"
             >
@@ -193,7 +193,7 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
               <h3 className="text-lg font-black text-slate-950">Estado de cobros</h3>
             </div>
             <div className="flex h-44 items-center justify-center">
-              <div className="flex w-full items-center">
+              <div className="flex h-full w-full items-center">
                 <div className="h-full w-1/2">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
