@@ -1,14 +1,16 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { notFound, useParams } from 'next/navigation'
+import { notFound, useParams, useSearchParams } from 'next/navigation'
 import { FileText, Printer, Loader2, ArrowLeft, Send } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
 export default function VerFacturaPage() {
    const params = useParams()
+   const searchParams = useSearchParams()
    const id = params.id as string
+   const invoiceId = searchParams.get('invoice_id')
    const [budget, setBudget] = useState<any>(null)
    const [loading, setLoading] = useState(true)
    const [emitiendo, setEmitiendo] = useState(false)
@@ -21,23 +23,67 @@ export default function VerFacturaPage() {
 
    async function fetchBudget() {
       setLoading(true)
-      const { data, error } = await supabase
+      const { data: budgetData, error: budgetError } = await supabase
          .from('budgets')
          .select(`
         *,
         clients ( name, cuit, address, email ),
         budget_items ( * ),
         companies ( name, cuit, address, logo_url ),
-        invoices ( afip_comprobante_tipo )
+        invoices ( id, afip_comprobante_tipo, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, invoice_items ( * ) )
       `)
          .eq('id', id)
          .single()
 
-      if (error || !data) {
-         console.error('Error fetching budget for invoice:', error)
-      } else {
-         setBudget(data)
+      if (budgetError || !budgetData) {
+         console.error('Error fetching budget for invoice:', budgetError)
+         setLoading(false)
+         return
       }
+
+      let finalBudget = { ...budgetData }
+      let activeInvoice = null
+
+      if (invoiceId) {
+         const found = budgetData.invoices?.find((i: any) => i.id === invoiceId)
+         if (found) {
+            activeInvoice = found
+         }
+      } else if (budgetData.invoices && budgetData.invoices.length > 0) {
+         activeInvoice = budgetData.invoices[0]
+      }
+
+      if (activeInvoice) {
+         finalBudget.afip_cae = activeInvoice.afip_cae
+         finalBudget.afip_cae_vencimiento = activeInvoice.afip_cae_vencimiento
+         finalBudget.afip_comprobante_numero = activeInvoice.afip_comprobante_numero
+         finalBudget.afip_comprobante_tipo = activeInvoice.afip_comprobante_tipo
+         finalBudget.total_amount = activeInvoice.total_amount
+         if (activeInvoice.invoice_date) {
+            finalBudget.budget_date = activeInvoice.invoice_date
+         }
+         finalBudget.selected_invoice = activeInvoice
+
+         if (activeInvoice.invoice_items && activeInvoice.invoice_items.length > 0) {
+            finalBudget.budget_items = activeInvoice.invoice_items
+         }
+      }
+
+      // Fetch company's AFIP configuration
+      const companyId = budgetData.company_id
+      if (companyId) {
+         const { data: afipData } = await supabase
+            .from('afip_config')
+            .select('tipo_contribuyente')
+            .eq('company_id', companyId)
+            .maybeSingle()
+
+         if (afipData) {
+            finalBudget.company_afip_config = afipData
+         }
+      }
+
+      setBudget(finalBudget)
       setLoading(false)
    }
 
@@ -76,9 +122,33 @@ export default function VerFacturaPage() {
    const items = budget.budget_items || []
 
    const esBorrador = !budget.afip_cae
+   const invoice = budget.selected_invoice || (budget.invoices && budget.invoices.length > 0 ? budget.invoices[0] : null)
+   const esAnulada = budget.selected_invoice ? false : (invoice?.status === 'cancelled')
 
    // Obtener el tipo de comprobante. Si está emitido, usa el del budget. Si es borrador, usa el de la tabla invoices. Si no, default a 11.
-   const comprobanteTipo = budget.afip_comprobante_tipo || (budget.invoices && budget.invoices.length > 0 ? budget.invoices[0].afip_comprobante_tipo : 11)
+   const comprobanteTipo = budget.afip_comprobante_tipo || (invoice ? invoice.afip_comprobante_tipo : 11)
+    const esComprobanteA = [1, 2, 3, 7, 8].includes(comprobanteTipo)
+
+   const afipConfig = budget.company_afip_config
+   const condicionIvaEmpresa = afipConfig?.tipo_contribuyente === 'responsable_inscripto'
+      ? 'Responsable Inscripto'
+      : (afipConfig?.tipo_contribuyente === 'monotributo'
+         ? 'Responsable Monotributo'
+         : ([11, 12, 13].includes(comprobanteTipo) ? 'Responsable Monotributo' : 'Responsable Inscripto'))
+
+   const getComprobanteLetra = (tipo: number) => {
+      if ([1, 2, 3].includes(tipo)) return 'A'
+      if ([6, 7, 8].includes(tipo)) return 'B'
+      if ([11, 12, 13].includes(tipo)) return 'C'
+      return 'C'
+   }
+
+   const getComprobanteNombre = (tipo: number) => {
+      if ([1, 6, 11].includes(tipo)) return 'Factura'
+      if ([3, 8, 13].includes(tipo)) return 'Nota de Crédito'
+      if ([2, 7, 12].includes(tipo)) return 'Nota de Débito'
+      return 'Factura'
+   }
 
    const qrData = {
       ver: 1,
@@ -87,7 +157,7 @@ export default function VerFacturaPage() {
       ptoVta: 2,
       tipoCmp: comprobanteTipo,
       nroCmp: budget.afip_comprobante_numero || 0,
-      importe: budget.total_amount,
+      importe: Math.abs(budget.total_amount),
       moneda: "PES",
       ctz: 1,
       tipoDocRec: 99,
@@ -142,16 +212,33 @@ export default function VerFacturaPage() {
                <FileText size={200} />
             </div>
 
+            {esAnulada && (
+               <div className="mb-6 rounded-2xl bg-rose-50 border border-rose-200 p-4 text-xs font-black text-rose-700 flex items-center justify-between print:hidden">
+                  <span className="flex items-center gap-2">
+                     ⚠️ Este comprobante ha sido ANULADO mediante una Nota de Crédito.
+                  </span>
+                  <span className="bg-rose-600 text-white px-2.5 py-1 rounded-md text-[9px] uppercase tracking-wider">
+                     Documento sin validez comercial
+                  </span>
+               </div>
+            )}
+
             {esBorrador && (
                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.05] z-0">
                   <p className="text-[140px] font-black tracking-tighter whitespace-nowrap text-slate-900">BORRADOR</p>
                </div>
             )}
 
+            {esAnulada && (
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.08] z-10">
+                  <p className="text-[120px] font-black tracking-tighter whitespace-nowrap text-rose-600 border-8 border-rose-600 px-10 rounded-3xl uppercase">ANULADA</p>
+               </div>
+            )}
+
             {/* Cabecera */}
             <div className="flex border-2 border-slate-900 relative">
                <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 flex h-16 w-16 items-center justify-center border-2 border-slate-900 bg-white text-4xl font-black z-10 shadow-sm">
-                  {comprobanteTipo === 1 ? 'A' : (comprobanteTipo === 11 ? 'C' : 'B')}
+                  {getComprobanteLetra(comprobanteTipo)}
                </div>
 
                <div className="flex-1 p-6 border-r-2 border-slate-900 bg-slate-50/30">
@@ -159,7 +246,7 @@ export default function VerFacturaPage() {
                   <div className="mt-4 space-y-1 text-xs font-bold text-slate-600">
                      <p>Razón Social: {company?.name}</p>
                      <p>Domicilio: {company?.address || 'Calle Falsa 123, Buenos Aires'}</p>
-                     <p>Condición frente al IVA: Responsable Inscripto</p>
+                     <p>Condición frente al IVA: {condicionIvaEmpresa}</p>
                   </div>
                </div>
 
@@ -168,7 +255,7 @@ export default function VerFacturaPage() {
                </div>
 
                <div className="flex-1 p-6 border-l-2 border-slate-900 bg-slate-50/30">
-                  <h2 className="text-2xl font-black uppercase text-slate-900 tracking-tighter">Factura</h2>
+                  <h2 className="text-2xl font-black uppercase text-slate-900 tracking-tighter">{getComprobanteNombre(comprobanteTipo)}</h2>
                   <div className="mt-4 space-y-1 text-sm font-black text-slate-900">
                      <p>Punto de Venta: {String(qrData.ptoVta).padStart(5, '0')}</p>
                      <p>Comp. Nro: {budget.afip_comprobante_numero ? String(budget.afip_comprobante_numero).padStart(8, '0') : '---'}</p>
@@ -205,15 +292,19 @@ export default function VerFacturaPage() {
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-bold text-slate-800">
-                     {items.map((item: any, idx: number) => (
-                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                           <td className="px-4 py-2.5">{item.product_code ? `[${item.product_code}] ` : ''}{item.product_name}</td>
-                           <td className="px-4 py-2.5 text-center">{item.quantity}</td>
-                           <td className="px-4 py-2.5 uppercase text-slate-500">Unid.</td>
-                           <td className="px-4 py-2.5 text-right">${Number(item.unit_price).toLocaleString('es-AR')}</td>
-                           <td className="px-4 py-2.5 text-right font-black">${(item.quantity * item.unit_price).toLocaleString('es-AR')}</td>
-                        </tr>
-                     ))}
+                     {items.map((item: any, idx: number) => {
+                        const unitPrice = esComprobanteA ? (Number(item.unit_price) / 1.21) : Number(item.unit_price);
+                        const rowSubtotal = item.quantity * unitPrice;
+                        return (
+                           <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                              <td className="px-4 py-2.5">{item.product_code ? `[${item.product_code}] ` : ''}{item.product_name}</td>
+                              <td className="px-4 py-2.5 text-center">{item.quantity}</td>
+                              <td className="px-4 py-2.5 uppercase text-slate-500">Unid.</td>
+                              <td className="px-4 py-2.5 text-right">${unitPrice.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="px-4 py-2.5 text-right font-black">${rowSubtotal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                           </tr>
+                        )
+                     })}
                      {[...Array(Math.max(0, 10 - items.length))].map((_, i) => (
                         <tr key={`empty-${i}`} className="h-6">
                            <td colSpan={5}></td>
@@ -245,7 +336,7 @@ export default function VerFacturaPage() {
 
                <div className="w-64 border-2 border-slate-900 bg-slate-50/50">
                   <div className="p-4 space-y-2 text-sm">
-                     {comprobanteTipo === 1 ? (
+                     {esComprobanteA ? (
                         <>
                            <div className="flex justify-between font-bold text-slate-500">
                               <span>Subtotal (Neto):</span>

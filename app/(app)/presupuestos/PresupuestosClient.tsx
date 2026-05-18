@@ -99,7 +99,16 @@ export default function PresupuestosClient({
     const q = busqueda.toLowerCase().trim()
     return presupuestos.filter((p: any) => {
       const coincideBusqueda = !q || p.budget_code?.toLowerCase().includes(q) || String(p.budget_number).includes(q) || p.client?.name?.toLowerCase().includes(q)
-      const coincideEstado = filtroEstado === 'all' || p.status === filtroEstado
+      
+      let coincideEstado = true
+      if (filtroEstado === 'issued') {
+        coincideEstado = p.status === 'issued' && !p.afip_cae
+      } else if (filtroEstado === 'approved') {
+        coincideEstado = p.status === 'approved' || !!p.afip_cae
+      } else if (filtroEstado !== 'all') {
+        coincideEstado = p.status === filtroEstado
+      }
+
       const coincideVendedor = filtroVendedor === 'all' || p.seller_id === filtroVendedor
       return coincideBusqueda && coincideEstado && coincideVendedor
     })
@@ -133,8 +142,8 @@ export default function PresupuestosClient({
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <TarjetaEstado titulo="Total" valor={presupuestos.length} icon={FileText} cargando={cargando} />
-        <TarjetaEstado titulo="Emitidos" valor={presupuestos.filter(p => p.status === 'issued').length} icon={Clock3} cargando={cargando} />
-        <TarjetaEstado titulo="Aprobados" valor={presupuestos.filter(p => p.status === 'approved').length} icon={CheckCircle2} cargando={cargando} />
+        <TarjetaEstado titulo="Emitidos" valor={presupuestos.filter(p => p.status === 'issued' && !p.afip_cae).length} icon={Clock3} cargando={cargando} />
+        <TarjetaEstado titulo="Aprobados" valor={presupuestos.filter(p => p.status === 'approved' || !!p.afip_cae).length} icon={CheckCircle2} cargando={cargando} />
         <TarjetaEstado titulo="Monto Vigente" valor={`$${montoTotal.toLocaleString('es-AR')}`} icon={DollarSign} cargando={cargando} />
       </section>
 

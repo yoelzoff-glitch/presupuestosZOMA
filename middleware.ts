@@ -52,10 +52,14 @@ export async function middleware(request: NextRequest) {
   const esPaginaPortal = rutaActual.startsWith('/portal')
   const esPaginaVendedor = rutaActual.startsWith('/vendedor')
   const esPaginaSuperAdmin = rutaActual.startsWith('/superadmin')
-  const esPaginaPublica = rutaActual.startsWith('/p/') || rutaActual === '/'
+  const rutasPublicas = ['/sobre-nosotros', '/terminos', '/privacidad', '/contacto']
+  const esPaginaPublica =
+    rutaActual.startsWith('/p/') ||
+    rutaActual === '/' ||
+    rutasPublicas.some(path => rutaActual === path || rutaActual.startsWith(path + '/'))
 
-  // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal, vendedor o superadmin
-  const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor && !esPaginaSuperAdmin
+  // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal, vendedor, superadmin o pública
+  const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor && !esPaginaSuperAdmin && !esPaginaPublica
 
   // Permitir API routes sin middleware (manejan su propia seguridad)
   if (esPaginaApi) return respuesta
@@ -111,12 +115,16 @@ export async function middleware(request: NextRequest) {
     // Redirigir si intenta entrar a /auth o / (landing) estando logueado
     if (esPaginaAuth || rutaActual === '/') {
       const url = request.nextUrl.clone()
-      url.pathname = rol === 'customer' ? '/portal' : rol === 'vendedor' ? '/vendedor' : '/dashboard'
+      url.pathname = 
+        rol === 'customer' ? '/portal' : 
+        rol === 'vendedor' ? '/vendedor' : 
+        rol === 'contador' ? '/contador' : 
+        '/dashboard'
       return NextResponse.redirect(url)
     }
 
-    // El Cliente (customer) solo puede entrar a /portal
-    if (rol === 'customer' && !esPaginaPortal) {
+    // El Cliente (customer) solo puede entrar a /portal o páginas públicas
+    if (rol === 'customer' && !esPaginaPortal && !esPaginaPublica) {
       const url = request.nextUrl.clone()
       url.pathname = '/portal'
       return NextResponse.redirect(url)
@@ -127,6 +135,20 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/vendedor'
       return NextResponse.redirect(url)
+    }
+
+    // El Contador solo puede entrar a /contador, /facturas, y /cuenta-corriente
+    if (rol === 'contador') {
+      const esPaginaContador = rutaActual.startsWith('/contador')
+      const esPaginaFacturas = rutaActual.startsWith('/facturas')
+      const esPaginaCuentaCorriente = rutaActual.startsWith('/cuenta-corriente')
+      const esRutaPermitida = esPaginaContador || esPaginaFacturas || esPaginaCuentaCorriente || esPaginaAuth || esPaginaPublica
+
+      if (!esRutaPermitida) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/contador'
+        return NextResponse.redirect(url)
+      }
     }
 
     // Admin/Vendedor no deben entrar al portal de clientes

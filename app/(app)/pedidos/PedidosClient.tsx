@@ -99,13 +99,13 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
     setLoading(false)
   }
 
-  async function generarBorrador(budgetId: string, cbteTipo: number) {
+  async function generarBorrador(budgetId: string, cbteTipo: number, addIva?: boolean) {
     setEmitiendoId(budgetId)
     try {
       const response = await fetch('/api/invoices/create-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ budget_id: budgetId, cbteTipo })
+        body: JSON.stringify({ budget_id: budgetId, cbteTipo, addIva })
       })
       const data = await response.json()
       if (data.success) {
@@ -232,19 +232,11 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
                       <div className="flex items-center justify-end gap-2">
                         {order.status === 'confirmed' && order.budget_id && !order.budget?.afip_cae && (!order.budget?.invoices || order.budget.invoices.length === 0) && (
                           <button
-                            onClick={() => {
-                              if (planType !== 'ultra') {
-                                toast.error('La facturación electrónica con AFIP (ARCA) requiere el Plan ULTRA. Contactá a soporte para actualizar tu cuenta.')
-                                return
-                              }
-                              abrirPreview(order)
-                            }}
+                            onClick={() => abrirPreview(order)}
                             disabled={!!emitiendoId}
-                            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white transition disabled:opacity-50 ${
-                              planType === 'ultra' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'
-                            }`}
+                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50"
                           >
-                            {planType === 'ultra' ? <FileText size={14} /> : <Lock size={14} />} Facturar
+                            <FileText size={14} /> Facturar
                           </button>
                         )}
                         {order.status === 'confirmed' && order.budget_id && !order.budget?.afip_cae && (order.budget?.invoices && order.budget.invoices.length > 0) && (
@@ -310,7 +302,7 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
           budgetId={modalPreview.budgetId}
           clientName={modalPreview.clientName}
           totalAmount={modalPreview.totalAmount}
-          onConfirm={(tipo) => generarBorrador(modalPreview.budgetId!, tipo)}
+          onConfirm={(tipo, addIva) => generarBorrador(modalPreview.budgetId!, tipo, addIva)}
           isEmitting={!!emitiendoId}
         />
       )}

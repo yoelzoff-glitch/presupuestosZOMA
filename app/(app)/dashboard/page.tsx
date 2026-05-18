@@ -60,5 +60,52 @@ export default async function DashboardPage(props: {
     )
   }
 
-  return <DashboardClient stats={stats || {}} />
+  // Calculamos la conversión de presupuestos (Enviados vs Convertidos a Pedidos) de forma directa
+  let budgetStatusStats: any[] = []
+  if (companyId) {
+    let query = supabase
+      .from('budgets')
+      .select('status, afip_cae')
+      .eq('company_id', companyId)
+      
+    if (daysInt > 0) {
+      const limitDate = new Date()
+      limitDate.setDate(limitDate.getDate() - daysInt)
+      query = query.gte('created_at', limitDate.toISOString())
+    }
+    
+    const { data: budgetsData } = await query
+    
+    const counts = { approved: 0, issued: 0, draft: 0, cancelled: 0 }
+    if (budgetsData) {
+      budgetsData.forEach((b: any) => {
+        const s = b.status
+        const hasCAE = !!b.afip_cae
+        
+        if (s === 'cancelled') {
+          counts.cancelled++
+        } else if (hasCAE || s === 'approved') {
+          counts.approved++ // Agrupar tanto aprobados como facturados bajo "Convertidos"
+        } else if (s === 'issued') {
+          counts.issued++ // Enviados reales sin facturar
+        } else if (s === 'draft') {
+          counts.draft++
+        }
+      })
+    }
+    
+    budgetStatusStats = [
+      { name: 'Convertidos', value: counts.approved, color: '#10b981' },
+      { name: 'Enviados', value: counts.issued, color: '#3b82f6' },
+      { name: 'Borradores', value: counts.draft, color: '#94a3b8' },
+      { name: 'Cancelados', value: counts.cancelled, color: '#ef4444' }
+    ].filter(item => item.value > 0)
+  }
+
+  const finalStats = {
+    ...(stats || {}),
+    budgetStatus: budgetStatusStats
+  }
+
+  return <DashboardClient stats={finalStats} />
 }

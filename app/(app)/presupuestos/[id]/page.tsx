@@ -571,7 +571,7 @@ export default function PresupuestoDetallePage() {
           <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <Link href="/presupuestos" className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-blue-200 transition hover:text-white">
-                <ArrowLeft size={17} /> Volver
+                <ArrowLeft size={17} /> Volver  
               </Link>
               <h1 className="text-3xl font-black tracking-tight">Presupuesto {budgetLabel}</h1>
               {budget.viewed_at && (
@@ -672,7 +672,7 @@ export default function PresupuestoDetallePage() {
             )}
             <div className="text-[10px] font-bold text-slate-500">
               <p>{company?.address}</p>
-              <p>CUIT: {company?.cuit} | {company?.phone}</p>
+              <p>CUIT:  {company?.cuit} | {company?.phone}</p>
             </div>
           </div>
           <div className="text-right">

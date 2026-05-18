@@ -71,10 +71,14 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Create Company
+    const subscriptionExpiry = new Date()
+    subscriptionExpiry.setDate(subscriptionExpiry.getDate() + 7)
+
     const { data: company, error: companyError } = await supabaseAdmin
       .from('companies')
       .insert({
         name: company_name,
+        subscription_expiry: subscriptionExpiry.toISOString(),
       })
       .select('id')
       .single()

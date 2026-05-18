@@ -11,10 +11,11 @@ export async function POST(request: Request) {
   const keyPath = path.join(tempDir, `key_inv_${Date.now()}.key`)
 
   try {
-    const { budget_id, cbteTipoOverride } = await request.json()
+    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount, addIva } = await request.json()
     if (!budget_id) return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
 
     const supabaseAdmin = createSupabaseAdminClient()
+    const esCorrectivo = isCreditNote || isDebitNote
 
     // 1. Obtener datos del presupuesto e ítems (con datos del cliente)
     const { data: budget, error: bError } = await supabaseAdmin
@@ -25,19 +26,10 @@ export async function POST(request: Request) {
 
     if (bError || !budget) throw new Error('Presupuesto no encontrado')
     
-    // Validar plan ULTRA
-    const { data: company, error: cPlanError } = await supabaseAdmin
-      .from('companies')
-      .select('plan_type')
-      .eq('id', budget.company_id)
-      .single()
 
-    if (cPlanError || !company || company.plan_type !== 'ultra') {
-      throw new Error('El módulo de facturación electrónica (ARCA/AFIP) requiere una suscripción al Plan ULTRA.')
-    }
     
-    if (budget.afip_cae) {
-      // Sincronización automática si ya tiene CAE
+    if (budget.afip_cae && !esCorrectivo) {
+      // Sincronización automática si ya tiene CAE y no es un comprobante correctivo
       await supabaseAdmin
         .from('invoices')
         .update({
@@ -57,6 +49,14 @@ export async function POST(request: Request) {
     }
 
     const client = Array.isArray(budget.clients) ? budget.clients[0] : budget.clients
+
+    // Obtener la factura borrador existente (si existe)
+    const { data: existingDraft } = await supabaseAdmin
+      .from('invoices')
+      .select('*')
+      .eq('budget_id', budget_id)
+      .eq('status', 'draft')
+      .maybeSingle()
 
     // 2. Obtener config fiscal
     const { data: config, error: cError } = await supabaseAdmin
@@ -84,7 +84,9 @@ export async function POST(request: Request) {
     const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
     const esCuitValido = cuitLimpio.length === 11
     const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
-    const montoTotal = Number(budget.total_amount)
+    let montoTotal = customAmount 
+      ? Number(customAmount) 
+      : (existingDraft ? Number(existingDraft.total_amount) : Number(budget.total_amount));
 
     // Límite AFIP identificación (Aprox mayo 2024)
     const LIMITE_IDENTIFICACION = 191624
@@ -139,8 +141,24 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validación final de montos según tipo de comprobante (A no tiene límite, B y C sí)
-    if (cbteTipo !== 1 && montoTotal > LIMITE_IDENTIFICACION && docTipo === 99) {
+    // Convertir a tipo correctivo de AFIP si corresponde
+    if (isCreditNote) {
+      if (cbteTipo === 1) cbteTipo = 3   // Nota de Crédito A
+      else if (cbteTipo === 6) cbteTipo = 8   // Nota de Crédito B
+      else if (cbteTipo === 11) cbteTipo = 13 // Nota de Crédito C
+    } else if (isDebitNote) {
+      if (cbteTipo === 1) cbteTipo = 2   // Nota de Débito A
+      else if (cbteTipo === 6) cbteTipo = 7   // Nota de Débito B
+      else if (cbteTipo === 11) cbteTipo = 12 // Nota de Débito C
+    }
+
+    // Aplicar adición de IVA si addIva es true, corresponde y no hay borrador previo ya calculado
+    if (addIva && !existingDraft && (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)) {
+      montoTotal = parseFloat((montoTotal * 1.21).toFixed(2));
+    }
+
+    // Validación final de montos según tipo de comprobante (A, B y C tienen límites)
+    if (cbteTipo !== 1 && cbteTipo !== 3 && cbteTipo !== 2 && montoTotal > LIMITE_IDENTIFICACION && docTipo === 99) {
        throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString()} es obligatorio identificar al cliente con DNI/CUIT`)
     }
 
@@ -155,20 +173,33 @@ export async function POST(request: Request) {
       CbteFch: new Date().toISOString().replace(/-/g, '').split('T')[0],
       ImpTotal: montoTotal,
       ImpTotConc: 0,
-      ImpNeto: cbteTipo === 1 || cbteTipo === 6 ? parseFloat((montoTotal / 1.21).toFixed(2)) : montoTotal,
+      ImpNeto: cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7
+        ? parseFloat((montoTotal / 1.21).toFixed(2)) 
+        : montoTotal,
       ImpOpEx: 0,
-      ImpIVA: cbteTipo === 1 || cbteTipo === 6 ? parseFloat((montoTotal - (montoTotal / 1.21)).toFixed(2)) : 0,
+      ImpIVA: cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7
+        ? parseFloat((montoTotal - (montoTotal / 1.21)).toFixed(2)) 
+        : 0,
       ImpTrib: 0,
       CondicionIVAReceptorId: condicionIvaReceptor,
       MonId: 'PES',
       MonCotiz: 1
     }
 
-    if (cbteTipo === 1 || cbteTipo === 6) {
+    if (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7) {
       voucherData.Iva = [{
         Id: 5, // 21%
         BaseImp: voucherData.ImpNeto,
         Importe: voucherData.ImpIVA
+      }]
+    }
+
+    // Agregar comprobante asociado oficial de AFIP
+    if (esCorrectivo && budget.afip_comprobante_numero) {
+      voucherData.CbtesAsoc = [{
+        Tipo: budget.afip_comprobante_tipo || (esRI ? (client?.client_type === 'distribuidor' || esCuitValido ? 1 : 6) : 11),
+        PtoVta: config.punto_venta || 2,
+        Nro: budget.afip_comprobante_numero
       }]
     }
 
@@ -217,28 +248,88 @@ export async function POST(request: Request) {
       throw new Error(msg)
     }
 
-    // 8. Actualización Dual: Presupuestos y Facturas
-    await supabaseAdmin
-      .from('budgets')
-      .update({
-        afip_cae: cae,
-        afip_cae_vencimiento: caeFchVto,
-        afip_comprobante_numero: cbteNro,
-        afip_comprobante_tipo: cbteTipo,
-        status: 'issued'
-      })
-      .eq('id', budget_id)
+    // 8. Actualización Dual o Inserción de Comprobante Correctivo
+    if (esCorrectivo) {
+      if (isCreditNote) {
+        // Anular la factura original solo si es anulación total (sin customAmount o igual/mayor al total)
+        const esAnulacionTotal = !customAmount || Number(customAmount) >= Number(budget.total_amount)
+        if (esAnulacionTotal) {
+          await supabaseAdmin
+            .from('invoices')
+            .update({ status: 'cancelled' })
+            .eq('budget_id', budget_id)
+            .eq('status', 'emitted')
+        }
+      }
 
-    await supabaseAdmin
-      .from('invoices')
-      .update({
-        status: 'emitted',
-        afip_cae: cae,
-        afip_cae_vencimiento: caeFchVto,
-        afip_comprobante_numero: cbteNro,
-        afip_comprobante_tipo: cbteTipo
-      })
-      .eq('budget_id', budget_id)
+      // Insertar el nuevo comprobante correctivo en la tabla invoices
+      await supabaseAdmin
+        .from('invoices')
+        .insert({
+          company_id: budget.company_id,
+          client_id: budget.client_id,
+          budget_id: budget_id,
+          status: 'emitted',
+          total_amount: isCreditNote ? -montoTotal : montoTotal,
+          afip_cae: cae,
+          afip_cae_vencimiento: caeFchVto,
+          afip_comprobante_numero: cbteNro,
+          afip_comprobante_tipo: cbteTipo,
+          invoice_date: new Date().toISOString().split('T')[0],
+          invoice_number: cbteNro
+        })
+    } else {
+      // Flujo de factura estándar (guardado dual original)
+      await supabaseAdmin
+        .from('budgets')
+        .update({
+          afip_cae: cae,
+          afip_cae_vencimiento: caeFchVto,
+          afip_comprobante_numero: cbteNro,
+          afip_comprobante_tipo: cbteTipo,
+          status: 'issued'
+        })
+        .eq('id', budget_id)
+
+      await supabaseAdmin
+        .from('invoices')
+        .update({
+          status: 'emitted',
+          total_amount: montoTotal,
+          afip_cae: cae,
+          afip_cae_vencimiento: caeFchVto,
+          afip_comprobante_numero: cbteNro,
+          afip_comprobante_tipo: cbteTipo
+        })
+        .eq('budget_id', budget_id);
+
+      if (addIva && !existingDraft) {
+        const { data: inv } = await supabaseAdmin
+          .from('invoices')
+          .select('id')
+          .eq('budget_id', budget_id)
+          .single();
+        
+        if (inv) {
+          const { data: items } = await supabaseAdmin
+            .from('invoice_items')
+            .select('*')
+            .eq('invoice_id', inv.id);
+          
+          if (items) {
+            for (const item of items) {
+              await supabaseAdmin
+                .from('invoice_items')
+                .update({
+                  unit_price: parseFloat((item.unit_price * 1.21).toFixed(2)),
+                  total: parseFloat((item.total * 1.21).toFixed(2))
+                })
+                .eq('id', item.id);
+            }
+          }
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -67,6 +67,12 @@ export default function Login() {
       return
     }
 
+    if (profile.role === 'contador') {
+      router.replace('/contador')
+      router.refresh()
+      return
+    }
+
     router.replace('/')
     router.refresh()
   }
