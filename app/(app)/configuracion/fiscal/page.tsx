@@ -76,12 +76,6 @@ export default function ConfigFiscalPage() {
           .eq('id', user.id)
           .single()
 
-        const planType = (profile?.company as any)?.plan_type || 'base'
-        if (planType !== 'ultra') {
-          router.replace('/configuracion/suscripcion')
-          return
-        }
-
         if (profile?.company_id) {
           const { data: afipConfig } = await supabase
             .from('afip_configs')

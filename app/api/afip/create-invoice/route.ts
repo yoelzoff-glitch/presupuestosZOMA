@@ -69,15 +69,41 @@ export async function POST(request: Request) {
 
     // 3. Inicializar ARCA
     const cleanKey = config.key_content.replace(/\r\n/g, '\n').trim()
-    const cleanCert = config.cert_content.replace(/\r\n/g, '\n').trim()
+    
+    // Separate certificate content and cached ticket
+    const certParts = config.cert_content.split('===WSAA_TICKET===')
+    const actualCert = certParts[0].trim()
+    const cachedTicketStr = certParts[1]?.trim()
 
-    const arca = new Arca({
+    let cachedTicket: any = null
+    if (cachedTicketStr) {
+      try {
+        cachedTicket = JSON.parse(cachedTicketStr)
+      } catch (e) {
+        console.error('Failed to parse cached ticket:', e)
+      }
+    }
+
+    const now = Date.now()
+    const isTicketValid = cachedTicket && cachedTicket.expiresAt && cachedTicket.expiresAt > now + 60000 // valid for at least 1 min
+
+    const arcaOptions: any = {
       key: cleanKey,
-      cert: cleanCert,
+      cert: actualCert,
       cuit: parseInt(config.cuit.replace(/-/g, '')),
       production: !config.is_sandbox,
-      ticketPath: path.join(os.tmpdir(), 'arca-tickets-stable')
-    })
+    }
+
+    if (isTicketValid) {
+      arcaOptions.credentials = cachedTicket.credentials
+      arcaOptions.handleTicket = true
+      console.log('Using valid WSAA ticket from database cache.')
+    } else {
+      arcaOptions.ticketPath = path.join(os.tmpdir(), 'arca-tickets-stable')
+      console.log('No valid WSAA ticket in database. Using disk automatic management.')
+    }
+
+    const arca = new Arca(arcaOptions)
 
     // 5. Determinar tipo de comprobante y lógica de IVA
     const esRI = config.tipo_contribuyente === 'responsable_inscripto'
@@ -222,14 +248,40 @@ export async function POST(request: Request) {
         fullErrorText.includes('cee ya posee un ta valido')
 
       if (isAlreadyAuth) {
-        const arcaRetry = new Arca({
-          key: cleanKey,
-          cert: cleanCert,
-          cuit: parseInt(config.cuit.replace(/-/g, '')),
-          production: !config.is_sandbox,
-          ticketPath: path.join(os.tmpdir(), `arca-retry-${Date.now()}`)
-        })
-        result = await arcaRetry.electronicBillingService.createNextVoucher(voucherData)
+        let credentialsToUse: any = null
+        
+        if (cachedTicket && cachedTicket.credentials) {
+          credentialsToUse = cachedTicket.credentials
+        } else {
+          // Check disk
+          const cuitClean = config.cuit.replace(/-/g, '')
+          const ticketFileName = `TA-${cuitClean}-wsfe.json`
+          const ticketFilePath = path.join(os.tmpdir(), 'arca-tickets-stable', ticketFileName)
+          if (fs.existsSync(ticketFilePath)) {
+            try {
+              const ticketData = JSON.parse(fs.readFileSync(ticketFilePath, 'utf8'))
+              credentialsToUse = {
+                header: ticketData.header,
+                credentials: ticketData.credentials
+              }
+            } catch (e) {}
+          }
+        }
+
+        if (credentialsToUse) {
+          console.log('WSAA reported alreadyAuthenticated. Force-reusing existing credentials.')
+          const arcaRetry = new Arca({
+            key: cleanKey,
+            cert: actualCert,
+            cuit: parseInt(config.cuit.replace(/-/g, '')),
+            production: !config.is_sandbox,
+            credentials: credentialsToUse,
+            handleTicket: true
+          })
+          result = await arcaRetry.electronicBillingService.createNextVoucher(voucherData)
+        } else {
+          throw error
+        }
       } else {
         throw error
       }
@@ -246,6 +298,38 @@ export async function POST(request: Request) {
       const err = result.Errors?.Err?.[0]?.Msg || result.response?.Errors?.Err?.[0]?.Msg
       const msg = obs || err || `Error ARCA (Status ${status})`
       throw new Error(msg)
+    }
+
+    // Cache ticket in database if we obtained a new one
+    if (!isTicketValid) {
+      const cuitClean = config.cuit.replace(/-/g, '')
+      const ticketFileName = `TA-${cuitClean}-wsfe.json`
+      const ticketFilePath = path.join(os.tmpdir(), 'arca-tickets-stable', ticketFileName)
+      if (fs.existsSync(ticketFilePath)) {
+        try {
+          const ticketContent = fs.readFileSync(ticketFilePath, 'utf8')
+          const ticketData = JSON.parse(ticketContent)
+          const expirationStr = ticketData.header?.[1]?.expirationtime
+          if (expirationStr) {
+            const expiresAt = new Date(expirationStr).getTime()
+            const payload = {
+              credentials: {
+                header: ticketData.header,
+                credentials: ticketData.credentials
+              },
+              expiresAt
+            }
+            const updatedCertContent = `${actualCert}\n===WSAA_TICKET===\n${JSON.stringify(payload)}`
+            await supabaseAdmin
+              .from('afip_configs')
+              .update({ cert_content: updatedCertContent })
+              .eq('company_id', budget.company_id)
+            console.log('Successfully cached WSAA ticket in database after voucher generation.')
+          }
+        } catch (err) {
+          console.error('Failed to cache ticket in database:', err)
+        }
+      }
     }
 
     // 8. Actualización Dual o Inserción de Comprobante Correctivo
