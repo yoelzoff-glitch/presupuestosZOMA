@@ -99,13 +99,13 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
     setLoading(false)
   }
 
-  async function generarBorrador(budgetId: string, cbteTipo: number) {
+  async function generarBorrador(budgetId: string, cbteTipo: number, addIva?: boolean) {
     setEmitiendoId(budgetId)
     try {
       const response = await fetch('/api/invoices/create-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ budget_id: budgetId, cbteTipo })
+        body: JSON.stringify({ budget_id: budgetId, cbteTipo, addIva })
       })
       const data = await response.json()
       if (data.success) {
@@ -302,7 +302,7 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
           budgetId={modalPreview.budgetId}
           clientName={modalPreview.clientName}
           totalAmount={modalPreview.totalAmount}
-          onConfirm={(tipo) => generarBorrador(modalPreview.budgetId!, tipo)}
+          onConfirm={(tipo, addIva) => generarBorrador(modalPreview.budgetId!, tipo, addIva)}
           isEmitting={!!emitiendoId}
         />
       )}

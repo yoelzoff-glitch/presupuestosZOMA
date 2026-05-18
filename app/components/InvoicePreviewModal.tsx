@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 type Props = {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (tipoCbte: number) => void
+  onConfirm: (tipoCbte: number, addIva: boolean) => void
   budgetId: string
   clientName: string
   totalAmount: number
@@ -27,9 +27,11 @@ export default function InvoicePreviewModal({
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [tipoCbte, setTipoCbte] = useState<number>(11)
+  const [addIva, setAddIva] = useState(false)
 
   useEffect(() => {
     if (isOpen && budgetId) {
+      setAddIva(false)
       fetchData()
     }
   }, [isOpen, budgetId])
@@ -77,8 +79,10 @@ export default function InvoicePreviewModal({
   
   // Cálculos de IVA si es RI y eligió A o B
   // Nota: Factura B también tiene IVA aunque no se detalla en el PDF para el cliente
-  const neto = (esRI && (tipoCbte === 1 || tipoCbte === 6)) ? (totalAmount / 1.21) : totalAmount
-  const iva = totalAmount - neto
+  const baseTotal = totalAmount
+  const finalTotal = (esRI && (tipoCbte === 1 || tipoCbte === 6) && addIva) ? (baseTotal * 1.21) : baseTotal
+  const neto = (esRI && (tipoCbte === 1 || tipoCbte === 6)) ? (finalTotal / 1.21) : finalTotal
+  const iva = finalTotal - neto
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -151,6 +155,33 @@ export default function InvoicePreviewModal({
             </div>
           </div>
 
+          {/* Toggle para Sumar IVA si es RI y emite A o B */}
+          {esRI && (tipoCbte === 1 || tipoCbte === 6) && (
+            <div className="mt-6 rounded-[2rem] border border-blue-100 bg-blue-50/20 p-5 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <h5 className="text-xs font-black uppercase tracking-wider text-blue-900">¿Sumar 21% de IVA al Facturar?</h5>
+                  <p className="text-[11px] font-semibold text-slate-500 leading-normal max-w-[380px]">
+                    Activalo si el presupuesto original fue enviado en montos Netos (Sin IVA) para que el sistema le sume el 21% automáticamente.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAddIva(!addIva)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    addIva ? 'bg-blue-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      addIva ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Items Table */}
           <div className="mt-8 overflow-hidden rounded-2xl border border-slate-100">
             <table className="w-full text-left text-sm">
@@ -177,14 +208,17 @@ export default function InvoicePreviewModal({
                     </td>
                   </tr>
                 ) : (
-                  items.map((item, idx) => (
-                    <tr key={idx} className="text-xs font-semibold text-slate-700">
-                      <td className="px-4 py-3">{item.product_name}</td>
-                      <td className="px-4 py-3 text-center">{item.quantity}</td>
-                      <td className="px-4 py-3 text-right">${Number(item.unit_price).toLocaleString('es-AR')}</td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-900">${(item.quantity * item.unit_price).toLocaleString('es-AR')}</td>
-                    </tr>
-                  ))
+                  items.map((item, idx) => {
+                    const price = (esRI && (tipoCbte === 1 || tipoCbte === 6) && addIva) ? (item.unit_price * 1.21) : item.unit_price;
+                    return (
+                      <tr key={idx} className="text-xs font-semibold text-slate-700">
+                        <td className="px-4 py-3">{item.product_name}</td>
+                        <td className="px-4 py-3 text-center">{item.quantity}</td>
+                        <td className="px-4 py-3 text-right">${Number(price).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-900">${(item.quantity * price).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -205,7 +239,7 @@ export default function InvoicePreviewModal({
                 <DollarSign size={18} />
                 <span className="text-sm font-black uppercase tracking-tight">Total ARCA</span>
               </div>
-              <span className="text-xl font-black">${totalAmount.toLocaleString('es-AR')}</span>
+              <span className="text-xl font-black">${finalTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
 
@@ -228,7 +262,7 @@ export default function InvoicePreviewModal({
             Cancelar
           </button>
           <button 
-            onClick={() => onConfirm(tipoCbte)}
+            onClick={() => onConfirm(tipoCbte, addIva)}
             disabled={isEmitting || loading}
             className="flex items-center gap-2 rounded-2xl bg-blue-600 px-8 py-3 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-500 active:scale-95 disabled:opacity-50"
           >

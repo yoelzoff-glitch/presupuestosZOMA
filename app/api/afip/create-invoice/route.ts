@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const keyPath = path.join(tempDir, `key_inv_${Date.now()}.key`)
 
   try {
-    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount } = await request.json()
+    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount, addIva } = await request.json()
     if (!budget_id) return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
 
     const supabaseAdmin = createSupabaseAdminClient()
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
     const esCuitValido = cuitLimpio.length === 11
     const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
-    const montoTotal = customAmount ? Number(customAmount) : Number(budget.total_amount)
+    let montoTotal = customAmount ? Number(customAmount) : Number(budget.total_amount);
 
     // Límite AFIP identificación (Aprox mayo 2024)
     const LIMITE_IDENTIFICACION = 191624
@@ -140,6 +140,11 @@ export async function POST(request: Request) {
       if (cbteTipo === 1) cbteTipo = 2   // Nota de Débito A
       else if (cbteTipo === 6) cbteTipo = 7   // Nota de Débito B
       else if (cbteTipo === 11) cbteTipo = 12 // Nota de Débito C
+    }
+
+    // Aplicar adición de IVA si addIva es true y corresponde
+    if (addIva && (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)) {
+      montoTotal = parseFloat((montoTotal * 1.21).toFixed(2));
     }
 
     // Validación final de montos según tipo de comprobante (A, B y C tienen límites)
@@ -267,12 +272,40 @@ export async function POST(request: Request) {
         .from('invoices')
         .update({
           status: 'emitted',
+          total_amount: montoTotal,
           afip_cae: cae,
           afip_cae_vencimiento: caeFchVto,
           afip_comprobante_numero: cbteNro,
           afip_comprobante_tipo: cbteTipo
         })
-        .eq('budget_id', budget_id)
+        .eq('budget_id', budget_id);
+
+      if (addIva) {
+        const { data: inv } = await supabaseAdmin
+          .from('invoices')
+          .select('id')
+          .eq('budget_id', budget_id)
+          .single();
+        
+        if (inv) {
+          const { data: items } = await supabaseAdmin
+            .from('invoice_items')
+            .select('*')
+            .eq('invoice_id', inv.id);
+          
+          if (items) {
+            for (const item of items) {
+              await supabaseAdmin
+                .from('invoice_items')
+                .update({
+                  unit_price: parseFloat((item.unit_price * 1.21).toFixed(2)),
+                  total: parseFloat((item.total * 1.21).toFixed(2))
+                })
+                .eq('id', item.id);
+            }
+          }
+        }
+      }
     }
 
     return NextResponse.json({

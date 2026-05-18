@@ -220,7 +220,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     }
   }
 
-  async function legalizarFactura(id: string, cbteTipoOverride?: number) {
+  async function legalizarFactura(id: string, cbteTipoOverride?: number, addIva?: boolean) {
     setProcesandoId(id)
     try {
       const response = await fetch('/api/afip/create-invoice', {
@@ -228,7 +228,8 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           budget_id: id,
-          cbteTipoOverride
+          cbteTipoOverride,
+          addIva
         }),
       })
 
@@ -560,9 +561,9 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
       <InvoicePreviewModal
         isOpen={modalPreview.isOpen}
         onClose={() => setModalPreview({ ...modalPreview, isOpen: false })}
-        onConfirm={(tipo) => {
+        onConfirm={(tipo, addIva) => {
           setModalPreview({ ...modalPreview, isOpen: false })
-          legalizarFactura(modalPreview.budgetId!, tipo)
+          legalizarFactura(modalPreview.budgetId!, tipo, addIva)
         }}
         budgetId={modalPreview.budgetId || ''}
         clientName={modalPreview.clientName}

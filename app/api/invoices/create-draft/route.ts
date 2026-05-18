@@ -4,7 +4,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/server'
 export async function POST(request: Request) {
   try {
     const supabase = createSupabaseAdminClient()
-    const { budget_id, cbteTipo } = await request.json()
+    const { budget_id, cbteTipo, addIva } = await request.json()
 
     if (!budget_id) {
       return NextResponse.json({ success: false, error: 'Budget ID is required' }, { status: 400 })
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
         company_id: budget.company_id,
         client_id: budget.client_id,
         budget_id: budget.id,
-        total_amount: budget.total_amount,
+        total_amount: addIva ? parseFloat((budget.total_amount * 1.21).toFixed(2)) : budget.total_amount,
         status: 'draft',
         afip_comprobante_tipo: cbteTipo,
         invoice_date: new Date().toISOString().split('T')[0]
@@ -63,8 +63,8 @@ export async function POST(request: Request) {
       product_name: item.product_name,
       product_code: item.product_code,
       quantity: item.quantity,
-      unit_price: item.unit_price,
-      total: item.total
+      unit_price: addIva ? parseFloat((item.unit_price * 1.21).toFixed(2)) : item.unit_price,
+      total: addIva ? parseFloat((item.total * 1.21).toFixed(2)) : item.total
     }))
 
     const { error: itemsError } = await supabase
