@@ -76,7 +76,7 @@ export default function PrivacidadPage() {
                 2. Seguridad y Encriptación
               </h2>
               <p>
-                Tus credenciales impositivas de AFIP (archivos .crt y .key) y las contraseñas de acceso al sistema se almacenan de manera encriptada y bajo medidas estrictas de ciberseguridad, asegurando un canal de conexión infranqueable y privado.
+                Tus credenciales impositivas de ARCA (archivos .crt y .key) y las contraseñas de acceso al sistema se almacenan de manera encriptada y bajo medidas estrictas de ciberseguridad, asegurando un canal de conexión infranqueable y privado.
               </p>
             </section>
 
