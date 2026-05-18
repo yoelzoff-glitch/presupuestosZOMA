@@ -32,15 +32,15 @@ type AppShellProps = {
 }
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'Inicio' },
-  { href: '/clientes', label: 'Clientes', icon: Users, section: 'Ventas' },
-  { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet, section: 'Ventas' },
-  { href: '/productos', label: 'Productos', icon: Package, section: 'Catálogo & Stock' },
-  { href: '/inventario', label: 'Inventario', icon: Boxes, section: 'Catálogo & Stock', isProFeature: true },
-  { href: '/presupuestos', label: 'Presupuestos', icon: FileText, section: 'Documentos' },
-  { href: '/pedidos', label: 'Pedidos', icon: ClipboardList, section: 'Documentos' },
-  { href: '/facturas', label: 'Facturas', icon: Receipt, section: 'Documentos' },
-  { href: '/contador', label: 'Portal Contable 👔', icon: ShieldCheck, section: 'Administración' },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/clientes', label: 'Clientes', icon: Users },
+  { href: '/productos', label: 'Productos', icon: Package },
+  { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
+  { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
+  { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
+  { href: '/facturas', label: 'Facturas', icon: Receipt },
+  { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
+  { href: '/contador', label: 'Portal Contable 👔', icon: ShieldCheck },
 ]
 
 function getPageTitle(pathname: string) {
@@ -130,9 +130,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   let finalNavItems = []
   if (isContador) {
     finalNavItems = [
-      { href: '/contador', label: 'Portal del Contador 👔', icon: ShieldCheck, section: 'Administración' },
-      { href: '/facturas', label: 'Facturas', icon: Receipt, section: 'Documentos' },
-      { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet, section: 'Ventas' },
+      { href: '/contador', label: 'Portal del Contador 👔', icon: ShieldCheck },
+      { href: '/facturas', label: 'Facturas', icon: Receipt },
+      { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
     ]
   } else if (isAdmin) {
     finalNavItems = baseNavItems.map(item => item)
@@ -142,7 +142,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         href: '/vendedores',
         label: 'Vendedores',
         icon: Users,
-        section: 'Ventas',
         isProFeature: true
       })
     }
@@ -152,7 +151,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   // Only Yoel sees Super Admin
   if (isSuperAdmin) {
-    finalNavItems = [...finalNavItems.filter(i => i.href !== '/superadmin'), { href: '/superadmin', label: 'Super Admin', icon: ShieldCheck, section: 'Administración' }]
+    finalNavItems = [...finalNavItems.filter(i => i.href !== '/superadmin'), { href: '/superadmin', label: 'Super Admin', icon: ShieldCheck }]
   }
 
   return (
@@ -202,67 +201,53 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-4 px-3 py-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <nav className="flex-1 space-y-0.5 px-3 py-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {loading ? (
           <div className="flex justify-center p-8">
             <Loader2 className="animate-spin text-slate-700" size={20} />
           </div>
         ) : (
-          ['Inicio', 'Ventas', 'Catálogo & Stock', 'Documentos', 'Administración'].map((sectionName) => {
-            const items = finalNavItems.filter(item => (item.section || 'Inicio') === sectionName)
-            if (items.length === 0) return null
+          finalNavItems.map((item) => {
+            const Icon = item.icon
+            const active = isActiveRoute(pathname, item.href)
 
             return (
-              <div key={sectionName} className="space-y-1">
-                <p className="px-3 text-[9px] font-black uppercase tracking-[0.25em] text-slate-500 mb-1.5">
-                  {sectionName}
-                </p>
-                <div className="space-y-0.5">
-                  {items.map((item) => {
-                    const Icon = item.icon
-                    const active = isActiveRoute(pathname, item.href)
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                className={`group relative flex items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-bold transition-all duration-300 ${active
+                    ? 'bg-blue-600/10 text-white'
+                    : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
+                  }`}
+              >
+                {active && (
+                  <div className="absolute left-0 h-5 w-1 rounded-r-full bg-blue-500" />
+                )}
 
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={onNavigate}
-                        className={`group relative flex items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-bold transition-all duration-300 ${active
-                            ? 'bg-blue-600/10 text-white'
-                            : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
-                          }`}
-                      >
-                        {active && (
-                          <div className="absolute left-0 h-5 w-1 rounded-r-full bg-blue-500" />
-                        )}
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 ${active
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                      : 'bg-white/[0.03] text-slate-500 group-hover:bg-white/[0.08] group-hover:text-slate-300'
+                    }`}
+                >
+                  <Icon size={16} strokeWidth={2.5} />
+                </span>
 
-                        <span
-                          className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 ${active
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                              : 'bg-white/[0.03] text-slate-500 group-hover:bg-white/[0.08] group-hover:text-slate-300'
-                            }`}
-                        >
-                          <Icon size={16} strokeWidth={2.5} />
-                        </span>
+                <span className="flex-1 tracking-tight">{item.label}</span>
 
-                        <span className="flex-1 tracking-tight">{item.label}</span>
+                {(item as any).isProFeature && !isPro && (
+                  <span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-500 ring-1 ring-blue-500/20">
+                    PRO
+                  </span>
+                )}
 
-                        {(item as any).isProFeature && !isPro && (
-                          <span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-500 ring-1 ring-blue-500/20">
-                            PRO
-                          </span>
-                        )}
-
-                        {(item as any).isUltraFeature && planType !== 'ultra' && (
-                          <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-purple-400 ring-1 ring-purple-500/20">
-                            ULTRA
-                          </span>
-                        )}
-                      </Link>
-                    )
-                  })}
-                </div>
-              </div>
+                {(item as any).isUltraFeature && planType !== 'ultra' && (
+                  <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-purple-400 ring-1 ring-purple-500/20">
+                    ULTRA
+                  </span>
+                )}
+              </Link>
             )
           })
         )}
