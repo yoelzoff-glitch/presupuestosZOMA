@@ -24,6 +24,7 @@ export default function ConfigFiscalPage() {
   const [saving, setSaving] = useState(false)
   const [isEditingCreds, setIsEditingCreds] = useState(true)
   const [testing, setTesting] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [config, setConfig] = useState({
     cuit: '',
     tipo_contribuyente: 'monotributo',
@@ -72,9 +73,13 @@ export default function ConfigFiscalPage() {
         // Obtenemos el profile para saber el company_id y validar el plan
         const { data: profile } = await supabase
           .from('users_profiles')
-          .select('company_id, company:companies(plan_type)')
+          .select('company_id, role, company:companies(plan_type)')
           .eq('id', user.id)
           .single()
+
+        if (profile) {
+          setUserRole(profile.role)
+        }
 
         if (profile?.company_id) {
           const { data: afipConfig } = await supabase
@@ -222,11 +227,18 @@ export default function ConfigFiscalPage() {
                 <span className="text-xs font-bold text-amber-900">Modo Testing (Homologación)</span>
                 <input 
                   type="checkbox"
+                  disabled={userRole !== 'super_admin'}
                   checked={config.is_sandbox}
                   onChange={(e) => setConfig({...config, is_sandbox: e.target.checked})}
-                  className="w-5 h-5 accent-amber-600"
+                  className="w-5 h-5 accent-amber-600 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
                 />
              </div>
+             {userRole !== 'super_admin' && (
+                <p className="mt-3 text-[10px] font-bold text-amber-700/80 leading-normal flex items-start gap-1">
+                  <span>⚠️</span>
+                  <span>Solo los administradores de ZOMA pueden cambiar el entorno del sistema.</span>
+                </p>
+             )}
              <p className="mt-4 text-[11px] font-medium text-amber-800 leading-relaxed">
                Recomendamos probar siempre en modo Testing antes de pasar a Producción para evitar facturas legales erróneas.
              </p>
