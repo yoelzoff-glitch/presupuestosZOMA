@@ -361,15 +361,45 @@ async function handleWebhook(req: NextRequest) {
 
     const mpUserId = body?.user_id || url.searchParams.get('user_id')
 
-    console.log(`📡 Webhook recibido - Topic: ${topic}, ID: ${paymentId}`);
+    console.log(`📡 Webhook recibido - Topic: ${topic}, ID: ${paymentId}, MP User ID: ${mpUserId || 'No provisto'}`);
 
-    // 4. Buscar todas las cuentas de Mercado Pago conectadas
-    const { data: mpAccounts } = await supabaseAdmin
-      .from('mp_accounts')
-      .select('*')
-      .eq('connected', true)
+    let mpAccounts: any[] = []
 
-    if (!mpAccounts || mpAccounts.length === 0) {
+    // 4. Búsqueda directa optimizada mediante mp_user_id para evitar loops y timeouts
+    if (mpUserId) {
+      console.log(`🔍 Buscando cuenta conectada directa para mp_user_id: ${mpUserId}...`);
+      const { data: directAccounts, error: directError } = await supabaseAdmin
+        .from('mp_accounts')
+        .select('*')
+        .eq('mp_user_id', String(mpUserId))
+        .eq('connected', true)
+
+      if (directError) {
+        console.error('❌ Error al consultar cuenta directa por mp_user_id:', directError)
+      } else if (directAccounts && directAccounts.length > 0) {
+        mpAccounts = directAccounts
+        console.log(`🎯 Encontrada cuenta directa para mp_user_id: ${mpUserId}. Empresa vinculada: ${mpAccounts[0].company_id}`)
+      } else {
+        console.log(`⚠️ No se encontró ninguna cuenta conectada con mp_user_id: ${mpUserId}`)
+      }
+    }
+
+    // Fallback defensivo: Si no viene mp_user_id o no se encontró la cuenta directa, buscamos en todas las conectadas
+    if (mpAccounts.length === 0) {
+      console.log(`⚠️ Iniciando búsqueda secuencial fallback en todas las cuentas activas...`);
+      const { data: allAccounts, error: allAccountsError } = await supabaseAdmin
+        .from('mp_accounts')
+        .select('*')
+        .eq('connected', true)
+
+      if (allAccountsError) {
+        console.error('❌ Error al obtener todas las cuentas de Mercado Pago:', allAccountsError)
+      } else {
+        mpAccounts = allAccounts || []
+      }
+    }
+
+    if (mpAccounts.length === 0) {
       console.error('❌ No hay cuentas de Mercado Pago conectadas (mp_accounts) en la base de datos');
       return NextResponse.json({ received: true, message: 'No accounts connected' })
     }
@@ -393,9 +423,12 @@ async function handleWebhook(req: NextRequest) {
           continue;
         }
 
+        // Obtener o refrescar el token de forma automática para evitar fallos de expiración
+        const validToken = await getValidMercadoPagoAccessToken(account.company_id) || account.access_token;
+
         const response = await fetch(endpoint, {
           headers: {
-            Authorization: `Bearer ${account.access_token}`,
+            Authorization: `Bearer ${validToken}`,
           },
         })
 
