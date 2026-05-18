@@ -30,7 +30,7 @@ export default function VerFacturaPage() {
         clients ( name, cuit, address, email ),
         budget_items ( * ),
         companies ( name, cuit, address, logo_url ),
-        invoices ( id, afip_comprobante_tipo, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date )
+        invoices ( id, afip_comprobante_tipo, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, invoice_items ( * ) )
       `)
          .eq('id', id)
          .single()
@@ -42,24 +42,30 @@ export default function VerFacturaPage() {
       }
 
       let finalBudget = { ...budgetData }
+      let activeInvoice = null
 
       if (invoiceId) {
-         const { data: invoiceData, error: invoiceError } = await supabase
-            .from('invoices')
-            .select('*')
-            .eq('id', invoiceId)
-            .single()
+         const found = budgetData.invoices?.find((i: any) => i.id === invoiceId)
+         if (found) {
+            activeInvoice = found
+         }
+      } else if (budgetData.invoices && budgetData.invoices.length > 0) {
+         activeInvoice = budgetData.invoices[0]
+      }
 
-         if (!invoiceError && invoiceData) {
-            finalBudget.afip_cae = invoiceData.afip_cae
-            finalBudget.afip_cae_vencimiento = invoiceData.afip_cae_vencimiento
-            finalBudget.afip_comprobante_numero = invoiceData.afip_comprobante_numero
-            finalBudget.afip_comprobante_tipo = invoiceData.afip_comprobante_tipo
-            finalBudget.total_amount = invoiceData.total_amount
-            if (invoiceData.invoice_date) {
-               finalBudget.budget_date = invoiceData.invoice_date
-            }
-            finalBudget.selected_invoice = invoiceData
+      if (activeInvoice) {
+         finalBudget.afip_cae = activeInvoice.afip_cae
+         finalBudget.afip_cae_vencimiento = activeInvoice.afip_cae_vencimiento
+         finalBudget.afip_comprobante_numero = activeInvoice.afip_comprobante_numero
+         finalBudget.afip_comprobante_tipo = activeInvoice.afip_comprobante_tipo
+         finalBudget.total_amount = activeInvoice.total_amount
+         if (activeInvoice.invoice_date) {
+            finalBudget.budget_date = activeInvoice.invoice_date
+         }
+         finalBudget.selected_invoice = activeInvoice
+
+         if (activeInvoice.invoice_items && activeInvoice.invoice_items.length > 0) {
+            finalBudget.budget_items = activeInvoice.invoice_items
          }
       }
 
