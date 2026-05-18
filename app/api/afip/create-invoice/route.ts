@@ -50,6 +50,14 @@ export async function POST(request: Request) {
 
     const client = Array.isArray(budget.clients) ? budget.clients[0] : budget.clients
 
+    // Obtener la factura borrador existente (si existe)
+    const { data: existingDraft } = await supabaseAdmin
+      .from('invoices')
+      .select('*')
+      .eq('budget_id', budget_id)
+      .eq('status', 'draft')
+      .maybeSingle()
+
     // 2. Obtener config fiscal
     const { data: config, error: cError } = await supabaseAdmin
       .from('afip_configs')
@@ -76,7 +84,9 @@ export async function POST(request: Request) {
     const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
     const esCuitValido = cuitLimpio.length === 11
     const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
-    let montoTotal = customAmount ? Number(customAmount) : Number(budget.total_amount);
+    let montoTotal = customAmount 
+      ? Number(customAmount) 
+      : (existingDraft ? Number(existingDraft.total_amount) : Number(budget.total_amount));
 
     // Límite AFIP identificación (Aprox mayo 2024)
     const LIMITE_IDENTIFICACION = 191624
@@ -142,8 +152,8 @@ export async function POST(request: Request) {
       else if (cbteTipo === 11) cbteTipo = 12 // Nota de Débito C
     }
 
-    // Aplicar adición de IVA si addIva es true y corresponde
-    if (addIva && (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)) {
+    // Aplicar adición de IVA si addIva es true, corresponde y no hay borrador previo ya calculado
+    if (addIva && !existingDraft && (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)) {
       montoTotal = parseFloat((montoTotal * 1.21).toFixed(2));
     }
 
@@ -280,7 +290,7 @@ export async function POST(request: Request) {
         })
         .eq('budget_id', budget_id);
 
-      if (addIva) {
+      if (addIva && !existingDraft) {
         const { data: inv } = await supabaseAdmin
           .from('invoices')
           .select('id')
