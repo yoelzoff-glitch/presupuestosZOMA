@@ -152,8 +152,8 @@ export default function LandingPage() {
       )
     },
     {
-      title: "3. Factura Electrónica AFIP",
-      description: "¡No escribas dos veces la información! Con un solo clic, ZOMA se conecta de forma segura con la AFIP para autorizar y generar tu factura electrónica al instante.",
+      title: "3. Factura Electrónica ARCA",
+      description: "¡No escribas dos veces la información! Con un solo clic, ZOMA se conecta de forma segura con ARCA para autorizar y generar tu factura electrónica al instante.",
       badge: "100% Legal",
       icon: ShieldCheck,
       color: "from-violet-600 to-purple-600",
@@ -292,7 +292,7 @@ export default function LandingPage() {
               <p 
                 className="text-lg md:text-xl text-slate-400 font-medium max-w-3xl mx-auto mb-12 leading-relaxed"
               >
-                ZOMA une todo lo que tu negocio necesita: hacé presupuestos profesionales, sabé cuándo los leen, generá facturas electrónicas AFIP en un clic e imprimí tus remitos físicos a la perfección.
+                ZOMA une todo lo que tu negocio necesita: hacé presupuestos profesionales, sabé cuándo los leen, generá facturas electrónicas ARCA en un clic e imprimí tus remitos físicos a la perfección.
               </p>
 
               {/* Call to Actions */}
@@ -324,7 +324,7 @@ export default function LandingPage() {
               >
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
                   <ShieldCheck size={16} className="text-emerald-400" />
-                  <span>Facturas AFIP en 1 clic</span>
+                  <span>Facturas ARCA en 1 clic</span>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
                   <Eye size={16} className="text-indigo-400" />
@@ -437,11 +437,11 @@ export default function LandingPage() {
                     </div>
                     <h3 className="text-2xl font-black mb-4 tracking-tight">Facturación en 1 Clic</h3>
                     <p className="text-slate-400 font-medium text-sm leading-relaxed">
-                      Olvidate de ingresar a la lenta web de AFIP. Generá facturas oficiales A, B y C firmadas directamente por el sistema en un solo clic.
+                      Olvidate de ingresar a la lenta web de ARCA. Generá facturas oficiales A, B y C firmadas directamente por el sistema en un solo clic.
                     </p>
                   </div>
                   <div className="bg-indigo-500/10 text-indigo-300 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-indigo-500/20 w-fit">
-                    Homologado AFIP
+                    Homologado ARCA
                   </div>
                 </div>
                 {/* Visual grid blur effect */}
@@ -546,7 +546,7 @@ export default function LandingPage() {
                 active={activeTab === 'afip'} 
                 onClick={() => setActiveTab('afip')}
                 icon={ShieldCheck} 
-                label="Factura AFIP" 
+                label="Factura ARCA" 
               />
               <TabButton 
                 active={activeTab === 'remitos'} 
@@ -647,10 +647,10 @@ export default function LandingPage() {
                       Facturación en 1 Clic
                     </span>
                     <h3 className="text-3xl font-black text-white mb-5 leading-tight">
-                      Facturas oficiales de AFIP sin dar vueltas
+                      Facturas oficiales de ARCA sin dar vueltas
                     </h3>
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
-                      El sistema calcula los impuestos y define si corresponde Factura A, B o C según el cliente de forma automática. Además, te avisa si el monto supera el límite permitido por AFIP para facturar a clientes sin registrar.
+                      El sistema calcula los impuestos y define si corresponde Factura A, B o C según el cliente de forma automática. Además, te avisa si el monto supera el límite permitido por ARCA para facturar a clientes sin registrar.
                     </p>
                     
                     <div className="space-y-4">
@@ -733,11 +733,11 @@ export default function LandingPage() {
                     {/* AFIP Rule Validation Alert */}
                     {invoiceAmount > 191624 && clientType === 'final' ? (
                       <div className="bg-rose-50 border border-rose-200 text-rose-800 font-bold p-3 rounded-2xl text-[10px] leading-relaxed">
-                        ⚠️ **Alerta AFIP:** El monto supera los **$191.624**. Por normativa legal, es obligatorio identificar al cliente con DNI o CUIT.
+                        ⚠️ **Alerta ARCA:** El monto supera los **$191.624**. Por normativa legal, es obligatorio identificar al cliente con DNI o CUIT.
                       </div>
                     ) : (
                       <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold p-3 rounded-2xl text-[10px]">
-                        ✓ El presupuesto cumple con las normas de AFIP para facturar de forma directa.
+                        ✓ El presupuesto cumple con las normas de ARCA para facturar de forma directa.
                       </div>
                     )}
                   </div>
@@ -1056,8 +1056,8 @@ export default function LandingPage() {
                   />
                   <TechDetailRow 
                     icon={Cpu} 
-                    title="Alertas de montos AFIP" 
-                    text="El sistema te avisa al instante si una factura supera el límite permitido por la AFIP para clientes sin registrar, evitando cualquier infracción." 
+                    title="Alertas de montos ARCA" 
+                    text="El sistema te avisa al instante si una factura supera el límite permitido por ARCA para clientes sin registrar, evitando cualquier infracción." 
                   />
                 </div>
               </div>
@@ -1131,7 +1131,7 @@ export default function LandingPage() {
                 price="80.000"
                 description="Organiza tus presupuestos, deudas y facturación fiscal al instante."
                 features={[
-                  "Facturación electrónica AFIP (A, B y C)",
+                  "Facturación electrónica ARCA (A, B y C)",
                   "Buscador automático de clientes por CUIT",
                   "Presupuestos profesionales en PDF o Web",
                   "Control de deudas y pagos (Cuentas Corrientes)",
@@ -1183,8 +1183,8 @@ export default function LandingPage() {
                 toggle={() => setOpenFaqIndex(openFaqIndex === 0 ? null : 0)}
               />
               <FaqItem 
-                question="¿La facturación directa de AFIP requiere que yo suba mi certificado digital?"
-                answer="Sí. Para poder emitir facturas electrónicas oficiales en ZOMA, AFIP exige asociar un certificado digital (archivos .crt y .key) que generás de forma gratuita en su web. ZOMA se encarga de conectar esos archivos de forma segura para autorizar tus facturas al instante y sin dar vueltas."
+                question="¿La facturación directa de ARCA requiere que yo suba mi certificado digital?"
+                answer="Sí. Para poder emitir facturas electrónicas oficiales en ZOMA, ARCA exige asociar un certificado digital (archivos .crt y .key) que generás de forma gratuita en su web. ZOMA se encarga de conectar esos archivos de forma segura para autorizar tus facturas al instante y sin dar vueltas."
                 isOpen={openFaqIndex === 1}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 1 ? null : 1)}
               />
@@ -1202,7 +1202,7 @@ export default function LandingPage() {
               />
               <FaqItem 
                 question="¿Qué validez tiene el control de vencimiento del C.A.I. en los remitos?"
-                answer="Los talonarios de remitos físicos tienen una fecha de vencimiento que te otorga la AFIP (el número de C.A.I.). Si emitís un remito vencido, podés tener problemas legales o multas. ZOMA controla esa fecha por vos de forma automática y te avisa con anticipación para que nunca imprimas un comprobante vencido sin querer."
+                answer="Los talonarios de remitos físicos tienen una fecha de vencimiento que te otorga ARCA (el número de C.A.I.). Si emitís un remito vencido, podés tener problemas legales o multas. ZOMA controla esa fecha por vos de forma automática y te avisa con anticipación para que nunca imprimas un comprobante vencido sin querer."
                 isOpen={openFaqIndex === 4}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 4 ? null : 4)}
               />
@@ -1287,7 +1287,7 @@ export default function LandingPage() {
                     }} 
                     className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
                   >
-                    Facturación AFIP (ARCA)
+                    Facturación ARCA
                   </button>
                 </li>
                 <li>
@@ -1328,7 +1328,7 @@ export default function LandingPage() {
             <div>
               <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-6">Regulación Argentina</h4>
               <ul className="space-y-3.5 text-xs font-bold text-slate-400">
-                <li><span className="text-slate-500 font-medium block leading-relaxed">Conexión Homologada a servidores ARCA. Liquidación con estándares de normativa fiscal AFIP 2026.</span></li>
+                <li><span className="text-slate-500 font-medium block leading-relaxed">Conexión Homologada a servidores ARCA. Liquidación con estándares de normativa fiscal ARCA 2026.</span></li>
               </ul>
             </div>
 
@@ -1519,7 +1519,7 @@ function PricingCard({ title, price, description, features, popular, badge, orig
         popular 
           ? 'border-indigo-600 bg-slate-900 shadow-[0_30px_60px_-15px_rgba(99,102,241,0.15)] ring-1 ring-indigo-600/10' 
           : 'border-slate-900 bg-slate-950'
-      } relative overflow-hidden transition-all duration-500 hover:scale-[1.02] flex flex-col justify-between`}
+      } relative transition-all duration-500 hover:scale-[1.02] flex flex-col justify-between`}
     >
       {badge && (
         <div className="absolute top-0 right-10 -translate-y-1/2 rounded-full bg-indigo-600 px-4 py-1.5 text-[8px] font-black uppercase tracking-[0.2em] text-white">

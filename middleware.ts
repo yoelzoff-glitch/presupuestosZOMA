@@ -52,10 +52,14 @@ export async function middleware(request: NextRequest) {
   const esPaginaPortal = rutaActual.startsWith('/portal')
   const esPaginaVendedor = rutaActual.startsWith('/vendedor')
   const esPaginaSuperAdmin = rutaActual.startsWith('/superadmin')
-  const esPaginaPublica = rutaActual.startsWith('/p/') || rutaActual === '/'
+  const rutasPublicas = ['/sobre-nosotros', '/terminos', '/privacidad', '/contacto']
+  const esPaginaPublica =
+    rutaActual.startsWith('/p/') ||
+    rutaActual === '/' ||
+    rutasPublicas.some(path => rutaActual === path || rutaActual.startsWith(path + '/'))
 
-  // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal, vendedor o superadmin
-  const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor && !esPaginaSuperAdmin
+  // Rutas exclusivas de Admin: todo lo que no sea auth, api, portal, vendedor, superadmin o pública
+  const esRutaAdmin = !esPaginaAuth && !esPaginaApi && !esPaginaPortal && !esPaginaVendedor && !esPaginaSuperAdmin && !esPaginaPublica
 
   // Permitir API routes sin middleware (manejan su propia seguridad)
   if (esPaginaApi) return respuesta
@@ -119,8 +123,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // El Cliente (customer) solo puede entrar a /portal
-    if (rol === 'customer' && !esPaginaPortal) {
+    // El Cliente (customer) solo puede entrar a /portal o páginas públicas
+    if (rol === 'customer' && !esPaginaPortal && !esPaginaPublica) {
       const url = request.nextUrl.clone()
       url.pathname = '/portal'
       return NextResponse.redirect(url)

@@ -76,7 +76,7 @@ export default function TerminosPublicosPage() {
                 2. Descripción del Servicio
               </h2>
               <p>
-                ZOMA provee un software integrado en la nube enfocado en la gestión comercial y presupuestos. Las herramientas de ZOMA incluyen la creación de presupuestos, facturación electrónica homologada por AFIP/ARCA, alineación de remitos físicos, control de cuentas corrientes y cálculo de comisiones.
+                ZOMA provee un software integrado en la nube enfocado en la gestión comercial y presupuestos. Las herramientas de ZOMA incluyen la creación de presupuestos, facturación electrónica homologada por ARCA, alineación de remitos físicos, control de cuentas corrientes y cálculo de comisiones.
               </p>
             </section>
 
