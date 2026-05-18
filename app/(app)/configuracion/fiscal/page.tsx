@@ -11,7 +11,8 @@ import {
   Settings2,
   CheckCircle2,
   Database,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -19,6 +20,7 @@ import { toast } from 'sonner'
 export default function ConfigFiscalPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [isEditingCreds, setIsEditingCreds] = useState(true)
   const [testing, setTesting] = useState(false)
   const [config, setConfig] = useState({
     cuit: '',
@@ -88,6 +90,13 @@ export default function ConfigFiscalPage() {
               key_content: afipConfig.key_content || '',
               is_sandbox: afipConfig.is_sandbox ?? true
             })
+            if (afipConfig.cert_content && afipConfig.key_content) {
+              setIsEditingCreds(false)
+            } else {
+              setIsEditingCreds(true)
+            }
+          } else {
+            setIsEditingCreds(true)
           }
         }
       }
@@ -125,6 +134,7 @@ export default function ConfigFiscalPage() {
 
       if (error) throw error
       toast.success('Configuración fiscal guardada correctamente')
+      setIsEditingCreds(false)
     } catch (error: any) {
       toast.error('Error al guardar: ' + error.message)
     } finally {
@@ -235,34 +245,88 @@ export default function ConfigFiscalPage() {
             </div>
 
             <div className="space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Contenido del Certificado (.crt)</label>
-                  <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black">-----BEGIN CERTIFICATE-----</span>
+            {!isEditingCreds ? (
+              <div className="space-y-6">
+                <div className="border border-slate-100 rounded-2xl p-6 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                      <CheckCircle2 size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-slate-800 uppercase tracking-wide">Certificado Digital (.crt)</p>
+                      <p className="text-[11px] font-semibold text-emerald-600">Cargado y activo correctamente en ZOMA</p>
+                    </div>
+                  </div>
+                  <span className="text-[9px] bg-slate-100 text-slate-500 font-mono px-3 py-1 rounded-lg border border-slate-200 self-start sm:self-auto">
+                    ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+                  </span>
                 </div>
-                <textarea
-                  placeholder="Pegá aquí el contenido de tu archivo .crt"
-                  value={config.cert_content}
-                  onChange={(e) => setConfig({ ...config, cert_content: e.target.value })}
-                  className="w-full h-40 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-[11px] font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-                />
-              </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Contenido de la Clave Privada (.key)</label>
-                  <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-black">-----BEGIN PRIVATE KEY-----</span>
+                <div className="border border-slate-100 rounded-2xl p-6 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                      <CheckCircle2 size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-slate-800 uppercase tracking-wide">Clave Privada (.key)</p>
+                      <p className="text-[11px] font-semibold text-emerald-600">Cargada y activa correctamente en ZOMA</p>
+                    </div>
+                  </div>
+                  <span className="text-[9px] bg-slate-100 text-slate-500 font-mono px-3 py-1 rounded-lg border border-slate-200 self-start sm:self-auto">
+                    ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+                  </span>
                 </div>
-                <textarea
-                  placeholder="Pegá aquí el contenido de tu archivo .key"
-                  value={config.key_content}
-                  onChange={(e) => setConfig({ ...config, key_content: e.target.value })}
-                  className="w-full h-40 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-[11px] font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-                />
-              </div>
-            </div>
 
-            <div className="bg-slate-50 rounded-2xl p-6 flex items-start gap-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingCreds(true)}
+                  className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/20 text-slate-500 hover:text-blue-600 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300"
+                >
+                  <RefreshCw size={14} /> Reemplazar Credenciales Digitales
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6 flex flex-col w-full">
+                {config.cert_content && config.key_content && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingCreds(false)}
+                    className="text-xs font-black text-slate-400 hover:text-slate-600 transition-all uppercase tracking-wider self-end mb-2"
+                  >
+                    Cancelar Edición
+                  </button>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Contenido del Certificado (.crt)</label>
+                    <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black">-----BEGIN CERTIFICATE-----</span>
+                  </div>
+                  <textarea
+                    placeholder="Pegá aquí el contenido de tu archivo .crt"
+                    value={config.cert_content}
+                    onChange={(e) => setConfig({ ...config, cert_content: e.target.value })}
+                    className="w-full h-40 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-[11px] font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Contenido de la Clave Privada (.key)</label>
+                    <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-black">-----BEGIN PRIVATE KEY-----</span>
+                  </div>
+                  <textarea
+                    placeholder="Pegá aquí el contenido de tu archivo .key"
+                    value={config.key_content}
+                    onChange={(e) => setConfig({ ...config, key_content: e.target.value })}
+                    className="w-full h-40 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-4 text-[11px] font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="bg-slate-50 rounded-2xl p-6 flex items-start gap-4">
                <ShieldCheck className="text-slate-400 shrink-0" size={20} />
                <p className="text-xs font-medium text-slate-500 leading-relaxed">
                   Tus certificados se almacenan de forma segura y solo se utilizan para firmar las peticiones ante ARCA. ZOMA nunca compartirá estas credenciales.
