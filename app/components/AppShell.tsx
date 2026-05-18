@@ -40,7 +40,7 @@ const navItems = [
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
-  { href: '/contador', label: 'Portal del Contador 👔', icon: ShieldCheck },
+  { href: '/contador', label: 'Portal Contable 👔', icon: ShieldCheck },
 ]
 
 function getPageTitle(pathname: string) {
@@ -95,7 +95,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             .select('role, company:companies(name, plan_type, enable_stock_module, logo_url)')
             .eq('id', user.id)
             .single()
-          
+
           // Seteamos el perfil. Si no hay data (error), igual guardamos el email para el check de Super Admin
           setProfile({ ...(data || {}), email: user.email })
         }
@@ -151,9 +151,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex items-center gap-3.5">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 p-1 shadow-xl ring-1 ring-white/10">
             {profile?.company?.logo_url ? (
-              <img 
-                src={profile.company.logo_url} 
-                alt="Logo" 
+              <img
+                src={profile.company.logo_url}
+                alt="Logo"
                 className="h-full w-full object-contain rounded-lg"
               />
             ) : (
@@ -178,13 +178,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </p>
             {planType && (
               <div className="mt-1.5">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${
-                  planType === 'ultra'
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${planType === 'ultra'
                     ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[0_0_12px_rgba(168,85,247,0.1)]'
                     : planType === 'pro' || planType === 'pro_plus'
                       ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.1)]'
                       : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                }`}>
+                  }`}>
                   PLAN {planType === 'pro_plus' ? 'PRO+' : planType}
                 </span>
               </div>
@@ -208,22 +207,20 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
-                className={`group relative flex items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-bold transition-all duration-300 ${
-                  active
+                className={`group relative flex items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-bold transition-all duration-300 ${active
                     ? 'bg-blue-600/10 text-white'
                     : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
-                }`}
+                  }`}
               >
                 {active && (
                   <div className="absolute left-0 h-5 w-1 rounded-r-full bg-blue-500" />
                 )}
 
                 <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 ${
-                    active
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 ${active
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                       : 'bg-white/[0.03] text-slate-500 group-hover:bg-white/[0.08] group-hover:text-slate-300'
-                  }`}
+                    }`}
                 >
                   <Icon size={16} strokeWidth={2.5} />
                 </span>
@@ -295,9 +292,9 @@ export default function AppShell({ children }: AppShellProps) {
           .select('role, company_id, company:companies(plan_type, subscription_expiry)')
           .eq('id', user.id)
           .single()
-        
+
         setUserRole(data?.role || null)
-        
+
         if (data?.role === 'vendedor') {
           // Si es vendedor, FUERA de (app)
           router.push('/vendedor')
@@ -306,7 +303,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         const company = data?.company as any
         setPlanType(company?.plan_type || 'base')
-        
+
         if (company?.subscription_expiry) {
           const hoy = new Date()
           const vencimiento = new Date(company.subscription_expiry)
@@ -338,9 +335,8 @@ export default function AppShell({ children }: AppShellProps) {
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen w-80 max-w-[86vw] border-r border-white/10 bg-slate-950 text-white shadow-2xl transition-transform duration-300 lg:hidden print:hidden ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed left-0 top-0 z-50 h-screen w-80 max-w-[86vw] border-r border-white/10 bg-slate-950 text-white shadow-2xl transition-transform duration-300 lg:hidden print:hidden ${mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <div className="absolute right-4 top-4">
           <button
@@ -383,19 +379,18 @@ export default function AppShell({ children }: AppShellProps) {
               {diasRestantes !== null && diasRestantes <= 15 && (
                 <Link
                   href="/configuracion/suscripcion"
-                  className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${
-                    diasRestantes <= 0 
-                      ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' 
+                  className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${diasRestantes <= 0
+                      ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
                       : diasRestantes <= 3
                         ? 'bg-amber-50 border-amber-200 text-amber-700'
                         : 'bg-blue-50 border-blue-100 text-blue-600'
-                  }`}
+                    }`}
                 >
                   <Clock size={14} />
-                  {diasRestantes < 0 
-                    ? 'Suscripción Vencida' 
-                    : diasRestantes === 0 
-                      ? 'Vence hoy' 
+                  {diasRestantes < 0
+                    ? 'Suscripción Vencida'
+                    : diasRestantes === 0
+                      ? 'Vence hoy'
                       : `Quedan ${diasRestantes} días`}
                 </Link>
               )}

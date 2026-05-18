@@ -68,6 +68,9 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     factura: null
   })
 
+  const [esCorreccionParcial, setEsCorreccionParcial] = useState(false)
+  const [montoPersonalizado, setMontoPersonalizado] = useState('')
+
   async function cargarFacturas(
     dias: number | 'all' | 'month' | 'custom' = filtroTiempo,
     customDesde = fechaDesdeCustom,
@@ -440,7 +443,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                       )}
                       {f.status === 'emitted' && (
                         <Link
-                          href={`/facturas/ver/${f.budget_id}`}
+                          href={`/facturas/ver/${f.budget_id}?invoice_id=${f.id}`}
                           className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition"
                           title="Ver / Imprimir"
                         >
@@ -454,13 +457,13 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                         >
                           <MoreVertical size={16} />
                         </button>
-
+ 
                         {menuAbierto === f.id && (
                           <>
                             <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(null)} />
                             <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white p-2 shadow-xl border border-slate-100 z-20">
                               <Link
-                                href={`/facturas/ver/${f.budget_id}`}
+                                href={`/facturas/ver/${f.budget_id}?invoice_id=${f.id}`}
                                 target="_blank"
                                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                               >
@@ -476,11 +479,11 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                                   <Trash2 size={14} /> Eliminar Borrador
                                 </button>
                               )}
-
+ 
                               {f.status === 'emitted' && (
                                 <>
                                   <button
-                                    onClick={() => window.open(`/facturas/ver/${f.budget_id}`, '_blank')}
+                                    onClick={() => window.open(`/facturas/ver/${f.budget_id}?invoice_id=${f.id}`, '_blank')}
                                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                                   >
                                     <Printer size={14} /> Re-imprimir
@@ -491,6 +494,8 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                                       <button
                                         onClick={() => {
                                           setMenuAbierto(null)
+                                          setEsCorreccionParcial(false)
+                                          setMontoPersonalizado('')
                                           setModalConfirmacion({ isOpen: true, tipo: 'credito', factura: f })
                                         }}
                                         className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
@@ -500,6 +505,8 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                                       <button
                                         onClick={() => {
                                           setMenuAbierto(null)
+                                          setEsCorreccionParcial(false)
+                                          setMontoPersonalizado('')
                                           setModalConfirmacion({ isOpen: true, tipo: 'debito', factura: f })
                                         }}
                                         className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 transition"
@@ -604,8 +611,57 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
               </div>
             </div>
 
+            {/* Selector de Tipo de Corrección (Total vs Parcial) */}
+            <div className="mb-6 space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block ml-1">Tipo de Corrección</label>
+              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEsCorreccionParcial(false)
+                    setMontoPersonalizado('')
+                  }}
+                  className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${!esCorreccionParcial ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                >
+                  Total (100%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEsCorreccionParcial(true)}
+                  className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${esCorreccionParcial ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                >
+                  Parcial ($)
+                </button>
+              </div>
+            </div>
+
+            {/* Input de Monto si es parcial */}
+            {esCorreccionParcial && (
+              <div className="mb-6 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block ml-1">
+                  Monto de la Nota de {modalConfirmacion.tipo === 'credito' ? 'Crédito' : 'Débito'}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-extrabold text-sm">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={modalConfirmacion.tipo === 'credito' ? modalConfirmacion.factura.total_amount : undefined}
+                    value={montoPersonalizado}
+                    onChange={(e) => setMontoPersonalizado(e.target.value)}
+                    placeholder={`Máximo: $${modalConfirmacion.factura.total_amount.toLocaleString('es-AR')}`}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-8 pr-4 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-inner focus:ring-4 focus:ring-indigo-500/5"
+                  />
+                </div>
+                <p className="text-[9px] font-semibold text-slate-400 leading-normal ml-1">
+                  Especificá el monto neto a {modalConfirmacion.tipo === 'credito' ? 'descontar' : 'recargar'} de la cuenta corriente.
+                </p>
+              </div>
+            )}
+
             {/* Disclaimer */}
-            <p className="text-[10px] text-slate-450 font-bold leading-relaxed mb-8">
+            <p className="text-[10px] text-slate-450 font-bold leading-relaxed mb-6">
               ⚠️ Esta acción es irreversible. Se conectará con los servidores de ARCA en tiempo real y modificará la cuenta corriente del cliente.
             </p>
 
@@ -624,6 +680,21 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                   const facturaId = modalConfirmacion.factura?.id;
                   const isCredito = modalConfirmacion.tipo === 'credito';
                   
+                  // Validaciones extras en frontend
+                  if (esCorreccionParcial) {
+                    const parsedMonto = parseFloat(montoPersonalizado);
+                    if (isNaN(parsedMonto) || parsedMonto <= 0) {
+                      toast.error('Por favor ingresá un monto válido mayor a 0.');
+                      return;
+                    }
+                    if (isCredito && parsedMonto > modalConfirmacion.factura!.total_amount) {
+                      toast.error(`El monto de la Nota de Crédito no puede superar el total facturado ($${modalConfirmacion.factura!.total_amount.toLocaleString('es-AR')}).`);
+                      return;
+                    }
+                  }
+
+                  const customAmt = esCorreccionParcial && montoPersonalizado ? parseFloat(montoPersonalizado) : undefined;
+                  
                   setModalConfirmacion({ isOpen: false, tipo: null, factura: null });
                   
                   // Ejecutar la autorización real llamando al backend oficial
@@ -635,7 +706,8 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                         body: JSON.stringify({
                           budget_id: modalConfirmacion.factura?.budget_id,
                           isCreditNote: isCredito,
-                          isDebitNote: !isCredito
+                          isDebitNote: !isCredito,
+                          customAmount: customAmt
                         })
                       });
                       

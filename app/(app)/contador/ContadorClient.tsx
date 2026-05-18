@@ -14,9 +14,14 @@ import {
   CheckCircle2, 
   UserPlus,
   Users,
-  Settings
+  Settings,
+  ShieldCheck,
+  AlertCircle,
+  Save,
+  Key,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase/client'
 
 type Client = {
   name: string
@@ -35,9 +40,16 @@ type Invoice = {
 }
 
 type ConfigFiscal = {
-  afip_cuit: string
-  afip_razon_social: string
-  is_sandbox: boolean
+  id?: string
+  company_id?: string
+  cuit?: string
+  tipo_contribuyente?: string
+  punto_venta?: number
+  cert_content?: string
+  key_content?: string
+  is_sandbox?: boolean
+  afip_razon_social?: string
+  afip_cuit?: string
 } | null
 
 type DBClient = {
@@ -52,6 +64,12 @@ type Movement = {
   credit: number
 }
 
+type DBContador = {
+  id: string
+  full_name: string
+  created_at: string
+}
+
 type Props = {
   invoicesIniciales: Invoice[]
   idEmpresa: string
@@ -60,6 +78,7 @@ type Props = {
   clients: DBClient[]
   movements: Movement[]
   userRole: string
+  contadoresIniciales: DBContador[]
 }
 
 export default function ContadorClient({ 
@@ -69,10 +88,72 @@ export default function ContadorClient({
   configFiscal,
   clients,
   movements,
-  userRole
+  userRole,
+  contadoresIniciales
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'iva' | 'cc' | 'config'>('iva')
+  const [activeTab, setActiveTab] = useState<'iva' | 'cc' | 'config' | 'fiscal'>('iva')
   const [invoices] = useState<Invoice[]>(invoicesIniciales)
+  
+  const [fiscalConfig, setFiscalConfig] = useState({
+    cuit: configFiscal?.cuit || configFiscal?.afip_cuit || '',
+    tipo_contribuyente: configFiscal?.tipo_contribuyente || 'monotributo',
+    punto_venta: configFiscal?.punto_venta?.toString() || '',
+    cert_content: configFiscal?.cert_content || '',
+    key_content: configFiscal?.key_content || '',
+    is_sandbox: configFiscal?.is_sandbox ?? true
+  })
+
+  const [savingFiscal, setSavingFiscal] = useState(false)
+  const [testingFiscal, setTestingFiscal] = useState(false)
+
+  async function handleSaveFiscal() {
+    setSavingFiscal(true)
+    try {
+      const payload = {
+        company_id: idEmpresa,
+        cuit: fiscalConfig.cuit,
+        tipo_contribuyente: fiscalConfig.tipo_contribuyente,
+        punto_venta: parseInt(fiscalConfig.punto_venta) || 0,
+        cert_content: fiscalConfig.cert_content,
+        key_content: fiscalConfig.key_content,
+        is_sandbox: fiscalConfig.is_sandbox,
+        updated_at: new Date()
+      }
+
+      const { error } = await supabase
+        .from('afip_configs')
+        .upsert(payload, { onConflict: 'company_id' })
+
+      if (error) throw error
+      toast.success('Configuración fiscal guardada correctamente')
+    } catch (error: any) {
+      toast.error('Error al guardar: ' + error.message)
+    } finally {
+      setSavingFiscal(false)
+    }
+  }
+
+  async function testConnection() {
+    setTestingFiscal(true)
+    try {
+      const response = await fetch('/api/afip/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: idEmpresa })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        toast.success('Conexión exitosa: ' + result.message)
+      } else {
+        throw new Error(result.error)
+      }
+    } catch (error: any) {
+      toast.error('Error de conexión: ' + error.message)
+    } finally {
+      setTestingFiscal(false)
+    }
+  }
   
   // Estados para Búsqueda
   const [busquedaIva, setBusquedaIva] = useState('')
@@ -226,11 +307,14 @@ export default function ContadorClient({
   }
 
   // Creación de Usuario de Estudio Contable (Solo para Admins)
+  const [contadores, setContadores] = useState<DBContador[]>(contadoresIniciales)
   const [emailContador, setEmailContador] = useState('')
   const [nombreContador, setNombreContador] = useState('')
   const [passContador, setPassContador] = useState('')
   const [creandoContador, setCreandoContador] = useState(false)
   const [contadorCreado, setContadorCreado] = useState(false)
+  const [mostrarFormularioNuevo, setMostrarFormularioNuevo] = useState(false)
+  const [desvinculando, setDesvinculando] = useState<string | null>(null)
 
   async function registrarContador(e: React.FormEvent) {
     e.preventDefault()
@@ -256,7 +340,22 @@ export default function ContadorClient({
         throw new Error(data.error || 'Error al vincular el estudio contable')
       }
 
+      // Volver a consultar la lista de contadores vinculados
+      const { data: updated } = await supabase
+        .from('users_profiles')
+        .select('id, full_name, created_at')
+        .eq('company_id', idEmpresa)
+        .eq('role', 'contador')
+      
+      if (updated) {
+        setContadores(updated)
+      }
+
       setContadorCreado(true)
+      setMostrarFormularioNuevo(false)
+      setEmailContador('')
+      setNombreContador('')
+      setPassContador('')
       toast.success('¡Estudio Contable vinculado con éxito!')
     } catch (err: any) {
       toast.error(err.message)
@@ -265,10 +364,34 @@ export default function ContadorClient({
     }
   }
 
+  async function desvincularContador(id: string) {
+    if (!confirm('¿Estás seguro de que deseas desvincular este estudio contable? Perderá el acceso de forma inmediata.')) return
+    
+    setDesvinculando(id)
+    try {
+      const { error } = await supabase
+        .from('users_profiles')
+        .delete()
+        .eq('id', id)
+      
+      if (error) throw error
+      
+      setContadores(prev => prev.filter(c => c.id !== id))
+      toast.success('Estudio contable desvinculado con éxito')
+      if (contadores.length <= 1) {
+        setContadorCreado(false)
+      }
+    } catch (err: any) {
+      toast.error('Error al desvincular: ' + err.message)
+    } finally {
+      setDesvinculando(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* TABS DE NAVEGACIÓN PRINCIPAL */}
-      <div className="flex border-b border-slate-200 bg-white rounded-2xl p-1.5 shadow-sm max-w-lg">
+      <div className="flex border-b border-slate-200 bg-white rounded-2xl p-1.5 shadow-sm max-w-2xl">
         <button
           onClick={() => setActiveTab('iva')}
           className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${
@@ -293,6 +416,18 @@ export default function ContadorClient({
           <span>Cuentas Corrientes</span>
         </button>
 
+        <button
+          onClick={() => setActiveTab('fiscal')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${
+            activeTab === 'fiscal'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
+          <Settings size={16} />
+          <span>Credenciales ARCA</span>
+        </button>
+
         {userRole === 'admin' && (
           <button
             onClick={() => setActiveTab('config')}
@@ -302,8 +437,8 @@ export default function ContadorClient({
                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >
-            <Settings size={16} />
-            <span>Configuración</span>
+            <UserPlus size={16} />
+            <span>Vincular Contador</span>
           </button>
         )}
       </div>
@@ -570,89 +705,291 @@ export default function ContadorClient({
 
       {/* CONTENIDO TAB 3: CONFIGURACIÓN / INVITACIÓN AL CONTADOR (SOLO ADMINS) */}
       {activeTab === 'config' && userRole === 'admin' && (
-        <div className="max-w-2xl rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm animate-in fade-in duration-200">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
-              <UserPlus size={20} />
+        <div className="max-w-4xl rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-3.5 mb-6">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 shadow-inner">
+              <UserPlus size={22} />
             </div>
             <div>
-              <h3 className="text-sm font-black text-slate-950 uppercase tracking-tight">Vincular Estudio Contable</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Acceso Directo Exclusivo</p>
+              <h3 className="text-base font-black text-slate-900 tracking-tight">Estudios Contables Vinculados</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Acceso directo y seguro para tu contador</p>
             </div>
           </div>
 
-          {contadorCreado ? (
-            <div className="text-center py-8 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
-                <CheckCircle2 size={24} />
-              </div>
-              <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">¡Estudio Vinculado con éxito!</h4>
-              <p className="text-xs font-medium text-slate-500 leading-relaxed max-w-sm mx-auto">
-                Tu contador ya puede acceder a la aplicación ingresando directamente a <code className="font-mono text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">zoma.app/auth/login</code> con su dirección de email.
+          {contadores.length > 0 && !mostrarFormularioNuevo ? (
+            <div className="space-y-6">
+              <p className="text-xs font-semibold text-slate-500 leading-relaxed max-w-2xl">
+                Los siguientes usuarios tienen acceso exclusivo a tu portal fiscal. Tu contador podrá iniciar sesión y descargar tus Libros de IVA Digital o revisar saldos de cuenta corriente, sin tener acceso a recetas o márgenes comerciales.
               </p>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {contadores.map((c) => (
+                  <div 
+                    key={c.id} 
+                    className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-all flex items-start justify-between gap-4"
+                  >
+                    <div className="flex items-start gap-3.5">
+                      <div className="h-10 w-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                        <Building2 size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-black text-slate-900 text-sm truncate uppercase tracking-tight">{c.full_name}</h4>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase tracking-wider border border-emerald-100 shadow-[0_0_8px_rgba(16,185,129,0.05)]">
+                            Activo
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                          Vinculado el: <span className="text-slate-600 font-extrabold">{new Date(c.created_at).toLocaleDateString()}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => desvincularContador(c.id)}
+                      disabled={desvinculando === c.id}
+                      className="text-xs font-black text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-xl transition-all border border-transparent hover:border-red-100 shrink-0"
+                    >
+                      {desvinculando === c.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        'Desvincular'
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
+                <button
+                  onClick={() => setMostrarFormularioNuevo(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-950 text-white hover:bg-slate-900 px-5 py-3 text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-slate-950/10 active:scale-95"
+                >
+                  <UserPlus size={15} />
+                  <span>Vincular otro Estudio</span>
+                </button>
+              </div>
             </div>
           ) : (
-            <form onSubmit={registrarContador} className="space-y-4">
-              <p className="text-xs font-medium text-slate-500 leading-relaxed mb-4">
+            <form onSubmit={registrarContador} className="space-y-6">
+              <p className="text-xs font-semibold text-slate-500 leading-relaxed">
                 Crea un usuario exclusivo para tu estudio contable. Tu contador podrá iniciar sesión y ver únicamente esta interfaz fiscal de consultas y exportaciones, bloqueando por completo la vista de tus recetas de producción y operaciones de venta directa preventistas.
               </p>
               
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">Nombre Completo / Estudio</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Nombre Completo / Estudio</label>
                   <input
                     type="text"
                     required
                     value={nombreContador}
                     onChange={(e) => setNombreContador(e.target.value)}
                     placeholder="Estudio Contable Pérez & Asoc."
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 shadow-sm"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-white transition-all shadow-inner focus:ring-4 focus:ring-purple-500/5"
                   />
                 </div>
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">Email del Contador</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Email del Contador</label>
                   <input
                     type="email"
                     required
                     value={emailContador}
                     onChange={(e) => setEmailContador(e.target.value)}
                     placeholder="contador@estudio.com"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 shadow-sm"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-white transition-all shadow-inner focus:ring-4 focus:ring-purple-500/5"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">Contraseña de Acceso</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Contraseña de Acceso</label>
                 <input
                   type="password"
                   required
                   value={passContador}
                   onChange={(e) => setPassContador(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 shadow-sm max-w-sm"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-white transition-all shadow-inner focus:ring-4 focus:ring-purple-500/5 max-w-sm"
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={creandoContador}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-purple-600 hover:bg-purple-700 active:scale-98 transition text-white px-6 py-3.5 text-xs font-black uppercase tracking-wider shadow-lg shadow-purple-600/10 disabled:opacity-50 mt-2"
-              >
-                {creandoContador ? (
-                  <>
-                    <Loader2 size={15} className="animate-spin text-white/80" />
-                    <span>Registrando...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus size={15} />
-                    <span>Registrar Estudio Contable</span>
-                  </>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={creandoContador}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-purple-600 hover:bg-purple-700 active:scale-95 transition-all text-white px-6 py-3.5 text-xs font-black uppercase tracking-wider shadow-lg shadow-purple-600/20 disabled:opacity-50"
+                >
+                  {creandoContador ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin text-white/80" />
+                      <span>Registrando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={15} />
+                      <span>Registrar Estudio Contable</span>
+                    </>
+                  )}
+                </button>
+
+                {contadores.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrarFormularioNuevo(false)
+                      setEmailContador('')
+                      setNombreContador('')
+                      setPassContador('')
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-600 px-6 py-3.5 text-xs font-black uppercase tracking-wider border border-slate-200"
+                  >
+                    Cancelar
+                  </button>
                 )}
-              </button>
+              </div>
             </form>
           )}
+        </div>
+      )}
+
+      {/* CONTENIDO TAB 4: CREDENCIALES ARCA */}
+      {activeTab === 'fiscal' && (
+        <div className="max-w-4xl space-y-8 pb-20 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Configuración Fiscal</h1>
+              <p className="text-slate-500 font-medium">Vinculá ZOMA con ARCA para facturación electrónica.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={testConnection}
+                disabled={testingFiscal || savingFiscal}
+                className="flex items-center gap-2 bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-black hover:bg-slate-200 transition-all disabled:opacity-50"
+              >
+                {testingFiscal ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={20} />}
+                Probar Conexión
+              </button>
+              
+              <button
+                onClick={handleSaveFiscal}
+                disabled={savingFiscal || testingFiscal}
+                className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:opacity-50"
+              >
+                {savingFiscal ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                Guardar Cambios
+              </button>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Info y Datos Básicos */}
+            <div className="md:col-span-1 space-y-6">
+              <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm space-y-6">
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">CUIT de la Empresa</label>
+                  <input
+                    type="text"
+                    placeholder="20-12345678-9"
+                    value={fiscalConfig.cuit}
+                    onChange={(e) => setFiscalConfig({ ...fiscalConfig, cuit: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Punto de Venta</label>
+                  <input
+                    type="number"
+                    placeholder="5"
+                    value={fiscalConfig.punto_venta}
+                    onChange={(e) => setFiscalConfig({ ...fiscalConfig, punto_venta: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Condición IVA</label>
+                  <select
+                    value={fiscalConfig.tipo_contribuyente}
+                    onChange={(e) => setFiscalConfig({ ...fiscalConfig, tipo_contribuyente: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  >
+                    <option value="monotributo">Monotributista</option>
+                    <option value="responsable_inscripto">Responsable Inscripto</option>
+                    <option value="exento">Exento</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 rounded-[2rem] p-8 border border-amber-100">
+                 <div className="flex items-center gap-3 text-amber-700 mb-4 font-black text-sm uppercase tracking-wider">
+                   <AlertCircle size={20} /> Entorno
+                 </div>
+                 <div className="flex items-center justify-between bg-white/50 p-4 rounded-2xl border border-amber-200">
+                    <span className="text-xs font-bold text-amber-900">Modo Testing (Homologación)</span>
+                    <input 
+                      type="checkbox"
+                      checked={fiscalConfig.is_sandbox}
+                      onChange={(e) => setFiscalConfig({...fiscalConfig, is_sandbox: e.target.checked})}
+                      className="w-5 h-5 accent-amber-600 cursor-pointer"
+                    />
+                 </div>
+                 <p className="mt-4 text-[11px] font-medium text-amber-800 leading-relaxed">
+                   Recomendamos probar siempre en modo Testing antes de pasar a Producción para evitar facturas legales erróneas.
+                 </p>
+              </div>
+            </div>
+
+            {/* Certificados */}
+            <div className="md:col-span-2 space-y-8">
+              <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm space-y-8">
+                <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
+                   <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                      <Key size={24} />
+                   </div>
+                   <div>
+                      <h3 className="font-black text-slate-900 tracking-tight">Certificados Digitales</h3>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Credenciales de acceso a Web Services</p>
+                   </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Contenido del Certificado (.crt)</label>
+                      <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black">-----BEGIN CERTIFICATE-----</span>
+                    </div>
+                    <textarea
+                      placeholder="Pegá aquí el contenido de tu archivo .crt"
+                      value={fiscalConfig.cert_content}
+                      onChange={(e) => setFiscalConfig({ ...fiscalConfig, cert_content: e.target.value })}
+                      className="w-full h-40 bg-slate-50 border border-slate-150 rounded-2xl px-4 py-4 text-[11px] font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Contenido de la Clave Privada (.key)</label>
+                      <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-black">-----BEGIN PRIVATE KEY-----</span>
+                    </div>
+                    <textarea
+                      placeholder="Pegá aquí el contenido de tu archivo .key"
+                      value={fiscalConfig.key_content}
+                      onChange={(e) => setFiscalConfig({ ...fiscalConfig, key_content: e.target.value })}
+                      className="w-full h-40 bg-slate-50 border border-slate-150 rounded-2xl px-4 py-4 text-[11px] font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-2xl p-6 flex items-start gap-4">
+                   <ShieldCheck className="text-slate-400 shrink-0" size={20} />
+                   <p className="text-xs font-medium text-slate-500 leading-relaxed">
+                      Tus certificados se almacenan de forma segura y solo se utilizan para firmar las peticiones ante ARCA. ZOMA nunca compartirá estas credenciales.
+                   </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

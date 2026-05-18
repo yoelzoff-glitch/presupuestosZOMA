@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const keyPath = path.join(tempDir, `key_inv_${Date.now()}.key`)
 
   try {
-    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote } = await request.json()
+    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount } = await request.json()
     if (!budget_id) return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
 
     const supabaseAdmin = createSupabaseAdminClient()
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
     const esCuitValido = cuitLimpio.length === 11
     const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
-    const montoTotal = Number(budget.total_amount)
+    const montoTotal = customAmount ? Number(customAmount) : Number(budget.total_amount)
 
     // Límite AFIP identificación (Aprox mayo 2024)
     const LIMITE_IDENTIFICACION = 191624
@@ -223,12 +223,15 @@ export async function POST(request: Request) {
     // 8. Actualización Dual o Inserción de Comprobante Correctivo
     if (esCorrectivo) {
       if (isCreditNote) {
-        // Anular la factura original
-        await supabaseAdmin
-          .from('invoices')
-          .update({ status: 'cancelled' })
-          .eq('budget_id', budget_id)
-          .eq('status', 'emitted')
+        // Anular la factura original solo si es anulación total (sin customAmount o igual/mayor al total)
+        const esAnulacionTotal = !customAmount || Number(customAmount) >= Number(budget.total_amount)
+        if (esAnulacionTotal) {
+          await supabaseAdmin
+            .from('invoices')
+            .update({ status: 'cancelled' })
+            .eq('budget_id', budget_id)
+            .eq('status', 'emitted')
+        }
       }
 
       // Insertar el nuevo comprobante correctivo en la tabla invoices

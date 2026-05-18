@@ -42,6 +42,13 @@ export default async function AccountantPage() {
     .select('client_id, debit, credit')
     .eq('company_id', contexto.idEmpresa)
 
+  // 5. Obtener los contadores vinculados a la empresa
+  const { data: contadores } = await supabase
+    .from('users_profiles')
+    .select('id, full_name, created_at')
+    .eq('company_id', contexto.idEmpresa)
+    .eq('role', 'contador')
+
   return (
     <ContadorClient 
       invoicesIniciales={invoices || []} 
@@ -51,6 +58,7 @@ export default async function AccountantPage() {
       clients={clients || []}
       movements={movements || []}
       userRole={contexto.rol} // Pasamos el rol real del usuario para habilitar/deshabilitar invitaciones
+      contadoresIniciales={contadores || []}
     />
   )
 }
