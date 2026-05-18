@@ -127,6 +127,7 @@ export default function VerFacturaPage() {
 
    // Obtener el tipo de comprobante. Si está emitido, usa el del budget. Si es borrador, usa el de la tabla invoices. Si no, default a 11.
    const comprobanteTipo = budget.afip_comprobante_tipo || (invoice ? invoice.afip_comprobante_tipo : 11)
+    const esComprobanteA = [1, 2, 3, 7, 8].includes(comprobanteTipo)
 
    const afipConfig = budget.company_afip_config
    const condicionIvaEmpresa = afipConfig?.tipo_contribuyente === 'responsable_inscripto'
@@ -291,15 +292,19 @@ export default function VerFacturaPage() {
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-bold text-slate-800">
-                     {items.map((item: any, idx: number) => (
-                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                           <td className="px-4 py-2.5">{item.product_code ? `[${item.product_code}] ` : ''}{item.product_name}</td>
-                           <td className="px-4 py-2.5 text-center">{item.quantity}</td>
-                           <td className="px-4 py-2.5 uppercase text-slate-500">Unid.</td>
-                           <td className="px-4 py-2.5 text-right">${Number(item.unit_price).toLocaleString('es-AR')}</td>
-                           <td className="px-4 py-2.5 text-right font-black">${(item.quantity * item.unit_price).toLocaleString('es-AR')}</td>
-                        </tr>
-                     ))}
+                     {items.map((item: any, idx: number) => {
+                        const unitPrice = esComprobanteA ? (Number(item.unit_price) / 1.21) : Number(item.unit_price);
+                        const rowSubtotal = item.quantity * unitPrice;
+                        return (
+                           <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                              <td className="px-4 py-2.5">{item.product_code ? `[${item.product_code}] ` : ''}{item.product_name}</td>
+                              <td className="px-4 py-2.5 text-center">{item.quantity}</td>
+                              <td className="px-4 py-2.5 uppercase text-slate-500">Unid.</td>
+                              <td className="px-4 py-2.5 text-right">${unitPrice.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="px-4 py-2.5 text-right font-black">${rowSubtotal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                           </tr>
+                        )
+                     })}
                      {[...Array(Math.max(0, 10 - items.length))].map((_, i) => (
                         <tr key={`empty-${i}`} className="h-6">
                            <td colSpan={5}></td>
@@ -331,7 +336,7 @@ export default function VerFacturaPage() {
 
                <div className="w-64 border-2 border-slate-900 bg-slate-50/50">
                   <div className="p-4 space-y-2 text-sm">
-                     {comprobanteTipo === 1 ? (
+                     {esComprobanteA ? (
                         <>
                            <div className="flex justify-between font-bold text-slate-500">
                               <span>Subtotal (Neto):</span>
