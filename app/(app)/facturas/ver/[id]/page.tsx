@@ -63,6 +63,20 @@ export default function VerFacturaPage() {
          }
       }
 
+      // Fetch company's AFIP configuration
+      const companyId = budgetData.company_id
+      if (companyId) {
+         const { data: afipData } = await supabase
+            .from('afip_config')
+            .select('tipo_contribuyente')
+            .eq('company_id', companyId)
+            .maybeSingle()
+
+         if (afipData) {
+            finalBudget.company_afip_config = afipData
+         }
+      }
+
       setBudget(finalBudget)
       setLoading(false)
    }
@@ -107,6 +121,13 @@ export default function VerFacturaPage() {
 
    // Obtener el tipo de comprobante. Si está emitido, usa el del budget. Si es borrador, usa el de la tabla invoices. Si no, default a 11.
    const comprobanteTipo = budget.afip_comprobante_tipo || (invoice ? invoice.afip_comprobante_tipo : 11)
+
+   const afipConfig = budget.company_afip_config
+   const condicionIvaEmpresa = afipConfig?.tipo_contribuyente === 'responsable_inscripto'
+      ? 'Responsable Inscripto'
+      : (afipConfig?.tipo_contribuyente === 'monotributo'
+         ? 'Responsable Monotributo'
+         : ([11, 12, 13].includes(comprobanteTipo) ? 'Responsable Monotributo' : 'Responsable Inscripto'))
 
    const getComprobanteLetra = (tipo: number) => {
       if ([1, 2, 3].includes(tipo)) return 'A'
@@ -218,7 +239,7 @@ export default function VerFacturaPage() {
                   <div className="mt-4 space-y-1 text-xs font-bold text-slate-600">
                      <p>Razón Social: {company?.name}</p>
                      <p>Domicilio: {company?.address || 'Calle Falsa 123, Buenos Aires'}</p>
-                     <p>Condición frente al IVA: Responsable Inscripto</p>
+                     <p>Condición frente al IVA: {condicionIvaEmpresa}</p>
                   </div>
                </div>
 
