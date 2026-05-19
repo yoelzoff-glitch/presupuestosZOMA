@@ -102,16 +102,16 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl">
-        <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
+      <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-8 text-white shadow-2xl border border-white/[0.05]">
+        <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-blue-500/10 blur-[100px] pointer-events-none" />
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="mb-3 text-sm font-bold uppercase tracking-[0.3em] text-blue-300">Panel de Control</p>
-            <h1 className="max-w-3xl text-4xl font-black tracking-tight lg:text-5xl">Gestión comercial unificada.</h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">Bienvenido al centro de mando. Aquí tienes el panorama completo de tu empresa.</p>
+            <p className="mb-2 text-xs font-mono font-bold uppercase tracking-[0.25em] text-blue-400">Panel de Control</p>
+            <h1 className="max-w-3xl text-4xl font-extrabold tracking-tight lg:text-5xl font-sans">Gestión comercial unificada.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-350 font-sans">Bienvenido al centro de mando. Aquí tienes el panorama completo de tu empresa.</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row items-center">
-            <div className="flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10 backdrop-blur-md mr-4">
+            <div className="flex items-center gap-1.5 bg-white/[0.05] p-1.5 rounded-xl border border-white/[0.05] backdrop-blur-md mr-2">
               <FilterButton variant="blue" active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
               <FilterButton variant="blue" active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
               <FilterButton variant="blue" active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
@@ -119,61 +119,63 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
             </div>
             <button
               onClick={toggleHero}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 text-sm font-bold text-white transition hover:bg-white/20"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4.5 text-xs font-bold text-white transition hover:bg-white/[0.1] active:scale-98"
             >
-              <BarChart3 size={18} />
+              <BarChart3 size={15} strokeWidth={2} />
               Personalizar
             </button>
-            <Link href="/clientes/nuevo" className="ml-3 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-xl shadow-blue-900/30 transition hover:bg-blue-500 active:scale-95"><Plus size={18} /> Nuevo cliente</Link>
+            <Link href="/clientes/nuevo" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5.5 text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-500 active:scale-95"><Plus size={16} strokeWidth={2.5} /> Nuevo cliente</Link>
           </div>
         </div>
       </section>
  
        {heroType === 'balance' ? (
-         <section className="relative overflow-hidden rounded-[2rem] bg-emerald-950 p-8 text-white shadow-2xl">
-           <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
+         <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#022c22] p-8 text-white shadow-2xl border border-emerald-500/20">
+           <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-emerald-500/20 blur-[100px] pointer-events-none" />
            <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
              <div className="flex items-center gap-5">
-               <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/20 text-emerald-400 shadow-inner"><Wallet size={32} /></div>
+               <div className="relative flex h-15 w-15 items-center justify-center rounded-2xl bg-emerald-400/10 text-emerald-400 shadow-inner border border-emerald-400/25 ring-4 ring-emerald-500/5">
+                 <Wallet size={26} strokeWidth={1.75} className="fill-emerald-400/10" />
+               </div>
                <div>
-                 <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400">Saldo Global Cuenta Corriente</p>
-                 <h2 className="mt-1 text-4xl font-black tracking-tight lg:text-5xl">{`$${(stats?.balance ?? 0).toLocaleString('es-AR')}`}</h2>
+                 <p className="text-[10px] font-mono font-bold uppercase tracking-[0.25em] text-emerald-450">Saldo Global Cuenta Corriente</p>
+                 <h2 className="mt-1 text-3xl md:text-4xl font-mono font-bold tracking-tight text-white">{`$${(stats?.balance ?? 0).toLocaleString('es-AR')}`}</h2>
                </div>
              </div>
-             <Link href="/cuenta-corriente" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-emerald-950 shadow-xl transition hover:bg-emerald-50 active:scale-95">Ver detalle completo <ArrowRight size={18} /></Link>
+             <Link href="/cuenta-corriente" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5.5 py-3 text-xs font-bold text-emerald-950 shadow-lg hover:bg-emerald-50 active:scale-95 transition-all duration-200">Ver detalle completo <ArrowRight size={15} strokeWidth={2.5} /></Link>
            </div>
          </section>
        ) : (
-         <section className="relative overflow-hidden rounded-[2rem] bg-indigo-950 p-8 text-white shadow-2xl border border-white/10">
-           <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />
+         <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#0c0a09] via-[#1e1b4b] to-[#0c0a09] p-8 text-white shadow-2xl border border-indigo-500/20">
+           <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-indigo-500/20 blur-[100px] pointer-events-none" />
            <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
              <div className="flex-1 space-y-4">
-               <p className="text-xs font-black uppercase tracking-[0.3em] text-indigo-400">Rendimiento de Ventas</p>
+               <p className="text-[10px] font-mono font-bold uppercase tracking-[0.25em] text-indigo-400">Rendimiento de Ventas</p>
                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                  <div>
-                   <p className="text-sm font-bold text-slate-400">Total Presupuestado</p>
-                   <h3 className="text-3xl font-black mt-1">${(stats?.totalBudgeted ?? 0).toLocaleString('es-AR')}</h3>
+                   <p className="text-xs font-semibold text-slate-400">Total Presupuestado</p>
+                   <h3 className="text-2xl font-mono font-bold mt-1 text-white">${(stats?.totalBudgeted ?? 0).toLocaleString('es-AR')}</h3>
                  </div>
                  <div>
-                   <p className="text-sm font-bold text-slate-400">Total Convertido</p>
-                   <h3 className="text-3xl font-black mt-1 text-indigo-400">${(stats?.totalConverted ?? 0).toLocaleString('es-AR')}</h3>
+                   <p className="text-xs font-semibold text-slate-400">Total Convertido</p>
+                   <h3 className="text-2xl font-mono font-bold mt-1 text-indigo-450">${(stats?.totalConverted ?? 0).toLocaleString('es-AR')}</h3>
                  </div>
                  <div>
-                   <p className="text-sm font-bold text-slate-400">Rentabilidad Bruta</p>
-                   <h3 className="text-3xl font-black mt-1 text-emerald-400">
+                   <p className="text-xs font-semibold text-slate-400">Rentabilidad Bruta</p>
+                   <h3 className="text-2xl font-mono font-bold mt-1 text-emerald-400">
                      ${(stats?.profitability ?? 0).toLocaleString('es-AR')}
-                     <span className="ml-2 text-sm font-bold opacity-60">
+                     <span className="ml-2 text-xs font-bold opacity-60 text-emerald-450">
                        ({(stats?.totalConverted ?? 0) > 0 ? (((stats?.profitability ?? 0) / (stats?.totalConverted ?? 1)) * 100).toFixed(1) : 0}%)
                      </span>
                    </h3>
                  </div>
                  <div>
-                   <p className="text-sm font-bold text-slate-400">Tasa de Cierre </p>
-                   <h3 className="text-3xl font-black mt-1 text-blue-400">{(stats?.conversionRate ?? 0).toFixed(1)}%</h3>
+                   <p className="text-xs font-semibold text-slate-400">Tasa de Cierre </p>
+                   <h3 className="text-2xl font-mono font-bold mt-1 text-blue-400">{(stats?.conversionRate ?? 0).toFixed(1)}%</h3>
                  </div>
                </div>
              </div>
-             <Link href="/presupuestos" className="inline-flex h-16 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-8 text-sm font-black text-white shadow-xl shadow-indigo-900/40 transition hover:bg-indigo-500 active:scale-95">Ver presupuestos <ArrowRight size={18} /></Link>
+             <Link href="/presupuestos" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-indigo-650 px-6 text-xs font-bold text-white shadow-lg shadow-indigo-900/40 transition hover:bg-indigo-600 active:scale-95">Ver presupuestos <ArrowRight size={15} strokeWidth={2.5} /></Link>
            </div>
          </section>
        )}
@@ -181,15 +183,21 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
        <section className="grid gap-5 md:grid-cols-3">
          {cards.map((card) => {
            const Icon = card.icon
+            const colorsMap: any = {
+              'Clientes': { from: 'from-blue-50/50', to: 'to-blue-100/50', text: 'text-blue-600', border: 'border-blue-100', ring: 'ring-blue-50/30', fill: 'fill-blue-600/10' },
+              'Productos': { from: 'from-indigo-50/50', to: 'to-indigo-100/50', text: 'text-indigo-600', border: 'border-indigo-100', ring: 'ring-indigo-50/30', fill: 'fill-indigo-600/10' },
+              'Presupuestos': { from: 'from-purple-50/50', to: 'to-purple-100/50', text: 'text-purple-600', border: 'border-purple-100', ring: 'ring-purple-50/30', fill: 'fill-purple-600/10' },
+            }
+            const colors = colorsMap[card.title] || colorsMap['Clientes']
            return (
-             <Link key={card.title} href={card.href} className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
+             <Link key={card.title} href={card.href} className="group rounded-[2rem] border border-slate-200/90 bg-white/95 p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_45px_rgba(15,23,42,0.08)] hover:border-blue-200/60 backdrop-blur-md">
                <div className="mb-6 flex items-center justify-between">
-                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700"><Icon size={23} /></div>
+                 <div className={`relative flex h-13 w-13 items-center justify-center rounded-2xl border ${colors.border} bg-gradient-to-br ${colors.from} ${colors.to} ${colors.text} shadow-[0_8px_20px_-6px_rgba(37,99,235,0.15)] ring-4 ring-offset-0 ${colors.ring}`}><Icon size={22} strokeWidth={1.75} className={colors.fill} /></div>
                  <ArrowRight size={18} className="text-slate-300 transition group-hover:translate-x-1 group-hover:text-blue-600" />
                </div>
-               <p className="text-sm font-bold text-slate-500">{card.title}</p>
-               <h2 className="mt-2 text-3xl font-black text-slate-950">{card.value}</h2>
-               <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">{daysFilter === 'all' ? 'Histórico total' : `Últimos ${daysFilter} días`}</p>
+               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{card.title}</p>
+               <h2 className="mt-2 text-4xl font-mono font-bold tracking-tight text-slate-950">{card.value}</h2>
+               <p className="mt-2 text-[9px] font-mono tracking-widest uppercase text-slate-400">{daysFilter === 'all' ? 'Histórico total' : `Últimos ${daysFilter} días`}</p>
              </Link>
            )
          })}
@@ -198,7 +206,7 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
        <section className="grid gap-6 lg:grid-cols-2">
          <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
            <div className="mb-6 flex items-center gap-3">
-             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><BarChart3 size={20} /></div>
+             <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/50 to-blue-100/50 text-blue-600 shadow-[0_4px_12px_rgba(37,99,235,0.08)] ring-4 ring-blue-500/5"><BarChart3 size={18} strokeWidth={1.75} className="fill-blue-600/5" /></div>
              <div><h3 className="text-lg font-black text-slate-950">Ventas históricas</h3><p className="text-sm font-medium text-slate-500">Volumen facturado global</p></div>
            </div>
            <div className="h-72 w-full">
@@ -217,7 +225,7 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
          <div className="grid gap-6">
            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
              <div className="mb-4 flex items-center gap-3">
-               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><PieIcon size={20} /></div>
+               <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-emerald-100/50 text-emerald-600 shadow-[0_4px_12px_rgba(16,185,129,0.08)] ring-4 ring-emerald-500/5"><PieIcon size={18} strokeWidth={1.75} className="fill-emerald-600/5" /></div>
                <h3 className="text-lg font-black text-slate-950">Conversión de Presupuestos</h3>
              </div>
              <div className="flex h-44 items-center justify-center">

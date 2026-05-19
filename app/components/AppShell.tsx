@@ -216,34 +216,34 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
-                className={`group relative flex items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-bold transition-all duration-300 ${active
-                    ? 'bg-blue-600/10 text-white'
-                    : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
+                className={`group relative flex items-center gap-3.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-300 ${active
+                    ? 'bg-blue-600/10 text-white font-bold'
+                    : 'text-slate-450 hover:bg-white/[0.02] hover:text-slate-105'
                   }`}
               >
                 {active && (
-                  <div className="absolute left-0 h-5 w-1 rounded-r-full bg-blue-500" />
+                  <div className="absolute left-0 h-6 w-1 rounded-r-full bg-blue-500 shadow-[0_0_12px_#3b82f6]" />
                 )}
 
                 <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 ${active
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                      : 'bg-white/[0.03] text-slate-500 group-hover:bg-white/[0.08] group-hover:text-slate-300'
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-300 ${active
+                      ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white border-blue-400 shadow-[0_8px_20px_-4px_rgba(37,99,235,0.4)] ring-4 ring-blue-500/10'
+                      : 'bg-white/[0.02] border-white/[0.04] text-slate-500 group-hover:bg-white/[0.06] group-hover:border-white/[0.08] group-hover:text-slate-350'
                     }`}
                 >
-                  <Icon size={16} strokeWidth={2.5} />
+                  <Icon size={16} strokeWidth={1.75} className={active ? "fill-white/15" : "fill-transparent group-hover:fill-white/5"} />
                 </span>
 
-                <span className="flex-1 tracking-tight">{item.label}</span>
+                <span className="flex-1 tracking-tight font-sans">{item.label}</span>
 
                 {(item as any).isProFeature && !isPro && (
-                  <span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-500 ring-1 ring-blue-500/20">
+                  <span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[8px] font-mono font-bold uppercase tracking-wider text-blue-400 ring-1 ring-blue-500/20">
                     PRO
                   </span>
                 )}
 
                 {(item as any).isUltraFeature && planType !== 'ultra' && (
-                  <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-purple-400 ring-1 ring-purple-500/20">
+                  <span className="rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[8px] font-mono font-bold uppercase tracking-wider text-purple-400 ring-1 ring-purple-500/20">
                     ULTRA
                   </span>
                 )}
