@@ -3,6 +3,7 @@ import FilterButton from '@/app/components/FilterButton'
 
 import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import {
   ClipboardList,
@@ -51,6 +52,7 @@ type Props = {
 }
 
 export default function PedidosClient({ initialOrders, initialSellers, companyId, planType }: Props) {
+  const router = useRouter()
   const [orders, setOrders] = useState<Order[]>(initialOrders)
   const [sellers] = useState<SellerProfile[]>(initialSellers)
   const [loading, setLoading] = useState(false)
@@ -109,13 +111,16 @@ export default function PedidosClient({ initialOrders, initialSellers, companyId
       })
       const data = await response.json()
       if (data.success) {
+        toast.success('Borrador de factura generado con éxito')
+        setModalPreview({ isOpen: false, budgetId: null, clientName: '', totalAmount: 0 })
         refreshOrders()
+        router.push(`/facturas/ver/${budgetId}`)
       } else {
         throw new Error(data.error || 'Error al generar borrador')
       }
     } catch (error: any) {
       console.error(error)
-      alert(error.message)
+      toast.error(error.message || 'Ocurrió un error al generar el borrador')
     } finally {
       setEmitiendoId(null)
     }
