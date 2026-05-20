@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     )
 
     const body = await req.json()
-    const { company_name, email, user_id: bodyUserId } = body
+    const { company_name, email, user_id: bodyUserId, plan_type } = body
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
       .insert({
         name: company_name,
         subscription_expiry: subscriptionExpiry.toISOString(),
+        plan_type: plan_type || 'base',
       })
       .select('id')
       .single()
