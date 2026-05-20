@@ -213,15 +213,24 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Link de Ingresar para pantallas de Escritorio */}
             <Link
               href="/auth/login"
               className="hidden sm:inline-block text-[11px] font-black uppercase tracking-[0.2em] text-slate-300 hover:text-white transition duration-200"
             >
               Ingresar
             </Link>
+            {/* Botón de Iniciar Sesión exclusivo para dispositivos móviles */}
+            <Link
+              href="/auth/login"
+              className="sm:hidden rounded-xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 hover:shadow-[0_0_25px_rgba(99,102,241,0.4)] transition-all duration-300"
+            >
+              Iniciar Sesión
+            </Link>
+            {/* Botón de Probar Gratis exclusivo para pantallas de Escritorio */}
             <Link
               href="/auth/registro-nuevo"
-              className="rounded-xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 hover:shadow-[0_0_25px_rgba(99,102,241,0.4)] transition-all duration-300"
+              className="hidden sm:inline-block rounded-xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 hover:shadow-[0_0_25px_rgba(99,102,241,0.4)] transition-all duration-300"
             >
               Probar Gratis
             </Link>
