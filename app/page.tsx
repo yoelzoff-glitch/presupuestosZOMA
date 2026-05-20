@@ -522,7 +522,7 @@ export default function LandingPage() {
                 active={activeTab === 'vendedores'}
                 onClick={() => setActiveTab('vendedores')}
                 icon={Users}
-                label="Comisiones"
+                label="Vendedores"
               />
             </div>
 
@@ -715,13 +715,13 @@ export default function LandingPage() {
                 >
                   <div>
                     <span className="bg-indigo-500/10 text-indigo-300 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 mb-4 inline-block">
-                      Control de Vendedores
+                      Fuerza de Ventas Inteligente
                     </span>
                     <h3 className="text-3xl font-black text-white mb-5 leading-tight">
-                      Cálculo automático de comisiones ganadas
+                      Autonomía para tus vendedores, control total para vos
                     </h3>
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
-                      Dale a tus vendedores un acceso exclusivo para crear presupuestos. ZOMA calcula automáticamente la comisión de cada uno al concretarse las ventas, sin que tengas que hacer cuentas a fin de mes.
+                      Cada vendedor ingresa con su propio usuario para gestionar su cartera exclusiva de clientes y emitir presupuestos al instante. Como administrador, visualizás las métricas de rendimiento en tiempo real, comparás su desempeño para identificar a los mejores del mes, y liquidás comisiones automáticamente.
                     </p>
 
                     <div className="space-y-4">
