@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { 
-  Sparkles, 
-  ArrowRight, 
-  CheckCircle2, 
-  Zap, 
-  ShieldCheck, 
-  BarChart3, 
+import {
+  Sparkles,
+  ArrowRight,
+  CheckCircle2,
+  Zap,
+  ShieldCheck,
+  BarChart3,
   Package,
   Wallet,
   Clock,
@@ -33,23 +33,21 @@ export default function LandingPage() {
   const [tourStep, setTourStep] = useState(0)
 
   // Interactive Features Tab state
-  const [activeTab, setActiveTab] = useState<'tracking' | 'afip' | 'remitos' | 'vendedores'>('tracking')
+  const [activeTab, setActiveTab] = useState<'tracking' | 'afip' | 'vendedores'>('tracking')
 
   // FAQ state
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null)
 
   // ROI Calculator states
-  const [monthlyBudgets, setMonthlyBudgets] = useState(60)
-  const [manualTime, setManualTime] = useState(25) // minutes per budget
+  const [monthlyBudgets, setMonthlyBudgets] = useState(100)
+  const [manualTime, setManualTime] = useState(30) // minutes per budget
 
   // AFIP Feature Simulator states
   const [issuerType, setIssuerType] = useState<'monotributo' | 'responsable_inscripto'>('responsable_inscripto')
   const [clientType, setClientType] = useState<'final' | 'ri_cuit'>('ri_cuit')
   const [invoiceAmount, setInvoiceAmount] = useState(210000)
 
-  // Remito Millimeter Simulator states
-  const [offsetX, setOffsetX] = useState(0)
-  const [offsetY, setOffsetY] = useState(0)
+
 
   // Vendedor Commission Simulator states
   const [commissionRate, setCommissionRate] = useState(5) // %
@@ -64,8 +62,8 @@ export default function LandingPage() {
   }, [])
 
   // ROI Calculations
-  const hoursSaved = Math.round((monthlyBudgets * manualTime) / 60)
-  const moneySaved = Math.round((monthlyBudgets * manualTime * 8500) / 60) // $8.500 ARS/hour manual cost
+  const hoursSaved = Math.round((monthlyBudgets * manualTime * 1.4) / 60)
+  const moneySaved = Math.round(hoursSaved * 15500) // $15.500 ARS/hour representing commercial value
   const conversionIncrease = Math.round(monthlyBudgets * 0.16) // ~16% increase in closures due to timely tracking
 
   // Interactive Tour Slides
@@ -181,35 +179,12 @@ export default function LandingPage() {
           </div>
         </div>
       )
-    },
-    {
-      title: "4. Impresión de Remito Físico",
-      description: "Imprimí directo sobre tus propias hojas de remito sin desperdiciar papel. Ajustá los campos milímetro a milímetro para que todo salga en el lugar exacto.",
-      badge: "Alineación Fácil",
-      icon: Printer,
-      color: "from-amber-600 to-orange-600",
-      element: (
-        <div className="bg-slate-950 border border-slate-850 rounded-2xl p-6 text-left font-sans text-xs text-slate-400 shadow-2xl relative">
-          <div className="mb-4">
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-1">Alineación de Hoja</p>
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-2 text-white font-mono text-[10px]">
-              <span className="text-amber-500">Mover Horizontal:</span> <span className="bg-slate-950 px-1.5 py-0.5 rounded font-bold">+1.2 mm</span>
-              <span className="text-amber-500 ml-2">Mover Vertical:</span> <span className="bg-slate-950 px-1.5 py-0.5 rounded font-bold">-0.8 mm</span>
-            </div>
-          </div>
-          <div className="border border-amber-500/20 bg-amber-500/5 rounded-xl p-3 text-[10px] text-amber-200/90 leading-relaxed font-mono">
-            <span className="font-bold text-amber-400 block mb-1">🛡️ Remito Listo para Imprimir</span>
-            El texto se acomoda automáticamente para encajar de forma exacta en los casilleros de tus hojas preimpresas.
-          </div>
-          <p className="text-[9px] text-slate-500 mt-4 text-center italic">Adaptado a todo tipo de impresoras.</p>
-        </div>
-      )
     }
   ]
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-950 overflow-x-hidden text-slate-200 selection:bg-indigo-600 selection:text-white font-sans antialiased">
-      
+
       {/* GLOWING TECH GRADIENTS BACKGROUND */}
       <div className="absolute top-0 left-0 w-full h-[1200px] opacity-[0.35] pointer-events-none overflow-hidden z-0">
         <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[700px] bg-gradient-to-br from-indigo-700/60 to-violet-800/10 blur-[130px] rounded-full" />
@@ -229,7 +204,7 @@ export default function LandingPage() {
               <span className="text-[9px] font-black tracking-widest text-indigo-400 uppercase">Gestión de Ventas</span>
             </div>
           </Link>
-          
+
           <div className="hidden md:flex items-center gap-10 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
             <Link href="#features" className="hover:text-white hover:scale-102 transition duration-200">Funciones</Link>
             <Link href="#interactive" className="hover:text-white hover:scale-102 transition duration-200">Simuladores</Link>
@@ -238,14 +213,14 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <Link 
-              href="/auth/login" 
+            <Link
+              href="/auth/login"
               className="hidden sm:inline-block text-[11px] font-black uppercase tracking-[0.2em] text-slate-300 hover:text-white transition duration-200"
             >
               Ingresar
             </Link>
-            <Link 
-              href="/auth/register" 
+            <Link
+              href="/auth/registro-nuevo"
               className="rounded-xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 hover:shadow-[0_0_25px_rgba(99,102,241,0.4)] transition-all duration-300"
             >
               Probar Gratis
@@ -255,19 +230,19 @@ export default function LandingPage() {
       </nav>
 
       <main className="relative z-10">
-        
+
         {/* --- HERO SECTION --- */}
         <section className="relative pt-36 pb-24 lg:pt-48 lg:pb-36 overflow-hidden">
-          
+
           {/* Tech Grid Background Backdrop */}
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-35" />
 
           <div className="container mx-auto px-6 relative">
-            
+
             <div className="max-w-5xl mx-auto text-center mb-16">
-              
+
               {/* Dynamic Live Ticker Badge */}
-              <div 
+              <div
                 className="inline-flex items-center gap-2.5 rounded-full bg-slate-900/90 border border-slate-800 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-8 shadow-inner shadow-indigo-950/20"
               >
                 <span className="relative flex h-2.5 w-2.5 shrink-0">
@@ -276,37 +251,37 @@ export default function LandingPage() {
                 </span>
                 <span>{budgetsCreated.toLocaleString('es-AR')} Presupuestos Creados</span>
               </div>
-              
+
               {/* Mega Title */}
-              <h1 
+              <h1
                 className="text-5xl md:text-8xl font-black tracking-tight text-white mb-8 leading-[0.98]"
               >
-                Controlá tus presupuestos <br/>
-                y facturas sin <br/>
+                Controlá tus presupuestos <br />
+                y facturas sin <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-indigo-500">
                   complicarte la vida.
                 </span>
               </h1>
-              
+
               {/* Copy Persuasivo */}
-              <p 
+              <p
                 className="text-lg md:text-xl text-slate-400 font-medium max-w-3xl mx-auto mb-12 leading-relaxed"
               >
-                ZOMA une todo lo que tu negocio necesita: hacé presupuestos profesionales, sabé cuándo los leen, generá facturas electrónicas ARCA en un clic e imprimí tus remitos físicos a la perfección.
+                ZOMA une todo lo que tu negocio necesita: hacé presupuestos profesionales, sabé cuándo los leen, generá facturas electrónicas ARCA en un clic y controlá tus comisiones al instante.
               </p>
 
               {/* Call to Actions */}
-              <div 
+              <div
                 className="flex flex-col sm:flex-row items-center justify-center gap-5 mb-16"
               >
-                <Link 
-                  href="/auth/register" 
+                <Link
+                  href="/auth/registro-nuevo"
                   className="w-full sm:w-auto rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-10 py-5 text-base font-black text-white hover:from-indigo-500 hover:to-blue-500 hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 shadow-[0_0_35px_rgba(99,102,241,0.25)] flex items-center justify-center gap-2 group"
                 >
-                  Probar 14 días gratis
+                  Probar 7 días gratis
                   <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
-                <button 
+                <button
                   onClick={() => {
                     setTourStep(0);
                     setIsTourOpen(true);
@@ -319,7 +294,7 @@ export default function LandingPage() {
               </div>
 
               {/* Floating Badges */}
-              <div 
+              <div
                 className="flex flex-wrap items-center justify-center gap-4 text-xs font-bold text-slate-400"
               >
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
@@ -331,8 +306,8 @@ export default function LandingPage() {
                   <span>Sabé cuándo leen tus presupuestos</span>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
-                  <Printer size={16} className="text-amber-400" />
-                  <span>Remitos impresos alineados</span>
+                  <Users size={16} className="text-indigo-400" />
+                  <span>Portal de Contador</span>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-850 px-4 py-2 rounded-full">
                   <Users size={16} className="text-blue-400" />
@@ -343,7 +318,7 @@ export default function LandingPage() {
             </div>
 
             {/* Premium Mockup Showcase */}
-            <div 
+            <div
               className="relative max-w-6xl mx-auto transition-all duration-700 ease-out"
             >
               {/* Decorative side lights */}
@@ -352,14 +327,14 @@ export default function LandingPage() {
 
               <div className="relative rounded-3xl border border-slate-800 bg-slate-950/80 p-3 shadow-[0_50px_100px_-25px_rgba(0,0,0,0.8)] backdrop-blur-md overflow-hidden">
                 <div className="rounded-2xl overflow-hidden border border-slate-900 relative aspect-[16/9] w-full">
-                  <Image 
-                    src="/dashboard-mockup.png" 
-                    alt="Zoma Dashboard" 
+                  <Image
+                    src="/dashboard-mockup.png"
+                    alt="Zoma Dashboard"
                     fill
                     className="object-cover"
                     priority
                   />
-                  
+
                   {/* Subtle dark-to-transparent overlay on mockup */}
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/20 via-transparent to-transparent" />
                 </div>
@@ -383,19 +358,19 @@ export default function LandingPage() {
         {/* --- BENTO FEATURES --- */}
         <section id="features" className="py-36 bg-slate-950 relative">
           <div className="container mx-auto px-6">
-            
+
             <div className="text-center mb-24">
               <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-5">Eficiencia y Simplicidad</h2>
               <p className="text-4xl md:text-6xl font-black tracking-tight text-white animate-fadeIn">
-                Todo lo que necesitás <br/>
+                Todo lo que necesitás <br />
                 para tu día a día.
               </p>
             </div>
 
             <div className="grid md:grid-cols-12 gap-8 auto-rows-[360px]">
-              
+
               {/* Feature 1: Large Bento (Presupuestos de Conversión) */}
-              <div 
+              <div
                 className="md:col-span-8 rounded-3xl border border-slate-850 bg-gradient-to-br from-slate-900 to-slate-950 p-10 md:p-12 text-white relative overflow-hidden group hover:border-slate-800 transition-all duration-300"
               >
                 <div className="relative z-10 max-w-lg flex flex-col h-full justify-between">
@@ -414,20 +389,20 @@ export default function LandingPage() {
                     </span>
                   </div>
                 </div>
-                
+
                 {/* Decorative growth graphic inside card */}
                 <div className="absolute right-[-5%] bottom-[-5%] w-[45%] h-[80%] opacity-40 group-hover:scale-105 transition-transform duration-700 pointer-events-none">
-                  <Image 
-                    src="/growth-icon-dark.png" 
-                    alt="Growth" 
-                    fill 
+                  <Image
+                    src="/growth-icon-dark.png"
+                    alt="Growth"
+                    fill
                     className="object-contain object-right-bottom mix-blend-lighten"
                   />
                 </div>
               </div>
 
               {/* Feature 2: Small Bento (Facturación AFIP) */}
-              <div 
+              <div
                 className="md:col-span-4 rounded-3xl border border-indigo-900/30 bg-gradient-to-br from-indigo-900/20 via-slate-900 to-slate-950 p-10 md:p-12 text-white relative overflow-hidden group hover:border-indigo-800/30 transition-all duration-300"
               >
                 <div className="flex flex-col h-full justify-between relative z-10">
@@ -448,29 +423,9 @@ export default function LandingPage() {
                 <div className="absolute bottom-[-15%] right-[-15%] w-36 h-36 bg-indigo-500/10 blur-3xl rounded-full" />
               </div>
 
-              {/* Feature 3: Small Bento (Remitos en Talonarios) */}
-              <div 
-                className="md:col-span-4 rounded-3xl border border-slate-850 bg-slate-900/60 p-10 md:p-12 text-white relative overflow-hidden group hover:border-slate-800 transition-all duration-300"
-              >
-                <div className="flex flex-col h-full justify-between">
-                  <div>
-                    <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center mb-8">
-                      <Printer size={22} />
-                    </div>
-                    <h3 className="text-2xl font-black mb-4 tracking-tight">Remitos sin Desvíos</h3>
-                    <p className="text-slate-400 font-medium text-sm leading-relaxed">
-                      Imprimí directo sobre tus hojas o talonarios físicos de remitos. Ajustá los textos al milímetro para que caigan en el lugar exacto y no desperdicies papel.
-                    </p>
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-500">
-                    Alineación exacta para impresoras
-                  </div>
-                </div>
-              </div>
-
               {/* Feature 4: Large Bento (Vendedores y Comisiones) */}
-              <div 
-                className="md:col-span-8 rounded-3xl border border-slate-850 bg-gradient-to-br from-slate-950 to-slate-900 p-10 md:p-12 relative overflow-hidden flex flex-col justify-between group hover:border-slate-800 transition-all duration-300"
+              <div
+                className="md:col-span-12 rounded-3xl border border-slate-850 bg-gradient-to-br from-slate-950 to-slate-900 p-10 md:p-12 relative overflow-hidden flex flex-col justify-between group hover:border-slate-800 transition-all duration-300"
               >
                 <div className="grid md:grid-cols-2 gap-8 items-center h-full">
                   <div className="flex flex-col justify-between h-full">
@@ -487,7 +442,7 @@ export default function LandingPage() {
                       <span className="h-2 w-2 rounded-full bg-blue-500" /> Acceso exclusivo para vendedores
                     </div>
                   </div>
-                  
+
                   {/* Interactive-looking graphic inside large bento */}
                   <div className="relative h-full flex items-center justify-center">
                     <div className="w-full bg-slate-950 border border-slate-850 rounded-2xl p-5 shadow-2xl space-y-4">
@@ -523,7 +478,7 @@ export default function LandingPage() {
         {/* --- INTERACTIVE SHOWCASE SECTION --- */}
         <section id="interactive" className="py-36 bg-slate-900/40 border-y border-slate-900 relative">
           <div className="container mx-auto px-6">
-            
+
             <div className="text-center mb-16">
               <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-5">Demostración Interactiva</h2>
               <p className="text-4xl md:text-5xl font-black tracking-tight text-white animate-fadeIn">
@@ -536,35 +491,30 @@ export default function LandingPage() {
 
             {/* Dynamic Tabs Selector */}
             <div className="flex flex-wrap items-center justify-center gap-2 mb-12 max-w-3xl mx-auto bg-slate-950/60 p-2 rounded-2xl border border-slate-850">
-              <TabButton 
-                active={activeTab === 'tracking'} 
+              <TabButton
+                active={activeTab === 'tracking'}
                 onClick={() => setActiveTab('tracking')}
-                icon={Eye} 
-                label="Aviso de Apertura" 
+                icon={Eye}
+                label="Aviso de Apertura"
               />
-              <TabButton 
-                active={activeTab === 'afip'} 
+              <TabButton
+                active={activeTab === 'afip'}
                 onClick={() => setActiveTab('afip')}
-                icon={ShieldCheck} 
-                label="Factura ARCA" 
+                icon={ShieldCheck}
+                label="Factura ARCA"
               />
-              <TabButton 
-                active={activeTab === 'remitos'} 
-                onClick={() => setActiveTab('remitos')}
-                icon={Printer} 
-                label="Alinear Remitos" 
-              />
-              <TabButton 
-                active={activeTab === 'vendedores'} 
+
+              <TabButton
+                active={activeTab === 'vendedores'}
                 onClick={() => setActiveTab('vendedores')}
-                icon={Users} 
-                label="Comisiones" 
+                icon={Users}
+                label="Comisiones"
               />
             </div>
 
             {/* Tabs Dynamic Content Panel */}
             <div className="max-w-5xl mx-auto bg-slate-950 border border-slate-850 rounded-[2.5rem] p-8 md:p-12 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
-              
+
               {/* TAB 1: TRAZABILIDAD (DOBLE CHECK) */}
               {activeTab === 'tracking' && (
                 <div
@@ -604,7 +554,7 @@ export default function LandingPage() {
                       </div>
                       <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-black px-2 py-0.5 rounded">Enviado</span>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-400 font-medium">Cliente:</span>
@@ -614,13 +564,13 @@ export default function LandingPage() {
                         <span className="text-slate-400 font-medium">Importe:</span>
                         <span className="text-emerald-400 font-mono font-bold">$384.500 ARS</span>
                       </div>
-                      
+
                       <div className="border border-slate-800 bg-slate-950 p-4 rounded-xl space-y-2 mt-2">
                         <div className="text-indigo-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                           <span className="h-2 w-2 bg-indigo-500 rounded-full animate-ping shrink-0" />
                           Registro de Visitas Activo
                         </div>
-                        
+
                         <div className="text-[11px] space-y-2 text-slate-300 font-mono leading-relaxed pt-1.5">
                           <div className="flex gap-2">
                             <span className="text-indigo-400">👁️</span>
@@ -652,27 +602,27 @@ export default function LandingPage() {
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
                       El sistema calcula los impuestos y define si corresponde Factura A, B o C según el cliente de forma automática. Además, te avisa si el monto supera el límite permitido por ARCA para facturar a clientes sin registrar.
                     </p>
-                    
+
                     <div className="space-y-4">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Monto del Presupuesto</label>
-                        <input 
-                          type="range" 
-                          min="50000" 
-                          max="300000" 
+                        <input
+                          type="range"
+                          min="50000"
+                          max="300000"
                           step="10000"
-                          value={invoiceAmount} 
+                          value={invoiceAmount}
                           onChange={(e) => setInvoiceAmount(Number(e.target.value))}
                           className="accent-indigo-500 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer h-2"
                         />
                         <span className="font-mono text-sm font-black text-white">$ {invoiceAmount.toLocaleString('es-AR')} ARS</span>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Tu Condición Fiscal</label>
-                          <select 
-                            value={issuerType} 
+                          <select
+                            value={issuerType}
                             onChange={(e: any) => setIssuerType(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl p-2.5 outline-none font-bold cursor-pointer"
                           >
@@ -682,8 +632,8 @@ export default function LandingPage() {
                         </div>
                         <div>
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-2">Tipo de Cliente</label>
-                          <select 
-                            value={clientType} 
+                          <select
+                            value={clientType}
                             onChange={(e: any) => setClientType(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-800 text-slate-300 text-xs rounded-xl p-2.5 outline-none font-bold cursor-pointer"
                           >
@@ -709,22 +659,22 @@ export default function LandingPage() {
                     <div className="space-y-2 text-[10px] text-slate-600 font-mono">
                       <div className="flex justify-between"><span>Condición Iva Emisor:</span> <span className="font-bold text-slate-900">{issuerType === 'monotributo' ? 'Monotributo' : 'Responsable Inscripto'}</span></div>
                       <div className="flex justify-between"><span>Condición Iva Cliente:</span> <span className="font-bold text-slate-900">{clientType === 'ri_cuit' ? 'Responsable Inscripto' : 'Consumidor Final'}</span></div>
-                      
+
                       <div className="border-t border-slate-150 my-2 pt-2 space-y-1.5 text-[11px]">
                         <div className="flex justify-between">
-                          <span>Subtotal Neto:</span> 
+                          <span>Subtotal Neto:</span>
                           <span className="font-bold text-slate-900">
                             $ {issuerType === 'monotributo' || clientType === 'final' ? invoiceAmount.toLocaleString('es-AR') : Math.round(invoiceAmount / 1.21).toLocaleString('es-AR')}
                           </span>
                         </div>
                         {issuerType === 'responsable_inscripto' && clientType === 'ri_cuit' && (
                           <div className="flex justify-between text-indigo-600">
-                            <span>IVA discriminado (21%):</span> 
+                            <span>IVA discriminado (21%):</span>
                             <span className="font-bold">$ {Math.round(invoiceAmount - (invoiceAmount / 1.21)).toLocaleString('es-AR')}</span>
                           </div>
                         )}
                         <div className="flex justify-between text-sm text-slate-950 font-black pt-1 border-t border-slate-100">
-                          <span>Total Facturado:</span> 
+                          <span>Total Facturado:</span>
                           <span>$ {invoiceAmount.toLocaleString('es-AR')} ARS</span>
                         </div>
                       </div>
@@ -744,110 +694,6 @@ export default function LandingPage() {
                 </div>
               )}
 
-              {/* TAB 3: CALIBRACION REMITO */}
-              {activeTab === 'remitos' && (
-                <div
-                  className="grid md:grid-cols-2 gap-10 items-center transition-opacity duration-300 ease-in-out"
-                >
-                  <div>
-                    <span className="bg-indigo-500/10 text-indigo-300 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 mb-4 inline-block">
-                      Alineación automática de papel
-                    </span>
-                    <h3 className="text-3xl font-black text-white mb-5 leading-tight">
-                      Alineá tus remitos sin desperdiciar hojas
-                    </h3>
-                    <p className="text-slate-400 font-medium leading-relaxed mb-6">
-                      No más textos corridos o fuera de lugar en tus talonarios físicos. Mové los textos milímetro a milímetro usando deslizadores simples para que calcen a la perfección con tu impresora.
-                    </p>
-                    
-                    <div className="space-y-6">
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
-                          <span>Mover a la izquierda / derecha</span>
-                          <span className="font-mono text-amber-400">{offsetX > 0 ? `+${offsetX}` : offsetX} mm</span>
-                        </div>
-                        <input 
-                          type="range" 
-                          min="-12" 
-                          max="12" 
-                          value={offsetX} 
-                          onChange={(e) => setOffsetX(Number(e.target.value))}
-                          className="accent-amber-500 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer h-2"
-                        />
-                      </div>
-                      
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
-                          <span>Mover hacia arriba / abajo</span>
-                          <span className="font-mono text-amber-400">{offsetY > 0 ? `+${offsetY}` : offsetY} mm</span>
-                        </div>
-                        <input 
-                          type="range" 
-                          min="-12" 
-                          max="12" 
-                          value={offsetY} 
-                          onChange={(e) => setOffsetY(Number(e.target.value))}
-                          className="accent-amber-500 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer h-2"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-center">
-                    {/* Interactive Visual Paper Mockup */}
-                    <div className="w-full max-w-[280px] aspect-[1/1.4] bg-white border-2 border-dashed border-amber-500/40 p-4 shadow-2xl rounded-xl relative overflow-hidden text-[9px] text-slate-800 font-mono">
-                      {/* Simulation Guide Grid */}
-                      <div className="absolute inset-0 bg-[radial-gradient(#f1f5f9_1px,transparent_1.5px)] bg-[size:10px_10px] opacity-70" />
-                      
-                      <div className="absolute inset-x-0 top-0 bg-amber-500/10 border-b border-amber-500/20 py-1 text-center text-[7px] font-bold text-amber-800 tracking-wider uppercase z-20">
-                        Simulación de tu Hoja de Remito
-                      </div>
-
-                      {/* Animated offset wrapper */}
-                      <div 
-                        style={{ 
-                          transform: `translate(${offsetX * 1.5}px, ${offsetY * 1.5}px)`,
-                          transition: 'transform 0.15s ease-out'
-                        }}
-                        className="space-y-4 pt-6 relative z-10"
-                      >
-                        <div className="flex justify-between items-start border-b border-slate-200 pb-1.5">
-                          <span className="font-bold text-slate-950 text-[10px]">REMITO R</span>
-                          <span className="text-rose-600 font-bold">N° 0001-00004812</span>
-                        </div>
-                        
-                        <div className="space-y-1">
-                          <div className="bg-slate-100 p-1 rounded"><span className="text-slate-400">Cliente:</span> Aberturas Castelli</div>
-                          <div className="bg-slate-100 p-1 rounded"><span className="text-slate-400">Domicilio:</span> Av. Rivadavia 4810</div>
-                        </div>
-
-                        <div className="border border-slate-200 rounded overflow-hidden">
-                          <div className="bg-slate-50 p-1 font-bold border-b border-slate-200 grid grid-cols-6 text-[7px]">
-                            <span className="col-span-4">Detalle</span>
-                            <span className="col-span-2 text-right">Cant.</span>
-                          </div>
-                          <div className="p-1 space-y-1 text-[7px]">
-                            <div className="grid grid-cols-6">
-                              <span className="col-span-4">Perfiles Aluminio</span>
-                              <span className="col-span-2 text-right">40</span>
-                            </div>
-                            <div className="grid grid-cols-6">
-                              <span className="col-span-4">Accesorios Cierre</span>
-                              <span className="col-span-2 text-right">2</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-between items-center text-[8px] pt-1">
-                          <span className="text-slate-400">CAI N°: 4892019485</span>
-                          <span className="text-slate-950 font-bold">Fecha: 17/05/2026</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* TAB 4: FUERZA DE VENTAS Y COMISIONES */}
               {activeTab === 'vendedores' && (
                 <div
@@ -863,16 +709,16 @@ export default function LandingPage() {
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
                       Dale a tus vendedores un acceso exclusivo para crear presupuestos. ZOMA calcula automáticamente la comisión de cada uno al concretarse las ventas, sin que tengas que hacer cuentas a fin de mes.
                     </p>
-                    
+
                     <div className="space-y-4">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Porcentaje de Comisión</label>
-                        <input 
-                          type="range" 
-                          min="2" 
-                          max="12" 
+                        <input
+                          type="range"
+                          min="2"
+                          max="12"
                           step="0.5"
-                          value={commissionRate} 
+                          value={commissionRate}
                           onChange={(e) => setCommissionRate(Number(e.target.value))}
                           className="accent-indigo-500 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer h-2"
                         />
@@ -888,7 +734,7 @@ export default function LandingPage() {
                     </div>
 
                     <div className="space-y-4">
-                      
+
                       {/* Seller 1 */}
                       <div className="bg-slate-950 p-4 border border-slate-850 rounded-xl space-y-2">
                         <div className="flex justify-between items-center">
@@ -933,15 +779,15 @@ export default function LandingPage() {
 
         {/* --- DYNAMIC ROI CALCULATOR --- */}
         <section className="py-36 bg-slate-950 relative">
-          
+
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#4f46e50f_0%,transparent_60%)] pointer-events-none" />
 
           <div className="container mx-auto px-6 relative">
-            
+
             <div className="max-w-5xl mx-auto rounded-[3.5rem] border border-slate-850 bg-gradient-to-br from-slate-900 to-slate-950 p-8 md:p-16 shadow-3xl">
-              
+
               <div className="grid lg:grid-cols-12 gap-12 items-center">
-                
+
                 <div className="lg:col-span-7 space-y-8">
                   <div>
                     <span className="inline-flex items-center gap-2 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-4.5 py-1.5 text-[10px] font-black uppercase tracking-widest mb-6">
@@ -949,7 +795,7 @@ export default function LandingPage() {
                       Calculadora de Ahorro
                     </span>
                     <h3 className="text-3xl md:text-5xl font-black text-white tracking-tight">
-                      Descubrí cuánto tiempo <br/> y dinero podés recuperar.
+                      Descubrí cuánto tiempo <br /> y dinero podés recuperar.
                     </h3>
                   </div>
 
@@ -964,11 +810,11 @@ export default function LandingPage() {
                         <span className="text-slate-400">Presupuestos que enviás por mes:</span>
                         <span className="text-white font-mono font-black">{monthlyBudgets}</span>
                       </div>
-                      <input 
-                        type="range" 
-                        min="10" 
-                        max="400" 
-                        value={monthlyBudgets} 
+                      <input
+                        type="range"
+                        min="10"
+                        max="400"
+                        value={monthlyBudgets}
                         onChange={(e) => setMonthlyBudgets(Number(e.target.value))}
                         className="w-full accent-indigo-500 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer h-2"
                       />
@@ -977,14 +823,14 @@ export default function LandingPage() {
                     {/* Time slider */}
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs font-bold">
-                        <span className="text-slate-400">Minutos que tardás por presupuesto (hacerlo, mandarlo por WhatsApp, facturarlo e imprimir remito):</span>
+                        <span className="text-slate-400">Minutos que tardás por presupuesto (hacerlo, mandarlo por WhatsApp, facturarlo y conciliar su cobro):</span>
                         <span className="text-white font-mono font-black">{manualTime} min</span>
                       </div>
-                      <input 
-                        type="range" 
-                        min="5" 
-                        max="60" 
-                        value={manualTime} 
+                      <input
+                        type="range"
+                        min="5"
+                        max="60"
+                        value={manualTime}
                         onChange={(e) => setManualTime(Number(e.target.value))}
                         className="w-full accent-indigo-500 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer h-2"
                       />
@@ -998,7 +844,7 @@ export default function LandingPage() {
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent opacity-50 pointer-events-none" />
 
                   <div className="relative z-10 space-y-8">
-                    
+
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Horas Recuperadas</p>
                       <p className="text-5xl font-black tracking-tight font-mono">{hoursSaved} hs <span className="text-sm text-indigo-200">/mes</span></p>
@@ -1033,7 +879,7 @@ export default function LandingPage() {
 
           <div className="container mx-auto px-6">
             <div className="grid lg:grid-cols-2 gap-24 items-center">
-              
+
               <div>
                 <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-6">Tranquilidad para tu Negocio</h2>
                 <h3 className="text-4xl md:text-5xl font-black tracking-tight mb-8 leading-tight">
@@ -1042,34 +888,34 @@ export default function LandingPage() {
                 <p className="text-slate-400 font-medium text-base mb-10 leading-relaxed">
                   ZOMA te acompaña en cada paso de tu negocio, cuidando tus datos y asegurando que cada factura, remito y cuenta corriente esté siempre en regla y libre de errores.
                 </p>
-                
+
                 <div className="space-y-8">
-                  <TechDetailRow 
-                    icon={ShieldCheck} 
-                    title="Pruebas sin riesgo antes de Facturar" 
-                    text="Hacé pruebas tranquilamente para entender el sistema antes de emitir facturas oficiales a tus clientes de forma real." 
+                  <TechDetailRow
+                    icon={ShieldCheck}
+                    title="Pruebas sin riesgo antes de Facturar"
+                    text="Hacé pruebas tranquilamente para entender el sistema antes de emitir facturas oficiales a tus clientes de forma real."
                   />
-                  <TechDetailRow 
-                    icon={Zap} 
-                    title="Aviso de vencimiento de talonarios" 
-                    text="ZOMA te avisa automáticamente antes de que se venzan tus autorizaciones (CAI) para que nunca imprimas un remito inválido sin darte cuenta." 
+                  <TechDetailRow
+                    icon={Users}
+                    title="Portal de Contador dedicado"
+                    text="Tu contador tiene un acceso directo para descargar facturas, retenciones y reportes impositivos sin que tengas que mandarle nada por mail."
                   />
-                  <TechDetailRow 
-                    icon={Cpu} 
-                    title="Alertas de montos ARCA" 
-                    text="El sistema te avisa al instante si una factura supera el límite permitido por ARCA para clientes sin registrar, evitando cualquier infracción." 
+                  <TechDetailRow
+                    icon={Cpu}
+                    title="Alertas de montos ARCA"
+                    text="El sistema te avisa al instante si una factura supera el límite permitido por ARCA para clientes sin registrar, evitando cualquier infracción."
                   />
                 </div>
               </div>
 
-              <div 
+              <div
                 className="relative"
               >
                 <div className="bg-gradient-to-br from-indigo-600/10 to-slate-900/40 rounded-[3rem] border border-slate-800 p-10 md:p-14 backdrop-blur-sm relative">
                   <div className="absolute top-0 right-0 transform translate-x-3 -translate-y-3 bg-indigo-500 text-slate-950 font-black uppercase text-[9px] tracking-widest px-3.5 py-1.5 rounded-xl">
                     Garantías
                   </div>
-                  
+
                   <div className="space-y-8">
                     <div className="flex items-start gap-5">
                       <div className="h-10 w-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/20">
@@ -1112,7 +958,7 @@ export default function LandingPage() {
         {/* --- PRICING SECTION --- */}
         <section id="pricing" className="py-36 bg-slate-900/30 relative border-t border-slate-900">
           <div className="container mx-auto px-6">
-            
+
             <div className="text-center mb-24">
               <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-5">Planes Comerciales</h2>
               <p className="text-4xl md:text-5xl font-black tracking-tight text-white">
@@ -1124,9 +970,9 @@ export default function LandingPage() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto items-stretch">
-              
+
               {/* PLAN BASE */}
-              <PricingCard 
+              <PricingCard
                 title="Plan Base"
                 price="80.000"
                 description="Organiza tus presupuestos, deudas y facturación fiscal al instante."
@@ -1137,13 +983,14 @@ export default function LandingPage() {
                   "Control de deudas y pagos (Cuentas Corrientes)",
                   "Saber si abrieron tus presupuestos (Aviso de lectura)",
                   "Cobrar por Mercado Pago integrado",
-                  "1 Sucursal y 2 Vendedores",
+                  "1 Sucursal Comercial (Sin vendedores)",
+                  "Portal de Contador dedicado 👔",
                   "Soporte rápido por Tickets"
                 ]}
               />
 
               {/* PLAN PRO */}
-              <PricingCard 
+              <PricingCard
                 title="Plan PRO"
                 price="110.000"
                 description="La suite de control completa para pymes que manejan stock y equipos."
@@ -1151,9 +998,9 @@ export default function LandingPage() {
                   "Todo lo del Plan Base",
                   "Control de Stock e Inventario inteligente",
                   "Recetas para armar productos (Insumos)",
-                  "Alineación milimétrica de remitos impresos",
-                  "Hasta 5 Vendedores con comisiones automáticas",
-                  "3 Sucursales comerciales",
+                  "Hasta 10 Vendedores con comisiones automáticas",
+                  "Portal de Contador dedicado 👔",
+                  "Chat Interno Real-time para tu equipo",
                   "Soporte Prioritario dedicado"
                 ]}
                 popular
@@ -1167,7 +1014,7 @@ export default function LandingPage() {
         {/* --- FAQ SECTION --- */}
         <section id="faq" className="py-36 bg-slate-950 border-t border-slate-900">
           <div className="container mx-auto px-6">
-            
+
             <div className="text-center mb-24">
               <h2 className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-5">Preguntas Frecuentes</h2>
               <p className="text-4xl md:text-5xl font-black tracking-tight text-white animate-fadeIn">
@@ -1176,33 +1023,33 @@ export default function LandingPage() {
             </div>
 
             <div className="max-w-4xl mx-auto space-y-4">
-              <FaqItem 
-                question="¿Cómo funciona la alineación para remitos preimpresos?"
-                answer="Es muy fácil: cada imprenta hace los talonarios con distintas medidas. Con ZOMA no necesitás adaptarte a planillas complicadas. En la configuración del sistema, podés mover los textos milímetro a milímetro usando deslizadores simples (hacia arriba, abajo o los lados) para que el texto encaje perfectamente en los casilleros de tus remitos físicos preimpresos."
+              <FaqItem
+                question="¿Qué es el Portal de Contador y cómo simplifica mi mes?"
+                answer="Es un acceso exclusivo y gratuito para tu contador público. Desde allí, puede exportar los reportes de IVA Ventas, facturas emitidas, percepciones y deudas de forma directa en formatos estándar (Excel y TXT para la AFIP), ahorrándote horas de descarga y envío manual a fin de mes."
                 isOpen={openFaqIndex === 0}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 0 ? null : 0)}
               />
-              <FaqItem 
+              <FaqItem
                 question="¿La facturación directa de ARCA requiere que yo suba mi certificado digital?"
                 answer="Sí. Para poder emitir facturas electrónicas oficiales en ZOMA, ARCA exige asociar un certificado digital (archivos .crt y .key) que generás de forma gratuita en su web. ZOMA se encarga de conectar esos archivos de forma segura para autorizar tus facturas al instante y sin dar vueltas."
                 isOpen={openFaqIndex === 1}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 1 ? null : 1)}
               />
-              <FaqItem 
+              <FaqItem
                 question="¿Qué es el aviso de lectura y cómo sé si el cliente abrió el presupuesto?"
                 answer="Es una alerta automática que te avisa cuando tu cliente leyó tu propuesta. Al crear un presupuesto en ZOMA, se genera un enlace web para enviarle. En el momento en que tu cliente entra a mirar ese enlace desde su celular o computadora, el sistema te lo marca con un check verde en tu panel y te avisa exactamente cuándo lo vio."
                 isOpen={openFaqIndex === 2}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 2 ? null : 2)}
               />
-              <FaqItem 
+              <FaqItem
                 question="¿Puedo probar el sistema de manera gratuita?"
-                answer="Sí, claro. Todos nuestros planes incluyen 14 días de prueba completamente gratis y sin compromiso. Podés registrarte, probar cómo se crean los presupuestos, controlar el stock y usar todas las funciones libremente para ver si te sirve."
+                answer="Sí, claro. Todos nuestros planes incluyen 7 días de prueba completamente gratis y sin compromiso. Podés registrarte, probar cómo se crean los presupuestos, controlar el stock y usar todas las funciones libremente para ver si te sirve."
                 isOpen={openFaqIndex === 3}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 3 ? null : 3)}
               />
-              <FaqItem 
-                question="¿Qué validez tiene el control de vencimiento del C.A.I. en los remitos?"
-                answer="Los talonarios de remitos físicos tienen una fecha de vencimiento que te otorga ARCA (el número de C.A.I.). Si emitís un remito vencido, podés tener problemas legales o multas. ZOMA controla esa fecha por vos de forma automática y te avisa con anticipación para que nunca imprimas un comprobante vencido sin querer."
+              <FaqItem
+                question="¿Cómo funciona el Chat Interno en el Plan PRO?"
+                answer="El chat interno conecta a todo tu equipo (administradores, vendedores y personal de stock) directamente dentro de la plataforma en tiempo real. Pueden coordinar entregas, consultar dudas sobre presupuestos activos y recibir alertas de ventas sin salir de la app ni depender de chats externos."
                 isOpen={openFaqIndex === 4}
                 toggle={() => setOpenFaqIndex(openFaqIndex === 4 ? null : 4)}
               />
@@ -1214,30 +1061,30 @@ export default function LandingPage() {
         {/* --- FINAL CTA SECTION --- */}
         <section className="py-36 bg-slate-950 border-t border-slate-900 relative">
           <div className="container mx-auto px-6">
-            
-            <div 
+
+            <div
               className="bg-indigo-600 rounded-[3rem] p-12 md:p-24 text-center text-white relative overflow-hidden shadow-2xl shadow-indigo-600/20"
             >
               {/* Decorative radial light */}
               <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.1)_0%,transparent_70%)] opacity-60 pointer-events-none" />
-              
+
               <h2 className="text-4xl md:text-7xl font-black tracking-tight mb-8 relative z-10 leading-none">
-                Tu Pyme merece <br/>
+                Tu Pyme merece <br />
                 el mejor sistema.
               </h2>
               <p className="text-lg md:text-xl text-indigo-100 font-medium mb-12 max-w-2xl mx-auto relative z-10">
                 Unite hoy a las cientos de empresas que agilizaron su circuito administrativo con ZOMA.
               </p>
-              
+
               <div className="flex flex-col sm:flex-row items-center justify-center gap-5 relative z-10">
-                <Link 
-                  href="/auth/register" 
+                <Link
+                  href="/auth/registro-nuevo"
                   className="w-full sm:w-auto rounded-xl bg-white px-10 py-5 text-base font-black text-indigo-700 hover:scale-[1.04] transition-all shadow-xl flex items-center justify-center"
                 >
                   Empezar ahora gratis
                 </Link>
                 <span className="text-xs font-black uppercase tracking-widest text-indigo-200">
-                  Prueba de 14 días · Sin tarjetas
+                  Prueba de 7 días · Sin tarjetas
                 </span>
               </div>
             </div>
@@ -1250,9 +1097,9 @@ export default function LandingPage() {
       {/* --- FOOTER --- */}
       <footer className="bg-slate-950 border-t border-slate-900 py-16 relative z-10">
         <div className="container mx-auto px-6">
-          
+
           <div className="grid md:grid-cols-4 gap-12 items-start mb-16">
-            
+
             <div className="space-y-6">
               <Link href="/" className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold">
@@ -1264,49 +1111,49 @@ export default function LandingPage() {
                 La plataforma líder en presupuestos y gestión integral de ventas adaptada al comercio en Argentina.
               </p>
             </div>
-            
+
             <div>
               <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-6">Módulos Core</h4>
               <ul className="space-y-3.5 text-xs font-bold text-slate-400">
                 <li>
-                  <button 
+                  <button
                     onClick={() => {
                       setActiveTab('tracking');
                       document.getElementById('interactive')?.scrollIntoView({ behavior: 'smooth' });
-                    }} 
+                    }}
                     className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
                   >
                     Presupuestos Trazables
                   </button>
                 </li>
                 <li>
-                  <button 
+                  <button
                     onClick={() => {
                       setActiveTab('afip');
                       document.getElementById('interactive')?.scrollIntoView({ behavior: 'smooth' });
-                    }} 
+                    }}
                     className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
                   >
                     Facturación ARCA
                   </button>
                 </li>
                 <li>
-                  <button 
+                  <button
                     onClick={() => {
-                      setActiveTab('remitos');
+                      setActiveTab('tracking');
                       document.getElementById('interactive')?.scrollIntoView({ behavior: 'smooth' });
-                    }} 
+                    }}
                     className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
                   >
-                    Calibrador de Remitos
+                    Portal de Contador
                   </button>
                 </li>
                 <li>
-                  <button 
+                  <button
                     onClick={() => {
                       setActiveTab('vendedores');
                       document.getElementById('interactive')?.scrollIntoView({ behavior: 'smooth' });
-                    }} 
+                    }}
                     className="hover:text-indigo-400 transition text-left cursor-pointer bg-transparent border-none p-0 outline-none"
                   >
                     Gestión Vendedores
@@ -1344,15 +1191,15 @@ export default function LandingPage() {
 
       {/* --- TOUR INTERACTIVE MODAL (SIMULATION DEMO) --- */}
       {isTourOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md transition-all duration-300"
         >
-          <div 
+          <div
             className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl p-6 md:p-10 shadow-2xl relative overflow-hidden"
           >
-            
+
             {/* Close button */}
-            <button 
+            <button
               onClick={() => setIsTourOpen(false)}
               className="absolute top-5 right-5 text-slate-400 hover:text-white bg-slate-850 p-2 rounded-xl border border-slate-800 transition cursor-pointer"
             >
@@ -1360,7 +1207,7 @@ export default function LandingPage() {
             </button>
 
             <div className="grid md:grid-cols-12 gap-8 items-center pt-4">
-              
+
               {/* Visual Simulation Display */}
               <div className="md:col-span-5 flex justify-center items-center">
                 <div className="w-full max-w-xs relative aspect-square flex items-center justify-center bg-slate-950 border border-slate-850 p-6 rounded-2xl shadow-inner overflow-hidden">
@@ -1388,7 +1235,7 @@ export default function LandingPage() {
                 {/* Navigation Bullets */}
                 <div className="flex gap-1.5 items-center">
                   {tourSlides.map((_, idx) => (
-                    <button 
+                    <button
                       key={idx}
                       onClick={() => setTourStep(idx)}
                       className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${tourStep === idx ? 'w-8 bg-indigo-500' : 'w-2 bg-slate-800'}`}
@@ -1399,23 +1246,23 @@ export default function LandingPage() {
                 {/* Navigation controls */}
                 <div className="flex gap-3 pt-4">
                   {tourStep > 0 && (
-                    <button 
+                    <button
                       onClick={() => setTourStep(prev => prev - 1)}
                       className="rounded-xl border border-slate-800 bg-slate-900 px-6 py-3.5 text-xs font-black uppercase tracking-wider text-slate-300 hover:text-white transition cursor-pointer"
                     >
                       Anterior
                     </button>
                   )}
-                  
+
                   {tourStep < tourSlides.length - 1 ? (
-                    <button 
+                    <button
                       onClick={() => setTourStep(prev => prev + 1)}
                       className="rounded-xl bg-indigo-600 px-8 py-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-indigo-500 transition shadow-[0_0_20px_rgba(99,102,241,0.2)] cursor-pointer"
                     >
                       Siguiente Paso
                     </button>
                   ) : (
-                    <button 
+                    <button
                       onClick={() => setIsTourOpen(false)}
                       className="rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-8 py-3.5 text-xs font-black uppercase tracking-wider text-white hover:scale-103 transition shadow-[0_0_25px_rgba(99,102,241,0.25)] cursor-pointer"
                     >
@@ -1453,13 +1300,13 @@ function StatBlock({ label, value }: { label: string, value: string }) {
 function TechDetailRow({ icon: Icon, title, text }: any) {
   return (
     <div className="flex gap-5">
-       <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-850 flex items-center justify-center shrink-0 text-indigo-400 shadow-inner">
-          <Icon size={18} />
-       </div>
-       <div>
-          <h4 className="text-lg font-black mb-1.5 text-white tracking-tight leading-tight">{title}</h4>
-          <p className="text-slate-400 text-sm font-medium leading-relaxed">{text}</p>
-       </div>
+      <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-850 flex items-center justify-center shrink-0 text-indigo-400 shadow-inner">
+        <Icon size={18} />
+      </div>
+      <div>
+        <h4 className="text-lg font-black mb-1.5 text-white tracking-tight leading-tight">{title}</h4>
+        <p className="text-slate-400 text-sm font-medium leading-relaxed">{text}</p>
+      </div>
     </div>
   )
 }
@@ -1467,13 +1314,12 @@ function TechDetailRow({ icon: Icon, title, text }: any) {
 /* SUBCOMPONENT: Interactive Tab Switcher Button */
 function TabButton({ active, icon: Icon, label, onClick }: any) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`flex items-center gap-2.5 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 cursor-pointer ${
-        active 
-          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
-          : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
-      }`}
+      className={`flex items-center gap-2.5 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 cursor-pointer ${active
+        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+        : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
+        }`}
     >
       <Icon size={15} />
       <span>{label}</span>
@@ -1485,23 +1331,22 @@ function TabButton({ active, icon: Icon, label, onClick }: any) {
 function FaqItem({ question, answer, isOpen, toggle }: any) {
   return (
     <div className="border border-slate-900 bg-slate-950/60 rounded-2xl overflow-hidden transition-all duration-300 hover:border-slate-800">
-      <button 
+      <button
         onClick={toggle}
         className="w-full flex items-center justify-between p-6 text-left outline-none cursor-pointer"
       >
         <span className="font-black text-white text-base md:text-lg tracking-tight pr-4">
           {question}
         </span>
-        <ChevronDown 
-          size={18} 
-          className={`text-indigo-400 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} 
+        <ChevronDown
+          size={18}
+          className={`text-indigo-400 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
-      <div 
-        className={`transition-all duration-300 ease-in-out overflow-hidden ${
-          isOpen ? 'max-h-96 opacity-100 pb-6' : 'max-h-0 opacity-0'
-        }`}
+      <div
+        className={`transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-96 opacity-100 pb-6' : 'max-h-0 opacity-0'
+          }`}
       >
         <div className="px-6 text-slate-400 text-sm leading-relaxed font-medium">
           {answer}
@@ -1514,23 +1359,22 @@ function FaqItem({ question, answer, isOpen, toggle }: any) {
 /* SUBCOMPONENT: Pricing Plan Card */
 function PricingCard({ title, price, description, features, popular, badge, originalPrice }: any) {
   return (
-    <div 
-      className={`p-10 md:p-12 rounded-[2.5rem] border ${
-        popular 
-          ? 'border-indigo-600 bg-slate-900 shadow-[0_30px_60px_-15px_rgba(99,102,241,0.15)] ring-1 ring-indigo-600/10' 
-          : 'border-slate-900 bg-slate-950'
-      } relative transition-all duration-500 hover:scale-[1.02] flex flex-col justify-between`}
+    <div
+      className={`p-10 md:p-12 rounded-[2.5rem] border ${popular
+        ? 'border-indigo-600 bg-slate-900 shadow-[0_30px_60px_-15px_rgba(99,102,241,0.15)] ring-1 ring-indigo-600/10'
+        : 'border-slate-900 bg-slate-950'
+        } relative transition-all duration-500 hover:scale-[1.02] flex flex-col justify-between`}
     >
       {badge && (
         <div className="absolute top-0 right-10 -translate-y-1/2 rounded-full bg-indigo-600 px-4 py-1.5 text-[8px] font-black uppercase tracking-[0.2em] text-white">
           {badge}
         </div>
       )}
-      
+
       <div>
         <h3 className="text-2xl font-black mb-1.5 text-white tracking-tight">{title}</h3>
         <p className="text-xs font-medium text-slate-500 mb-8">{description}</p>
-        
+
         <div className="mb-8 min-h-[64px] flex flex-col justify-end">
           {originalPrice && (
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -1544,7 +1388,7 @@ function PricingCard({ title, price, description, features, popular, badge, orig
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">/ mes</span>
           </div>
         </div>
-        
+
         <div className="space-y-4 mb-10">
           {features.map((f: string) => (
             <div key={f} className="flex items-start gap-3.5 text-xs font-bold text-slate-300">
@@ -1555,15 +1399,14 @@ function PricingCard({ title, price, description, features, popular, badge, orig
         </div>
       </div>
 
-      <Link 
-        href="/auth/register" 
-        className={`block w-full rounded-xl py-4.5 text-center text-xs font-black uppercase tracking-widest transition-all duration-300 ${
-          popular 
-            ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/15' 
-            : 'bg-slate-900 text-white hover:bg-slate-850 hover:text-white border border-slate-800'
-        }`}
+      <Link
+        href="/auth/registro-nuevo"
+        className={`block w-full rounded-xl py-4.5 text-center text-xs font-black uppercase tracking-widest transition-all duration-300 ${popular
+          ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/15'
+          : 'bg-slate-900 text-white hover:bg-slate-850 hover:text-white border border-slate-800'
+          }`}
       >
-        Probar 14 días gratis
+        Probar 7 días gratis
       </Link>
     </div>
   )
