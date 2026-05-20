@@ -195,9 +195,14 @@ export default function LandingPage() {
       {/* --- NAVIGATION --- */}
       <nav className="fixed top-0 z-[100] w-full bg-slate-950/75 backdrop-blur-2xl border-b border-slate-900 transition-all duration-300">
         <div className="container mx-auto flex h-22 items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform duration-300">
-              <Sparkles size={20} className="animate-pulse" />
+          {/* --- LOGO --- */}
+          <Link href="#" className="flex items-center gap-3 group relative z-10">
+            <div className="h-10 w-10 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300 flex items-center justify-center bg-[#001333] border border-slate-800">
+              <img 
+                src="/logo-zoma.jpg" 
+                alt="ZOMA Logo" 
+                className="h-full w-full object-cover scale-[1.45] -translate-y-[8%]" 
+              />
             </div>
             <div className="flex flex-col">
               <span className="text-xl font-black tracking-tighter text-white leading-none">ZOMA</span>
@@ -1111,8 +1116,12 @@ export default function LandingPage() {
 
             <div className="space-y-6">
               <Link href="/" className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold">
-                  <Sparkles size={16} />
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden bg-[#001333] border border-slate-800">
+                  <img 
+                    src="/logo-zoma.jpg" 
+                    alt="ZOMA Logo" 
+                    className="h-full w-full object-cover scale-[1.45] -translate-y-[8%]" 
+                  />
                 </div>
                 <span className="text-lg font-black tracking-tighter text-white">ZOMA</span>
               </Link>
