@@ -92,6 +92,7 @@ export async function POST(request: Request) {
       cert: actualCert,
       cuit: parseInt(config.cuit.replace(/-/g, '')),
       production: !config.is_sandbox,
+      useHttpsAgent: true,
     }
 
     if (isTicketValid) {
@@ -276,7 +277,8 @@ export async function POST(request: Request) {
             cuit: parseInt(config.cuit.replace(/-/g, '')),
             production: !config.is_sandbox,
             credentials: credentialsToUse,
-            handleTicket: true
+            handleTicket: true,
+            useHttpsAgent: true
           })
           result = await arcaRetry.electronicBillingService.createNextVoucher(voucherData)
         } else {

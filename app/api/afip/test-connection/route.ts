@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       cert: fs.readFileSync(certPath, 'utf8'),
       cuit: parseInt(config.cuit.replace(/-/g, '')),
       production: !config.is_sandbox,
+      useHttpsAgent: true,
     }
 
     if (isTicketValid) {
