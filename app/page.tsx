@@ -198,10 +198,10 @@ export default function LandingPage() {
           {/* --- LOGO --- */}
           <Link href="#" className="flex items-center gap-3 group relative z-10">
             <div className="h-10 w-10 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300 flex items-center justify-center bg-[#001333] border border-slate-800">
-              <img 
-                src="/logo-zoma.jpg" 
-                alt="ZOMA Logo" 
-                className="h-full w-full object-cover scale-[1.45] -translate-y-[8%]" 
+              <img
+                src="/logo-zoma.jpg"
+                alt="ZOMA Logo"
+                className="h-full w-full object-cover scale-[1.45] -translate-y-[8%]"
               />
             </div>
             <div className="flex flex-col">
@@ -449,7 +449,7 @@ export default function LandingPage() {
                       </div>
                       <h3 className="text-3xl font-black mb-4 tracking-tight">Control de Vendedores</h3>
                       <p className="text-slate-400 font-medium text-base leading-relaxed">
-                        Asigná presupuestos a cada miembro de tu equipo. El sistema calcula automáticamente la comisión ganada de cada uno al concretarse las ventas.
+                        Administrá hasta 10 vendedores, cada uno con su usuario y compará sus rendimientos y % de conversion.
                       </p>
                     </div>
                     <div className="mt-8 text-slate-400 text-xs font-bold flex items-center gap-2">
@@ -720,23 +720,56 @@ export default function LandingPage() {
                     <h3 className="text-3xl font-black text-white mb-5 leading-tight">
                       Cálculo automático de comisiones ganadas
                     </h3>
-                    <p className="text-slate-400 font-medium leading-relaxed mb-6">
+                    <p className="text-slate-400 font-medium leading-relaxed mb-8">
                       Dale a tus vendedores un acceso exclusivo para crear presupuestos. ZOMA calcula automáticamente la comisión de cada uno al concretarse las ventas, sin que tengas que hacer cuentas a fin de mes.
                     </p>
 
+                    {/* Premium Grid detailing Seller Portal and Admin Panel */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 text-xs">
+                      <div className="bg-slate-900/60 border border-slate-850 p-4.5 rounded-2xl space-y-2.5">
+                        <h4 className="font-black text-indigo-450 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                          <Users size={13} className="text-indigo-400" /> Portal de Vendedores
+                        </h4>
+                        <ul className="space-y-2 text-slate-355 font-semibold leading-relaxed">
+                          <li className="flex items-start gap-2">
+                            <span className="text-indigo-400 shrink-0">✓</span> Cada vendedor accede con su usuario y contraseña propios.
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-indigo-400 shrink-0">✓</span> Acceso exclusivo a su propia cartera de clientes.
+                          </li>
+                        </ul>
+                      </div>
+
+                      <div className="bg-slate-900/60 border border-slate-850 p-4.5 rounded-2xl space-y-2.5">
+                        <h4 className="font-black text-emerald-450 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                          <BarChart3 size={13} className="text-emerald-400" /> Panel de Control Admin
+                        </h4>
+                        <ul className="space-y-2 text-slate-355 font-semibold leading-relaxed">
+                          <li className="flex items-start gap-2">
+                            <span className="text-emerald-400 shrink-0">✓</span> Medí presupuestos emitidos, rendimiento y su % de conversión.
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-emerald-400 shrink-0">✓</span> Calculá comisiones del mes en un instante.
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+
                     <div className="space-y-4">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Porcentaje de Comisión</label>
-                        <input
-                          type="range"
-                          min="2"
-                          max="12"
-                          step="0.5"
-                          value={commissionRate}
-                          onChange={(e) => setCommissionRate(Number(e.target.value))}
-                          className="accent-indigo-500 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer h-2"
-                        />
-                        <span className="font-mono text-sm font-black text-white">{commissionRate} %</span>
+                      <div className="flex flex-col gap-2 bg-slate-900/30 border border-slate-900 p-4 rounded-2xl">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Porcentaje de Comisión Interactivo</label>
+                        <div className="flex items-center gap-4">
+                          <input
+                            type="range"
+                            min="2"
+                            max="12"
+                            step="0.5"
+                            value={commissionRate}
+                            onChange={(e) => setCommissionRate(Number(e.target.value))}
+                            className="accent-indigo-500 bg-slate-950 border border-slate-850 rounded-lg cursor-pointer h-2 flex-grow"
+                          />
+                          <span className="font-mono text-sm font-black text-emerald-400 shrink-0">{commissionRate} %</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1117,10 +1150,10 @@ export default function LandingPage() {
             <div className="space-y-6">
               <Link href="/" className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden bg-[#001333] border border-slate-800">
-                  <img 
-                    src="/logo-zoma.jpg" 
-                    alt="ZOMA Logo" 
-                    className="h-full w-full object-cover scale-[1.45] -translate-y-[8%]" 
+                  <img
+                    src="/logo-zoma.jpg"
+                    alt="ZOMA Logo"
+                    className="h-full w-full object-cover scale-[1.45] -translate-y-[8%]"
                   />
                 </div>
                 <span className="text-lg font-black tracking-tighter text-white">ZOMA</span>
