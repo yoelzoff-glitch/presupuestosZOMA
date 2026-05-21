@@ -66,6 +66,7 @@ export default function EditarProductoPage() {
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'general' | 'stock' | 'receta'>('general')
   const [enableStockModule, setEnableStockModule] = useState(false)
+  const [businessType, setBusinessType] = useState('products')
 
   const [product, setProduct] = useState<Product | null>(null)
   const [recipe, setRecipe] = useState<RecipeItem[]>([])
@@ -103,11 +104,12 @@ export default function EditarProductoPage() {
       // Load company settings
       const { data: company } = await supabase
         .from('companies')
-        .select('enable_stock_module')
+        .select('enable_stock_module, business_type')
         .eq('id', profile.company_id)
         .single()
       
       setEnableStockModule(company?.enable_stock_module || false)
+      setBusinessType(company?.business_type || 'products')
 
       // Load product
       const { data: prod, error: prodErr } = await supabase
@@ -160,40 +162,43 @@ export default function EditarProductoPage() {
     setSaving(true)
 
     try {
+      const isServices = businessType === 'services'
       // 1. Update Product
       const { error: prodErr } = await supabase
         .from('products')
         .update({
           internal_code: product.internal_code,
           name: product.name,
-          supplier: product.supplier,
+          supplier: isServices ? null : product.supplier,
           category: product.category,
-          cost_price: product.cost_price,
+          cost_price: isServices ? 0 : product.cost_price,
           sale_price: product.sale_price,
-          stock_quantity: product.stock_quantity,
-          min_stock_level: product.min_stock_level,
-          track_stock: product.track_stock,
-          is_bundle: recipe.length > 0,
-          show_in_catalog: product.show_in_catalog
+          stock_quantity: isServices ? 0 : product.stock_quantity,
+          min_stock_level: isServices ? 0 : product.min_stock_level,
+          track_stock: isServices ? false : product.track_stock,
+          is_bundle: isServices ? false : recipe.length > 0,
+          show_in_catalog: isServices ? true : product.show_in_catalog
         })
         .eq('id', id)
 
       if (prodErr) throw prodErr
 
-      // 2. Update Recipe (Delete and Re-insert for simplicity in this version)
-      await supabase.from('product_recipes').delete().eq('parent_id', id)
-      
-      if (recipe.length > 0) {
-        const recipeToInsert = recipe.map(r => ({
-          company_id: (product as any).company_id,
-          parent_id: id,
-          component_id: r.component_id,
-          quantity: r.quantity
-        }))
-        await supabase.from('product_recipes').insert(recipeToInsert)
+      if (!isServices) {
+        // 2. Update Recipe (Delete and Re-insert for simplicity in this version)
+        await supabase.from('product_recipes').delete().eq('parent_id', id)
+        
+        if (recipe.length > 0) {
+          const recipeToInsert = recipe.map(r => ({
+            company_id: (product as any).company_id,
+            parent_id: id,
+            component_id: r.component_id,
+            quantity: r.quantity
+          }))
+          await supabase.from('product_recipes').insert(recipeToInsert)
+        }
       }
 
-      toast.success('Producto actualizado correctamente')
+      toast.success(businessType === 'services' ? 'Servicio actualizado correctamente' : 'Producto actualizado correctamente')
     } catch (error: any) {
       toast.error('Error al guardar: ' + error.message)
     } finally {
@@ -322,7 +327,7 @@ export default function EditarProductoPage() {
 
       <nav className="flex gap-2 rounded-[2rem] bg-slate-100 p-1.5 shadow-inner w-fit">
         <TabButton active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={Settings2} label="General" />
-        {enableStockModule && (
+        {enableStockModule && businessType !== 'services' && (
           <>
             <TabButton active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} icon={Boxes} label="Stock e Inventario" />
             <TabButton active={activeTab === 'receta'} onClick={() => setActiveTab('receta')} icon={Layers} label="Insumos / Receta" />
@@ -336,19 +341,19 @@ export default function EditarProductoPage() {
             <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
               <h3 className="text-xl font-black text-slate-950 mb-6 flex items-center gap-2">
                 <Settings2 size={22} className="text-blue-600" />
-                Información del Producto
+                {businessType === 'services' ? 'Información del Servicio' : 'Información del Producto'}
               </h3>
               
               <div className="grid gap-6 md:grid-cols-2">
-                <InputGroup label="Nombre del producto" value={product.name} onChange={v => setProduct({...product, name: v})} icon={Tag} />
+                <InputGroup label={businessType === 'services' ? 'Nombre del servicio' : 'Nombre del producto'} value={product.name} onChange={v => setProduct({...product, name: v})} icon={Tag} />
                 <InputGroup label="Código interno" value={product.internal_code || ''} onChange={v => setProduct({...product, internal_code: v})} icon={Hash} />
-                <InputGroup label="Proveedor" value={product.supplier || ''} onChange={v => setProduct({...product, supplier: v})} icon={Truck} />
+                {businessType !== 'services' && <InputGroup label="Proveedor" value={product.supplier || ''} onChange={v => setProduct({...product, supplier: v})} icon={Truck} />}
                 <InputGroup label="Categoría" value={product.category || ''} onChange={v => setProduct({...product, category: v})} icon={Layers} />
                 <InputGroup label="Precio de venta ($)" type="number" value={(product.sale_price || product.cost_price || 0).toString()} onChange={v => setProduct({...product, sale_price: Number(v)})} icon={DollarSign} />
-                <InputGroup label="Precio de costo ($)" type="number" value={(product.cost_price || 0).toString()} onChange={v => setProduct({...product, cost_price: Number(v)})} icon={DollarSign} />
+                {businessType !== 'services' && <InputGroup label="Precio de costo ($)" type="number" value={(product.cost_price || 0).toString()} onChange={v => setProduct({...product, cost_price: Number(v)})} icon={DollarSign} />}
               </div>
 
-              {enableStockModule && (
+              {enableStockModule && businessType !== 'services' && (
                 <div className="mt-8 pt-8 border-t border-slate-100">
                   <label className="flex items-center justify-between p-4 rounded-3xl bg-slate-50 hover:bg-slate-100 transition cursor-pointer">
                     <div className="flex items-center gap-4">
@@ -529,42 +534,74 @@ export default function EditarProductoPage() {
         </div>
 
         <aside className="space-y-6">
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-            <h3 className="text-lg font-black text-slate-950 mb-6 flex items-center gap-2">
-              <History size={20} className="text-slate-400" />
-              Resumen Financiero
-            </h3>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50">
-                <span className="text-xs font-bold text-slate-500">Costo Base</span>
-                <span className="text-sm font-black text-slate-900">${product.cost_price.toLocaleString('es-AR')}</span>
-              </div>
-              
-              {recipe.length > 0 && (
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-blue-50/50 border border-blue-100">
-                  <span className="text-xs font-bold text-blue-600">Costo Insumos</span>
-                  <span className="text-sm font-black text-blue-700">${calculatedCost.toLocaleString('es-AR')}</span>
+          {businessType === 'services' ? (
+            <>
+              <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+                <h3 className="text-lg font-black text-slate-950 mb-6 flex items-center gap-2">
+                  <Zap size={20} className="text-blue-600" />
+                  Facturación de Servicios
+                </h3>
+                <div className="space-y-4 text-xs font-semibold text-slate-600 leading-relaxed">
+                  <p>
+                    • Este servicio se facturará utilizando el **Concepto 2 (Servicios)** ante la AFIP.
+                  </p>
+                  <p>
+                    • Al facturarlo en un presupuesto, la plataforma te solicitará de forma obligatoria las fechas de prestación del servicio y su vencimiento de pago.
+                  </p>
+                  <p>
+                    • Los servicios no descuentan stock ni se consideran dentro del depósito físico.
+                  </p>
                 </div>
-              )}
+              </section>
 
-              <div className="pt-4 border-t border-slate-100">
-                <div className="flex items-center justify-between px-2">
-                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Costo Total Estimado</span>
-                  <span className="text-xl font-black text-slate-950">${(product.cost_price + calculatedCost).toLocaleString('es-AR')}</span>
+              <section className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-xl relative overflow-hidden">
+                <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-blue-500/20 blur-3xl" />
+                <h3 className="text-lg font-black mb-4 relative z-10">Factura de Servicios</h3>
+                <p className="text-xs font-medium text-slate-400 leading-relaxed relative z-10">
+                  Ideal para agencias de marketing, consultoras, asesores y prestadores de servicios profesionales que facturan de forma periódica o por proyecto cerrado.
+                </p>
+              </section>
+            </>
+          ) : (
+            <>
+              <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+                <h3 className="text-lg font-black text-slate-950 mb-6 flex items-center gap-2">
+                  <History size={20} className="text-slate-400" />
+                  Resumen Financiero
+                </h3>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50">
+                    <span className="text-xs font-bold text-slate-500">Costo Base</span>
+                    <span className="text-sm font-black text-slate-900">${product.cost_price.toLocaleString('es-AR')}</span>
+                  </div>
+                  
+                  {recipe.length > 0 && (
+                    <div className="flex items-center justify-between p-4 rounded-2xl bg-blue-50/50 border border-blue-100">
+                      <span className="text-xs font-bold text-blue-600">Costo Insumos</span>
+                      <span className="text-sm font-black text-blue-700">${calculatedCost.toLocaleString('es-AR')}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-4 border-t border-slate-100">
+                    <div className="flex items-center justify-between px-2">
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-400">Costo Total Estimado</span>
+                      <span className="text-xl font-black text-slate-950">${(product.cost_price + calculatedCost).toLocaleString('es-AR')}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </section>
+              </section>
 
-          <section className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-xl relative overflow-hidden">
-            <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-blue-500/20 blur-3xl" />
-            <h3 className="text-lg font-black mb-4 relative z-10">Ayuda PRO</h3>
-            <p className="text-xs font-medium text-slate-400 leading-relaxed relative z-10">
-              Si este producto es un **ensamblado** (como una bañera), asegúrate de cargar todos sus componentes en la pestaña "Insumos". 
-              El sistema se encargará de calcular el costo real basándose en los precios de los componentes.
-            </p>
-          </section>
+              <section className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-xl relative overflow-hidden">
+                <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-blue-500/20 blur-3xl" />
+                <h3 className="text-lg font-black mb-4 relative z-10">Ayuda PRO</h3>
+                <p className="text-xs font-medium text-slate-400 leading-relaxed relative z-10">
+                  Si este producto es un **ensamblado** (como una bañera), asegúrate de cargar todos sus componentes en la pestaña "Insumos". 
+                  El sistema se encargará de calcular el costo real basándose en los precios de los componentes.
+                </p>
+              </section>
+            </>
+          )}
         </aside>
       </div>
 

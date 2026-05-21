@@ -19,6 +19,7 @@ import {
 export default function NuevoProductoPage() {
   const [loading, setLoading] = useState(false)
   const [enableStockModule, setEnableStockModule] = useState(false)
+  const [businessType, setBusinessType] = useState('products')
 
   const [form, setForm] = useState({
     internal_code: '',
@@ -57,8 +58,9 @@ export default function NuevoProductoPage() {
     async function checkStockModule() {
       const companyId = await getCompanyId()
       if (!companyId) return
-      const { data } = await supabase.from('companies').select('enable_stock_module').eq('id', companyId).single()
+      const { data } = await supabase.from('companies').select('enable_stock_module, business_type').eq('id', companyId).single()
       setEnableStockModule(data?.enable_stock_module || false)
+      setBusinessType(data?.business_type || 'products')
     }
     checkStockModule()
   }, [])
@@ -67,7 +69,7 @@ export default function NuevoProductoPage() {
     e.preventDefault()
 
     if (!form.name.trim()) {
-      toast.error('Ingresá el nombre del producto.')
+      toast.error(businessType === 'services' ? 'Ingresá el nombre del servicio.' : 'Ingresá el nombre del producto.')
       return
     }
 
@@ -76,7 +78,7 @@ export default function NuevoProductoPage() {
       return
     }
 
-    if (enableStockModule && (!form.cost_price.trim() || Number(form.cost_price) < 0)) {
+    if (enableStockModule && businessType !== 'services' && (!form.cost_price.trim() || Number(form.cost_price) < 0)) {
       toast.error('Ingresá un precio de costo válido.')
       return
     }
@@ -91,17 +93,18 @@ export default function NuevoProductoPage() {
       return
     }
 
+    const isServices = businessType === 'services'
     const { error } = await supabase.from('products').insert({
       company_id: companyId,
       internal_code: form.internal_code.trim() || null,
       name: form.name.trim(),
-      supplier: form.supplier.trim() || null,
+      supplier: isServices ? null : (form.supplier.trim() || null),
       category: form.category.trim() || null,
       sale_price: Number(form.sale_price),
-      cost_price: Number(form.cost_price) || 0,
-      stock_quantity: Number(form.stock_quantity),
-      track_stock: form.track_stock,
-      show_in_catalog: form.show_in_catalog,
+      cost_price: isServices ? 0 : (Number(form.cost_price) || 0),
+      stock_quantity: isServices ? 0 : Number(form.stock_quantity),
+      track_stock: isServices ? false : form.track_stock,
+      show_in_catalog: isServices ? true : form.show_in_catalog,
       last_price_update: new Date().toISOString(),
     } as any)
 
@@ -112,7 +115,7 @@ export default function NuevoProductoPage() {
       return
     }
 
-    toast.success('Producto creado correctamente.')
+    toast.success(businessType === 'services' ? 'Servicio creado correctamente.' : 'Producto creado correctamente.')
 
     setForm({
       internal_code: '',
@@ -139,20 +142,22 @@ export default function NuevoProductoPage() {
             className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-blue-200 transition hover:text-white"
           >
             <ArrowLeft size={17} />
-            Volver a productos
+            {businessType === 'services' ? 'Volver a servicios' : 'Volver a productos'}
           </Link>
 
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-200">
             <PackagePlus size={14} />
-            Nuevo producto
+            {businessType === 'services' ? 'Nuevo servicio' : 'Nuevo producto'}
           </div>
 
           <h1 className="text-3xl font-black tracking-tight">
-            Cargar producto
+            {businessType === 'services' ? 'Cargar servicio' : 'Cargar producto'}
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-            Registrá productos con proveedor, categoría y precio para usarlos en presupuestos.
+            {businessType === 'services'
+              ? 'Registrá servicios con categoría y precio para usarlos en presupuestos.'
+              : 'Registrá productos con proveedor, categoría y precio para usarlos en presupuestos.'}
           </p>
         </div>
       </section>
@@ -163,11 +168,11 @@ export default function NuevoProductoPage() {
       >
         <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm lg:col-span-3">
           <h2 className="text-xl font-black text-slate-950">
-            Datos del producto
+            {businessType === 'services' ? 'Datos del servicio' : 'Datos del producto'}
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Completá la información principal del producto.
+            {businessType === 'services' ? 'Completá la información principal del servicio.' : 'Completá la información principal del producto.'}
           </p>
 
           <div className="mt-6 grid gap-5 md:grid-cols-2">
@@ -180,23 +185,25 @@ export default function NuevoProductoPage() {
               placeholder="Ej: 001"
             />
 
-            <Field
-              icon={Truck}
-              label="Proveedor"
-              name="supplier"
-              value={form.supplier}
-              onChange={handleChange}
-              placeholder="Ej: Acme"
-            />
+            {businessType !== 'services' && (
+              <Field
+                icon={Truck}
+                label="Proveedor"
+                name="supplier"
+                value={form.supplier}
+                onChange={handleChange}
+                placeholder="Ej: Acme"
+              />
+            )}
 
             <div className="md:col-span-2">
               <Field
                 icon={Tag}
-                label="Nombre del producto"
+                label={businessType === 'services' ? 'Nombre del servicio' : 'Nombre del producto'}
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                placeholder="Ej: Cable bipolar 2x1"
+                placeholder={businessType === 'services' ? 'Ej: Asesoría mensual' : 'Ej: Cable bipolar 2x1'}
               />
             </div>
 
@@ -219,17 +226,19 @@ export default function NuevoProductoPage() {
               type="number"
             />
 
-            <Field
-              icon={DollarSign}
-              label="Precio de Costo"
-              name="cost_price"
-              value={form.cost_price}
-              onChange={handleChange}
-              placeholder="Costo interno"
-              type="number"
-            />
+            {businessType !== 'services' && (
+              <Field
+                icon={DollarSign}
+                label="Precio de Costo"
+                name="cost_price"
+                value={form.cost_price}
+                onChange={handleChange}
+                placeholder="Costo interno"
+                type="number"
+              />
+            )}
 
-            {enableStockModule && (
+            {enableStockModule && businessType !== 'services' && (
               <>
                 <div className="md:col-span-2 space-y-3">
                   <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Propósito del producto</label>
@@ -306,7 +315,7 @@ export default function NuevoProductoPage() {
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Save size={18} />
-              {loading ? 'Guardando...' : 'Guardar producto'}
+              {loading ? 'Guardando...' : (businessType === 'services' ? 'Guardar servicio' : 'Guardar producto')}
             </button>
 
             <Link
@@ -329,7 +338,7 @@ export default function NuevoProductoPage() {
 
           <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
             <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-              Producto
+              {businessType === 'services' ? 'Servicio' : 'Producto'}
             </p>
 
             <h4 className="mt-2 text-2xl font-black text-slate-950">
@@ -337,7 +346,7 @@ export default function NuevoProductoPage() {
             </h4>
 
             <div className="mt-4 space-y-3 text-sm font-semibold text-slate-600">
-              <p>Proveedor: {form.supplier || 'Sin proveedor'}</p>
+              {businessType !== 'services' && <p>Proveedor: {form.supplier || 'Sin proveedor'}</p>}
               <p>Categoría: {form.category || 'Sin categoría'}</p>
               <p>Código: {form.internal_code || 'Sin código'}</p>
             </div>
@@ -352,14 +361,16 @@ export default function NuevoProductoPage() {
                 </p>
               </div>
 
-              <div className="rounded-2xl bg-white p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                  Precio Costo
-                </p>
-                <p className="mt-1 text-xl font-black text-slate-600">
-                  ${Number(form.cost_price || 0).toLocaleString('es-AR')}
-                </p>
-              </div>
+              {businessType !== 'services' && (
+                <div className="rounded-2xl bg-white p-4">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                    Precio Costo
+                  </p>
+                  <p className="mt-1 text-xl font-black text-slate-600">
+                    ${Number(form.cost_price || 0).toLocaleString('es-AR')}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </aside>
