@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 type Props = {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (tipoCbte: number, addIva: boolean) => void
+  onConfirm: (tipoCbte: number, addIva: boolean, serviceDates?: { FchServDesde: string; FchServHasta: string; FchVtoPago: string }) => void
   budgetId: string
   clientName: string
   totalAmount: number
@@ -28,10 +28,37 @@ export default function InvoicePreviewModal({
   const [loading, setLoading] = useState(true)
   const [tipoCbte, setTipoCbte] = useState<number>(11)
   const [addIva, setAddIva] = useState(false)
+  const [businessType, setBusinessType] = useState<string>('products')
+  const [serviceDates, setServiceDates] = useState({ desde: '', hasta: '', vto: '' })
+
+  const getInitialDates = () => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = today.getMonth()
+    
+    const startOfMonth = new Date(year, month, 1)
+    const endOfMonth = new Date(year, month + 1, 0)
+    const dueDay = new Date(today)
+    dueDay.setDate(today.getDate() + 10)
+    
+    const formatDate = (date: Date) => {
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
+    }
+    
+    return {
+      desde: formatDate(startOfMonth),
+      hasta: formatDate(endOfMonth),
+      vto: formatDate(dueDay)
+    }
+  }
 
   useEffect(() => {
     if (isOpen && budgetId) {
       setAddIva(false)
+      setServiceDates(getInitialDates())
       fetchData()
     }
   }, [isOpen, budgetId])
@@ -57,6 +84,15 @@ export default function InvoicePreviewModal({
           .single()
         
         setConfig(afipData)
+
+        // Fetch company business type
+        const { data: compData } = await supabase
+          .from('companies')
+          .select('business_type')
+          .eq('id', budgetData.company_id)
+          .single()
+        
+        setBusinessType(compData?.business_type || 'products')
 
         // Pre-seleccionar tipo
         if (afipData?.tipo_contribuyente === 'responsable_inscripto') {
@@ -123,10 +159,60 @@ export default function InvoicePreviewModal({
                   <Calendar size={12} /> Fecha de Emisión
                 </div>
                 <p className="font-bold text-slate-900">{new Date().toLocaleDateString('es-AR')}</p>
-                <p className="text-xs text-slate-500 italic mt-1">Vencimiento: Inmediato</p>
+                <p className="text-xs text-slate-500 italic mt-1">
+                  Vencimiento: {businessType === 'services' && serviceDates.vto ? new Date(serviceDates.vto + 'T00:00:00').toLocaleDateString('es-AR') : 'Inmediato'}
+                </p>
               </div>
             </div>
           </div>
+
+          {/* Fechas de Servicio si es empresa de Servicios */}
+          {businessType === 'services' && (
+            <div className="mt-6 rounded-[2rem] border border-blue-100 bg-blue-50/20 p-6 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="text-blue-600" size={18} />
+                <h5 className="text-xs font-black uppercase tracking-wider text-blue-900">Período de Facturación del Servicio</h5>
+              </div>
+              <p className="text-[11px] font-semibold text-slate-500 mb-4 leading-normal">
+                Al facturar servicios, la AFIP requiere definir el rango de fechas en el que se prestó el servicio y el vencimiento de la factura.
+              </p>
+              
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Servicio Desde</label>
+                  <input
+                    type="date"
+                    value={serviceDates.desde}
+                    onChange={(e) => setServiceDates({ ...serviceDates, desde: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Servicio Hasta</label>
+                  <input
+                    type="date"
+                    value={serviceDates.hasta}
+                    onChange={(e) => setServiceDates({ ...serviceDates, hasta: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Vencimiento Pago</label>
+                  <input
+                    type="date"
+                    value={serviceDates.vto}
+                    onChange={(e) => setServiceDates({ ...serviceDates, vto: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Selector de Tipo de Factura */}
           <div className="mt-8 rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6">
@@ -262,7 +348,13 @@ export default function InvoicePreviewModal({
             Cancelar
           </button>
           <button 
-            onClick={() => onConfirm(tipoCbte, addIva)}
+            onClick={() => onConfirm(
+              tipoCbte, 
+              addIva, 
+              businessType === 'services' 
+                ? { FchServDesde: serviceDates.desde, FchServHasta: serviceDates.hasta, FchVtoPago: serviceDates.vto } 
+                : undefined
+            )}
             disabled={isEmitting || loading}
             className="flex items-center gap-2 rounded-2xl bg-blue-600 px-8 py-3 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-500 active:scale-95 disabled:opacity-50"
           >

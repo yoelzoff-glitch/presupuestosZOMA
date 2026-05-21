@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { notFound, useParams, useSearchParams } from 'next/navigation'
-import { FileText, Printer, Loader2, ArrowLeft, Send } from 'lucide-react'
+import { FileText, Printer, Loader2, ArrowLeft, Send, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -14,9 +14,35 @@ export default function VerFacturaPage() {
    const [budget, setBudget] = useState<any>(null)
    const [loading, setLoading] = useState(true)
    const [emitiendo, setEmitiendo] = useState(false)
+   const [serviceDates, setServiceDates] = useState({ desde: '', hasta: '', vto: '' })
+
+   const getInitialDates = () => {
+      const today = new Date()
+      const year = today.getFullYear()
+      const month = today.getMonth()
+      
+      const startOfMonth = new Date(year, month, 1)
+      const endOfMonth = new Date(year, month + 1, 0)
+      const dueDay = new Date(today)
+      dueDay.setDate(today.getDate() + 10)
+      
+      const formatDate = (date: Date) => {
+         const y = date.getFullYear()
+         const m = String(date.getMonth() + 1).padStart(2, '0')
+         const d = String(date.getDate()).padStart(2, '0')
+         return `${y}-${m}-${d}`
+      }
+      
+      return {
+         desde: formatDate(startOfMonth),
+         hasta: formatDate(endOfMonth),
+         vto: formatDate(dueDay)
+      }
+   }
 
    useEffect(() => {
       if (id) {
+         setServiceDates(getInitialDates())
          fetchBudget()
       }
    }, [id])
@@ -29,8 +55,8 @@ export default function VerFacturaPage() {
         *,
         clients ( name, cuit, address, email ),
         budget_items ( * ),
-        companies ( name, cuit, address, logo_url ),
-        invoices ( id, afip_comprobante_tipo, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, invoice_items ( * ) )
+        companies ( name, cuit, address, logo_url, business_type ),
+        invoices ( id, afip_comprobante_tipo, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, afip_servicio_desde, afip_servicio_hasta, afip_servicio_vto, invoice_items ( * ) )
       `)
          .eq('id', id)
          .single()
@@ -67,6 +93,11 @@ export default function VerFacturaPage() {
          if (activeInvoice.invoice_items && activeInvoice.invoice_items.length > 0) {
             finalBudget.budget_items = activeInvoice.invoice_items
          }
+
+         // Sincronizar fechas de servicio facturadas
+         finalBudget.afip_servicio_desde = activeInvoice.afip_servicio_desde
+         finalBudget.afip_servicio_hasta = activeInvoice.afip_servicio_hasta
+         finalBudget.afip_servicio_vto = activeInvoice.afip_servicio_vto
       }
 
       // Fetch company's AFIP configuration
@@ -93,7 +124,14 @@ export default function VerFacturaPage() {
          const response = await fetch('/api/afip/create-invoice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ budget_id: budget.id })
+            body: JSON.stringify({ 
+               budget_id: budget.id,
+               serviceDates: budget.companies?.business_type === 'services' ? {
+                  FchServDesde: serviceDates.desde,
+                  FchServHasta: serviceDates.hasta,
+                  FchVtoPago: serviceDates.vto
+               } : undefined
+            })
          })
 
          const result = await response.json()
@@ -150,6 +188,23 @@ export default function VerFacturaPage() {
       return 'Factura'
    }
 
+   const formatDateString = (dateStr: string) => {
+      if (!dateStr) return '-'
+      if (dateStr.length === 8 && !dateStr.includes('-')) {
+         const year = dateStr.substring(0, 4)
+         const month = dateStr.substring(4, 6)
+         const day = dateStr.substring(6, 8)
+         return `${day}/${month}/${year}`
+      }
+      if (dateStr.includes('-')) {
+         const parts = dateStr.split('-')
+         if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`
+         }
+      }
+      return dateStr
+   }
+
    const qrData = {
       ver: 1,
       fecha: budget.budget_date,
@@ -203,6 +258,56 @@ export default function VerFacturaPage() {
                </button>
             </div>
          </div>
+
+         {/* Fechas de Servicio si es empresa de Servicios y es borrador */}
+         {esBorrador && company?.business_type === 'services' && (
+            <div className="mx-auto mb-6 max-w-4xl rounded-2xl bg-white p-6 shadow-sm border border-slate-200 print:hidden animate-in fade-in slide-in-from-top-2 duration-200">
+               <div className="flex items-center gap-3 mb-4">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                     <Calendar size={18} />
+                  </div>
+                  <div>
+                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Período de Facturación del Servicio</h3>
+                     <p className="text-[11px] font-medium text-slate-500">Configurá las fechas requeridas por AFIP para la prestación de servicios y vencimiento de pago.</p>
+                  </div>
+               </div>
+               
+               <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Servicio Desde</label>
+                     <input
+                        type="date"
+                        value={serviceDates.desde}
+                        onChange={(e) => setServiceDates({ ...serviceDates, desde: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                        required
+                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Servicio Hasta</label>
+                     <input
+                        type="date"
+                        value={serviceDates.hasta}
+                        onChange={(e) => setServiceDates({ ...serviceDates, hasta: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                        required
+                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Vencimiento Pago</label>
+                     <input
+                        type="date"
+                        value={serviceDates.vto}
+                        onChange={(e) => setServiceDates({ ...serviceDates, vto: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                        required
+                     />
+                  </div>
+               </div>
+            </div>
+         )}
 
          {/* Factura Layout */}
          <div className="mx-auto max-w-4xl border border-slate-300 bg-white p-10 pt-14 shadow-2xl print:shadow-none print:border-none print:p-0 print:pt-10 rounded-[2rem] print:rounded-none overflow-hidden relative">
@@ -268,6 +373,38 @@ export default function VerFacturaPage() {
                   </div>
                </div>
             </div>
+
+            {/* Período del Servicio (Solo si es empresa de Servicios) */}
+            {company?.business_type === 'services' && (
+               <div className="mt-4 border-2 border-slate-900 p-4 bg-slate-50/10">
+                  <div className="grid grid-cols-3 gap-4 text-xs font-bold text-slate-800">
+                     <p>
+                        <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Período Facturado Desde:</span>
+                        <span className="font-black text-slate-900">
+                           {esBorrador 
+                              ? formatDateString(serviceDates.desde)
+                              : formatDateString(budget.afip_servicio_desde)}
+                        </span>
+                     </p>
+                     <p>
+                        <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Hasta:</span>
+                        <span className="font-black text-slate-900">
+                           {esBorrador 
+                              ? formatDateString(serviceDates.hasta)
+                              : formatDateString(budget.afip_servicio_hasta)}
+                        </span>
+                     </p>
+                     <p>
+                        <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Vto. para el Pago:</span>
+                        <span className="font-black text-slate-900">
+                           {esBorrador 
+                              ? formatDateString(serviceDates.vto)
+                              : formatDateString(budget.afip_servicio_vto)}
+                        </span>
+                     </p>
+                  </div>
+               </div>
+            )}
 
             {/* Datos del Receptor */}
             <div className="mt-4 rounded-none border-2 border-slate-900 p-4 bg-slate-50/10">
