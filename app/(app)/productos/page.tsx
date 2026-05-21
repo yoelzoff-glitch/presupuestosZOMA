@@ -19,7 +19,7 @@ export default async function ProductosPage() {
 
   const { data: companyData } = await supabase
     .from('companies')
-    .select('enable_stock_module')
+    .select('enable_stock_module, business_type')
     .eq('id', contexto.idEmpresa)
     .single()
 
@@ -28,6 +28,7 @@ export default async function ProductosPage() {
       productosIniciales={data || []}
       idEmpresa={contexto.idEmpresa}
       enableStockModule={companyData?.enable_stock_module || false}
+      businessType={companyData?.business_type || 'products'}
     />
   )
 }

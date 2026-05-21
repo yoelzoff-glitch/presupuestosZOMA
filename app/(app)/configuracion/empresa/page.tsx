@@ -34,6 +34,7 @@ type Company = {
   default_notes: string | null
   enable_stock_module: boolean
   plan_type: string | null
+  business_type: string | null
 }
 
 export default function EmpresaPage() {
@@ -89,6 +90,7 @@ export default function EmpresaPage() {
         logo_url: company.logo_url,
         default_notes: company.default_notes,
         enable_stock_module: company.enable_stock_module,
+        business_type: company.business_type || 'products',
       })
       .eq('id', company.id)
 
@@ -320,6 +322,55 @@ export default function EmpresaPage() {
                     placeholder="Ej: Validez del presupuesto: 5 días. Forma de pago: Transferencia bancaria anticipada..."
                   />
                 </div>
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">Modelo de Negocio</h3>
+              <p className="mb-6 text-xs font-bold text-slate-500">
+                Seleccioná el tipo de actividad que realiza tu empresa. Esto optimizará automáticamente las terminologías y los módulos del sistema.
+              </p>
+              
+              <div className="grid gap-4 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setCompany({ ...company, business_type: 'products' })}
+                  className={`flex flex-col items-start gap-3 rounded-2xl border-2 p-5 text-left transition-all ${
+                    company.business_type === 'services'
+                      ? 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                      : 'border-blue-600 bg-blue-50/20 ring-4 ring-blue-100'
+                  }`}
+                >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${company.business_type !== 'services' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-white text-slate-400 shadow-sm'}`}>
+                    <Boxes size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">Venta de Productos</h4>
+                    <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                      Para fábricas, distribuidoras y comercios con inventario físico, cuentas corrientes e insumos.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCompany({ ...company, business_type: 'services' })}
+                  className={`flex flex-col items-start gap-3 rounded-2xl border-2 p-5 text-left transition-all ${
+                    company.business_type === 'services'
+                      ? 'border-blue-600 bg-blue-50/20 ring-4 ring-blue-100'
+                      : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                  }`}
+                >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${company.business_type === 'services' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-white text-slate-400 shadow-sm'}`}>
+                    <Zap size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">Prestación de Servicios</h4>
+                    <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                      Para agencias, consultoras y profesionales. Renombra el menú a "Servicios", oculta el inventario y habilita facturación AFIP Concepto 2.
+                    </p>
+                  </div>
+                </button>
               </div>
             </section>
 

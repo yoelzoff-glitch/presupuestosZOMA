@@ -43,12 +43,12 @@ const navItems = [
   { href: '/contador', label: 'Portal Contable 👔', icon: ShieldCheck },
 ]
 
-function getPageTitle(pathname: string) {
+function getPageTitle(pathname: string, businessType?: string) {
   if (pathname === '/dashboard') return 'Dashboard'
   if (pathname.startsWith('/clientes')) return 'Clientes'
-  if (pathname.startsWith('/productos')) return 'Productos'
+  if (pathname.startsWith('/productos')) return businessType === 'services' ? 'Servicios' : 'Productos'
   if (pathname.startsWith('/inventario')) return 'Inventario'
-  if (pathname.startsWith('/pedidos')) return 'Pedidos'
+  if (pathname.startsWith('/pedidos')) return businessType === 'services' ? 'Trabajos' : 'Pedidos'
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
   if (pathname.startsWith('/facturas')) return 'Facturación'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
@@ -59,14 +59,14 @@ function getPageTitle(pathname: string) {
   return 'Panel principal'
 }
 
-function getPageDescription(pathname: string) {
+function getPageDescription(pathname: string, businessType?: string) {
   if (pathname === '/dashboard') return 'Resumen general de la gestión comercial'
   if (pathname.startsWith('/clientes')) return 'Administración de clientes y datos comerciales'
-  if (pathname.startsWith('/productos')) return 'Gestión de productos, precios y catálogo'
+  if (pathname.startsWith('/productos')) return businessType === 'services' ? 'Gestión de servicios y catálogo' : 'Gestión de productos, precios y catálogo'
   if (pathname.startsWith('/inventario')) return 'Control de stock y movimientos de mercadería'
   if (pathname.startsWith('/presupuestos')) return 'Creación de propuestas comerciales'
   if (pathname.startsWith('/facturas')) return 'Gestión de comprobantes y CAE'
-  if (pathname.startsWith('/pedidos')) return 'Gestión de órdenes de venta confirmadas'
+  if (pathname.startsWith('/pedidos')) return businessType === 'services' ? 'Gestión de trabajos y servicios aceptados' : 'Gestión de órdenes de venta confirmadas'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
   if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'
@@ -92,7 +92,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         if (user) {
           const { data, error } = await supabase
             .from('users_profiles')
-            .select('role, company:companies(name, plan_type, enable_stock_module, logo_url)')
+            .select('role, company:companies(name, plan_type, enable_stock_module, logo_url, business_type)')
             .eq('id', user.id)
             .single()
 
@@ -115,15 +115,31 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const planType = profile?.company?.plan_type || 'base'
   const isPro = planType === 'pro' || planType === 'pro_plus' || planType === 'ultra'
   const stockEnabled = profile?.company?.enable_stock_module || false
+  const businessType = profile?.company?.business_type || 'products'
 
-  // Filtrar navItems based on stock module activation
+  // Filtrar navItems based on stock module activation and business type
   let baseNavItems = navItems.filter(item => {
+    if (businessType === 'services') {
+      if (item.href === '/inventario' || item.href === '/cuenta-corriente') {
+        return false
+      }
+    }
     // If it's the inventory link, check if it's enabled OR if user is base (upsell)
     if (item.href === '/inventario') {
       if (!isPro) return true // Show as upsell for base
       return stockEnabled // For PRO, only show if they activated it
     }
     return true
+  }).map(item => {
+    if (businessType === 'services') {
+      if (item.href === '/productos') {
+        return { ...item, label: 'Servicios' }
+      }
+      if (item.href === '/pedidos') {
+        return { ...item, label: 'Trabajos' }
+      }
+    }
+    return item
   })
 
   // Final sidebar list based on role
@@ -289,6 +305,7 @@ export default function AppShell({ children }: AppShellProps) {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [planType, setPlanType] = useState<string | null>(null)
+  const [businessType, setBusinessType] = useState<string>('products')
   const [diasRestantes, setDiasRestantes] = useState<number | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
 
@@ -298,7 +315,7 @@ export default function AppShell({ children }: AppShellProps) {
       if (user) {
         const { data } = await supabase
           .from('users_profiles')
-          .select('role, company_id, company:companies(plan_type, subscription_expiry)')
+          .select('role, company_id, company:companies(plan_type, subscription_expiry, business_type)')
           .eq('id', user.id)
           .single()
 
@@ -312,6 +329,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         const company = data?.company as any
         setPlanType(company?.plan_type || 'base')
+        setBusinessType(company?.business_type || 'products')
 
         if (company?.subscription_expiry) {
           const hoy = new Date()
@@ -325,8 +343,8 @@ export default function AppShell({ children }: AppShellProps) {
     checkAccess()
   }, [router])
 
-  const title = getPageTitle(pathname)
-  const description = getPageDescription(pathname)
+  const title = getPageTitle(pathname, businessType)
+  const description = getPageDescription(pathname, businessType)
 
   return (
     <div className="min-h-screen bg-slate-100">
