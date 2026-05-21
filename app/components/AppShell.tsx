@@ -21,6 +21,7 @@ import {
   Boxes,
   Clock,
   Receipt,
+  CalendarRange,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
@@ -34,6 +35,7 @@ type AppShellProps = {
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
+  { href: '/abonos', label: 'Abonos Mensuales', icon: CalendarRange },
   { href: '/productos', label: 'Productos', icon: Package },
   { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
@@ -46,6 +48,7 @@ const navItems = [
 function getPageTitle(pathname: string, businessType?: string) {
   if (pathname === '/dashboard') return 'Dashboard'
   if (pathname.startsWith('/clientes')) return 'Clientes'
+  if (pathname.startsWith('/abonos')) return 'Abonos Mensuales'
   if (pathname.startsWith('/productos')) return businessType === 'services' ? 'Servicios' : 'Productos'
   if (pathname.startsWith('/inventario')) return 'Inventario'
   if (pathname.startsWith('/pedidos')) return businessType === 'services' ? 'Trabajos' : 'Pedidos'
@@ -62,6 +65,7 @@ function getPageTitle(pathname: string, businessType?: string) {
 function getPageDescription(pathname: string, businessType?: string) {
   if (pathname === '/dashboard') return 'Resumen general de la gestión comercial'
   if (pathname.startsWith('/clientes')) return 'Administración de clientes y datos comerciales'
+  if (pathname.startsWith('/abonos')) return 'Gestión de abonos recurrentes y suscripciones de servicios'
   if (pathname.startsWith('/productos')) return businessType === 'services' ? 'Gestión de servicios y catálogo' : 'Gestión de productos, precios y catálogo'
   if (pathname.startsWith('/inventario')) return 'Control de stock y movimientos de mercadería'
   if (pathname.startsWith('/presupuestos')) return 'Creación de propuestas comerciales'
@@ -121,6 +125,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   let baseNavItems = navItems.filter(item => {
     if (businessType === 'services') {
       if (item.href === '/inventario' || item.href === '/cuenta-corriente') {
+        return false
+      }
+    } else {
+      if (item.href === '/abonos') {
         return false
       }
     }
