@@ -223,112 +223,112 @@ export default function VendedorPresupuestoDetalle() {
 
           /* SISTEMA DE ESCALADO INTELIGENTE SEGÚN CANTIDAD DE ÍTEMS */
 
-          /* 1. DENSE LAYOUT (8-10 ítems) */
+          /* 1. DENSE LAYOUT (8-11 ítems) */
           #print-section.dense {
-            padding: 8mm !important;
+            padding: 12mm !important;
           }
           #print-section.dense .pb-6 {
-            padding-bottom: 8px !important;
+            padding-bottom: 10px !important;
           }
           #print-section.dense .mb-8 {
-            margin-bottom: 10px !important;
+            margin-bottom: 12px !important;
           }
           #print-section.dense .p-4, #print-section.dense .bg-slate-50 {
-            padding: 10px !important;
-            margin-bottom: 10px !important;
+            padding: 12px !important;
+            margin-bottom: 12px !important;
           }
           #print-section.dense table {
-            margin-bottom: 10px !important;
-            font-size: 9px !important;
+            margin-bottom: 12px !important;
+            font-size: 9.5px !important;
           }
           #print-section.dense table th,
           #print-section.dense table td {
-            padding: 5px 6px !important;
+            padding: 6px 8px !important;
           }
           #print-section.dense .text-xl {
-            font-size: 1.1rem !important;
-          }
-          #print-section.dense .text-2xl {
             font-size: 1.25rem !important;
           }
+          #print-section.dense .text-2xl {
+            font-size: 1.35rem !important;
+          }
           #print-section.dense .bg-slate-950 {
-            padding: 10px !important;
-            border-radius: 12px !important;
+            padding: 12px !important;
+            border-radius: 14px !important;
           }
           #print-section.dense .text-3xl {
-            font-size: 1.5rem !important;
+            font-size: 1.6rem !important;
           }
 
-          /* 2. ULTRA DENSE LAYOUT (11-15 ítems) */
+          /* 2. ULTRA DENSE LAYOUT (12-17 ítems) */
           #print-section.ultra-dense {
-            padding: 6mm !important;
+            padding: 10mm !important;
           }
           #print-section.ultra-dense .pb-6 {
-            padding-bottom: 4px !important;
+            padding-bottom: 8px !important;
           }
           #print-section.ultra-dense .mb-8 {
-            margin-bottom: 6px !important;
+            margin-bottom: 10px !important;
           }
           #print-section.ultra-dense .p-4, #print-section.ultra-dense .bg-slate-50 {
-            padding: 6px !important;
-            margin-bottom: 6px !important;
+            padding: 8px !important;
+            margin-bottom: 10px !important;
           }
           #print-section.ultra-dense table {
-            margin-bottom: 6px !important;
-            font-size: 8px !important;
+            margin-bottom: 10px !important;
+            font-size: 8.8px !important;
           }
           #print-section.ultra-dense table th,
           #print-section.ultra-dense table td {
-            padding: 3px 4px !important;
+            padding: 4.5px 6px !important;
           }
           #print-section.ultra-dense .text-xl {
-            font-size: 0.95rem !important;
-          }
-          #print-section.ultra-dense .text-2xl {
             font-size: 1.1rem !important;
           }
+          #print-section.ultra-dense .text-2xl {
+            font-size: 1.2rem !important;
+          }
           #print-section.ultra-dense .bg-slate-950 {
-            padding: 6px !important;
-            border-radius: 10px !important;
+            padding: 8px !important;
+            border-radius: 12px !important;
           }
           #print-section.ultra-dense .text-3xl {
-            font-size: 1.25rem !important;
+            font-size: 1.4rem !important;
           }
 
-          /* 3. SUPER DENSE LAYOUT (16+ ítems) */
+          /* 3. SUPER DENSE LAYOUT (18+ ítems) */
           #print-section.super-dense {
-            padding: 4mm !important;
+            padding: 8mm !important;
           }
           #print-section.super-dense .pb-6 {
-            padding-bottom: 2px !important;
+            padding-bottom: 4px !important;
           }
           #print-section.super-dense .mb-8 {
-            margin-bottom: 4px !important;
+            margin-bottom: 8px !important;
           }
           #print-section.super-dense .p-4, #print-section.super-dense .bg-slate-50 {
-            padding: 4px !important;
-            margin-bottom: 4px !important;
+            padding: 6px !important;
+            margin-bottom: 8px !important;
           }
           #print-section.super-dense table {
-            margin-bottom: 4px !important;
-            font-size: 7px !important;
+            margin-bottom: 8px !important;
+            font-size: 8px !important;
           }
           #print-section.super-dense table th,
           #print-section.super-dense table td {
-            padding: 1.5px 3px !important;
+            padding: 3px 5px !important;
           }
           #print-section.super-dense .text-xl {
-            font-size: 0.85rem !important;
+            font-size: 1.0rem !important;
           }
           #print-section.super-dense .text-2xl {
-            font-size: 0.95rem !important;
+            font-size: 1.1rem !important;
           }
           #print-section.super-dense .bg-slate-950 {
-            padding: 4px !important;
-            border-radius: 8px !important;
+            padding: 6px !important;
+            border-radius: 10px !important;
           }
           #print-section.super-dense .text-3xl {
-            font-size: 1.1rem !important;
+            font-size: 1.25rem !important;
           }
         }
       `}</style>
@@ -412,7 +412,7 @@ export default function VendedorPresupuestoDetalle() {
       </div>
 
       {/* PDF PRINT SECTION */}
-      <div id="print-section" className={items.length > 15 ? 'super-dense' : items.length > 10 ? 'ultra-dense' : items.length > 7 ? 'dense' : ''}>
+      <div id="print-section" className={items.length > 17 ? 'super-dense' : items.length > 11 ? 'ultra-dense' : items.length > 7 ? 'dense' : ''}>
         <div className="flex justify-between border-b-2 border-slate-900 pb-6 mb-8">
           <div>
             <h1 className="text-2xl font-black">{company?.name}</h1>
