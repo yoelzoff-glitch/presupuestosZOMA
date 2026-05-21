@@ -60,6 +60,7 @@ type Company = {
   logo_url: string | null
   default_notes: string | null
   enable_stock_module: boolean
+  business_type?: string
 }
 
 type BudgetItem = {
@@ -86,6 +87,8 @@ export default function PresupuestoDetallePage() {
   const [role, setRole] = useState<string | null>(null)
   const [convertingToOrder, setConvertingToOrder] = useState(false)
   const [associatedOrderId, setAssociatedOrderId] = useState<string | null>(null)
+  const [convertingToSubscription, setConvertingToSubscription] = useState(false)
+  const [associatedSubscriptionId, setAssociatedSubscriptionId] = useState<string | null>(null)
 
   // Estados para control de precios actualizados
   const [showPriceAlert, setShowPriceAlert] = useState(false)
@@ -156,7 +159,7 @@ export default function PresupuestoDetallePage() {
 
     const { data: companyData } = await supabase
       .from('companies')
-      .select('name, cuit, address, phone, email, website, logo_url, default_notes, enable_stock_module')
+      .select('name, cuit, address, phone, email, website, logo_url, default_notes, enable_stock_module, business_type')
       .eq('id', data.company_id)
       .single()
 
@@ -177,6 +180,14 @@ export default function PresupuestoDetallePage() {
       .maybeSingle()
 
     setAssociatedOrderId(orderData?.id || null)
+
+    const { data: subData } = await supabase
+      .from('subscriptions')
+      .select('id')
+      .eq('budget_id', id)
+      .maybeSingle()
+
+    setAssociatedSubscriptionId(subData?.id || null)
     setLoading(false)
   }
 
@@ -369,6 +380,47 @@ export default function PresupuestoDetallePage() {
       toast.error('Error al convertir pedido.')
     } finally {
       setConvertingToOrder(false)
+    }
+  }
+
+  async function handleConvertirAAbono() {
+    if (!budget || associatedSubscriptionId) return
+    try {
+      setConvertingToSubscription(true)
+      
+      const subItems = items.map(item => ({
+        product_id: item.product_id,
+        product_code: item.product_code,
+        product_name: item.product_name,
+        category: item.category,
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unit_price),
+        discount_str: item.discount_str,
+      }))
+
+      const { data: newSub, error: subError } = await supabase
+        .from('subscriptions')
+        .insert({
+          company_id: budget.company_id,
+          client_id: budget.client_id,
+          budget_id: budget.id,
+          name: `Abono: ${budget.clients?.name || 'Cliente'} - ${budget.budget_code || '#' + budget.budget_number}`,
+          items: subItems,
+          total_amount: finalTotal,
+          status: 'active'
+        })
+        .select('id')
+        .single()
+
+      if (subError) throw subError
+
+      setAssociatedSubscriptionId(newSub.id)
+      toast.success('¡Convertido en Abono Recurrente con éxito!')
+    } catch (err: any) {
+      console.error(err)
+      toast.error('Error al crear abono: ' + (err.message || 'Desconocido'))
+    } finally {
+      setConvertingToSubscription(false)
     }
   }
 
@@ -704,6 +756,21 @@ export default function PresupuestoDetallePage() {
 
             <div className="flex flex-wrap gap-3">
               <StatusBadge status={budget.status || 'issued'} />
+              {company?.business_type === 'services' && budget.status === 'approved' && (
+                <button
+                  onClick={associatedSubscriptionId ? () => router.push('/abonos') : handleConvertirAAbono}
+                  disabled={convertingToSubscription}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-500 disabled:opacity-50 transition active:scale-95 shadow-lg shadow-indigo-900/20"
+                >
+                  {convertingToSubscription ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Zap size={18} />
+                  )}
+                  {associatedSubscriptionId ? 'Ver Abono Recurrente' : 'Convertir en Abono'}
+                </button>
+              )}
+
               <button
                 onClick={handlePasarAPedido}
                 disabled={convertingToOrder || isCheckingPrices || !!associatedOrderId || budget.status === 'cancelled'}
