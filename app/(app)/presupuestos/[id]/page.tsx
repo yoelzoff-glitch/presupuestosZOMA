@@ -561,6 +561,127 @@ export default function PresupuestoDetallePage() {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+
+          /* SISTEMA DE ESCALADO INTELIGENTE SEGÚN CANTIDAD DE ÍTEMS */
+
+          /* 1. DENSE LAYOUT (8-10 ítems) */
+          #print-section.dense {
+            padding: 8mm !important;
+          }
+          #print-section.dense .pb-6 {
+            padding-bottom: 8px !important;
+          }
+          #print-section.dense .mb-8 {
+            margin-bottom: 10px !important;
+          }
+          #print-section.dense .p-5 {
+            padding: 10px !important;
+          }
+          #print-section.dense .gap-8 {
+            gap: 12px !important;
+          }
+          #print-section.dense table.w-full {
+            margin-bottom: 10px !important;
+            font-size: 8.5px !important;
+          }
+          #print-section.dense table.w-full th,
+          #print-section.dense table.w-full td {
+            padding: 5px 6px !important;
+          }
+          #print-section.dense img {
+            height: 38px !important;
+          }
+          #print-section.dense .text-2xl {
+            font-size: 1.25rem !important;
+          }
+          #print-section.dense .text-3xl {
+            font-size: 1.5rem !important;
+          }
+          #print-section.dense .pt-4 {
+            padding-top: 8px !important;
+          }
+
+          /* 2. ULTRA DENSE LAYOUT (11-15 ítems) */
+          #print-section.ultra-dense {
+            padding: 6mm !important;
+          }
+          #print-section.ultra-dense .pb-6 {
+            padding-bottom: 4px !important;
+          }
+          #print-section.ultra-dense .mb-8 {
+            margin-bottom: 6px !important;
+          }
+          #print-section.ultra-dense .p-5 {
+            padding: 6px !important;
+          }
+          #print-section.ultra-dense .gap-8 {
+            gap: 8px !important;
+          }
+          #print-section.ultra-dense table.w-full {
+            margin-bottom: 6px !important;
+            font-size: 7.5px !important;
+          }
+          #print-section.ultra-dense table.w-full th,
+          #print-section.ultra-dense table.w-full td {
+            padding: 3px 4px !important;
+          }
+          #print-section.ultra-dense img {
+            height: 30px !important;
+          }
+          #print-section.ultra-dense .text-2xl {
+            font-size: 1.1rem !important;
+          }
+          #print-section.ultra-dense .text-3xl {
+            font-size: 1.25rem !important;
+          }
+          #print-section.ultra-dense .pt-4 {
+            padding-top: 4px !important;
+          }
+          #print-section.ultra-dense .whitespace-pre-wrap {
+            font-size: 8px !important;
+            line-height: 1.2 !important;
+          }
+
+          /* 3. SUPER DENSE LAYOUT (16+ ítems) */
+          #print-section.super-dense {
+            padding: 4mm !important;
+          }
+          #print-section.super-dense .pb-6 {
+            padding-bottom: 2px !important;
+          }
+          #print-section.super-dense .mb-8 {
+            margin-bottom: 4px !important;
+          }
+          #print-section.super-dense .p-5 {
+            padding: 4px !important;
+          }
+          #print-section.super-dense .gap-8 {
+            gap: 4px !important;
+          }
+          #print-section.super-dense table.w-full {
+            margin-bottom: 4px !important;
+            font-size: 6.8px !important;
+          }
+          #print-section.super-dense table.w-full th,
+          #print-section.super-dense table.w-full td {
+            padding: 1.5px 3px !important;
+          }
+          #print-section.super-dense img {
+            height: 22px !important;
+          }
+          #print-section.super-dense .text-2xl {
+            font-size: 0.95rem !important;
+          }
+          #print-section.super-dense .text-3xl {
+            font-size: 1.1rem !important;
+          }
+          #print-section.super-dense .pt-4 {
+            padding-top: 2px !important;
+          }
+          #print-section.super-dense .whitespace-pre-wrap {
+            font-size: 7px !important;
+            line-height: 1.1 !important;
+          }
         }
       `}</style>
 
@@ -662,7 +783,7 @@ export default function PresupuestoDetallePage() {
       </div>
 
       {/* VISTA DE IMPRESIÓN (PDF) - AISLADA TOTALMENTE */}
-      <div id="print-section">
+      <div id="print-section" className={items.length > 15 ? 'super-dense' : items.length > 10 ? 'ultra-dense' : items.length > 7 ? 'dense' : ''}>
         <div className="flex justify-between border-b-2 border-slate-900 pb-6 mb-8">
           <div>
             {company?.logo_url ? (

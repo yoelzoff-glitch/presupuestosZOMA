@@ -351,6 +351,119 @@ export default function PortalPresupuestoDetallePage() {
             line-height: 1.1 !important;
             font-weight: 900 !important;
           }
+
+          /* SISTEMA DE IMPRESIÓN COMPACTO INTELIGENTE (PORTAL DE PEDIDOS) */
+          
+          /* 1. DENSE LAYOUT (8-10 ítems) */
+          .print-area.dense {
+            border: none !important;
+          }
+          .print-area.dense .print-header {
+            padding-bottom: 8px !important;
+            margin-bottom: 10px !important;
+            gap: 12px !important;
+          }
+          .print-area.dense .print-title {
+            font-size: 20px !important;
+          }
+          .print-area.dense .print-section {
+            padding: 10px 0 !important;
+          }
+          .print-area.dense .p-6 {
+            padding: 10px !important;
+          }
+          .print-area.dense .print-client-grid {
+            gap: 6px !important;
+          }
+          .print-area.dense .print-table {
+            font-size: 9px !important;
+          }
+          .print-area.dense .print-table th, .print-area.dense .print-table td {
+            padding: 5px 6px !important;
+          }
+          .print-area.dense .print-total {
+            padding: 10px !important;
+            width: 200px !important;
+            border-radius: 12px !important;
+            margin-top: 10px !important;
+          }
+          .print-area.dense .print-total-number {
+            font-size: 20px !important;
+          }
+
+          /* 2. ULTRA DENSE LAYOUT (11-15 ítems) */
+          .print-area.ultra-dense {
+            border: none !important;
+          }
+          .print-area.ultra-dense .print-header {
+            padding-bottom: 4px !important;
+            margin-bottom: 6px !important;
+            gap: 6px !important;
+          }
+          .print-area.ultra-dense .print-title {
+            font-size: 16px !important;
+          }
+          .print-area.ultra-dense .print-section {
+            padding: 6px 0 !important;
+          }
+          .print-area.ultra-dense .p-6 {
+            padding: 6px !important;
+          }
+          .print-area.ultra-dense .print-client-grid {
+            gap: 4px !important;
+          }
+          .print-area.ultra-dense .print-table {
+            font-size: 8px !important;
+          }
+          .print-area.ultra-dense .print-table th, .print-area.ultra-dense .print-table td {
+            padding: 3px 4px !important;
+          }
+          .print-area.ultra-dense .print-total {
+            padding: 6px !important;
+            width: 160px !important;
+            border-radius: 10px !important;
+            margin-top: 6px !important;
+          }
+          .print-area.ultra-dense .print-total-number {
+            font-size: 16px !important;
+          }
+
+          /* 3. SUPER DENSE LAYOUT (16+ ítems) */
+          .print-area.super-dense {
+            border: none !important;
+          }
+          .print-area.super-dense .print-header {
+            padding-bottom: 2px !important;
+            margin-bottom: 4px !important;
+            gap: 4px !important;
+          }
+          .print-area.super-dense .print-title {
+            font-size: 14px !important;
+          }
+          .print-area.super-dense .print-section {
+            padding: 4px 0 !important;
+          }
+          .print-area.super-dense .p-6 {
+            padding: 4px !important;
+          }
+          .print-area.super-dense .print-client-grid {
+            gap: 2px !important;
+          }
+          .print-area.super-dense .print-table {
+            font-size: 7px !important;
+          }
+          .print-area.super-dense .print-table th, .print-area.super-dense .print-table td {
+            padding: 1.5px 3px !important;
+          }
+          .print-area.super-dense .print-total {
+            padding: 4px !important;
+            width: 130px !important;
+            border-radius: 8px !important;
+            margin-top: 4px !important;
+          }
+          .print-area.super-dense .print-total-number {
+            font-size: 14px !important;
+          }
         }
       `}</style>
 
@@ -423,7 +536,9 @@ export default function PortalPresupuestoDetallePage() {
           />
         </section>
 
-        <section className="print-area print-card rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+        <section className={`print-area print-card rounded-[1.5rem] border border-slate-200 bg-white shadow-sm ${
+          items.length > 15 ? 'super-dense' : items.length > 10 ? 'ultra-dense' : items.length > 7 ? 'dense' : ''
+        }`}>
           <div className="print-header border-b border-slate-200 p-6">
             <div>
               <p className="print-subtitle text-xs font-black uppercase tracking-[0.25em] text-blue-700">

@@ -138,11 +138,146 @@ export default function BudgetPublicClient() {
             padding: 15mm !important;
             margin: 0 !important;
           }
+
+          /* SISTEMA DE IMPRESIÓN COMPACTO INTELIGENTE (VISTA PÚBLICA) */
+
+          /* 1. DENSE LAYOUT (8-10 ítems) */
+          .print-area.dense {
+            padding: 8mm !important;
+          }
+          .print-area.dense .bg-slate-950 {
+            padding: 18px !important;
+            border-radius: 16px !important;
+          }
+          .print-area.dense .bg-slate-950 img {
+            height: 38px !important;
+            margin-bottom: 8px !important;
+          }
+          .print-area.dense .bg-slate-950 h2 {
+            font-size: 1.5rem !important;
+          }
+          .print-area.dense .bg-slate-950 h1 {
+            font-size: 2rem !important;
+          }
+          .print-area.dense .grid-cols-1 {
+            padding: 16px !important;
+            gap: 12px !important;
+          }
+          .print-area.dense .p-0, .print-area.dense .sm:p-6, .print-area.dense .lg:p-12 {
+            padding: 8px !important;
+          }
+          .print-area.dense table {
+            font-size: 9px !important;
+          }
+          .print-area.dense table th, .print-area.dense table td {
+            padding: 5px 6px !important;
+          }
+          .print-area.dense table td .shrink-0 {
+            display: none !important;
+          }
+          .print-area.dense .bg-slate-50 {
+            padding: 12px !important;
+          }
+          .print-area.dense .text-5xl {
+            font-size: 1.75rem !important;
+          }
+
+          /* 2. ULTRA DENSE LAYOUT (11-15 ítems) */
+          .print-area.ultra-dense {
+            padding: 6mm !important;
+          }
+          .print-area.ultra-dense .bg-slate-950 {
+            padding: 12px !important;
+            border-radius: 12px !important;
+          }
+          .print-area.ultra-dense .bg-slate-950 img {
+            height: 30px !important;
+            margin-bottom: 4px !important;
+          }
+          .print-area.ultra-dense .bg-slate-950 h2 {
+            font-size: 1.25rem !important;
+          }
+          .print-area.ultra-dense .bg-slate-950 h1 {
+            font-size: 1.5rem !important;
+          }
+          .print-area.ultra-dense .grid-cols-1 {
+            padding: 10px !important;
+            gap: 8px !important;
+          }
+          .print-area.ultra-dense .p-0, .print-area.ultra-dense .sm:p-6, .print-area.ultra-dense .lg:p-12 {
+            padding: 4px !important;
+          }
+          .print-area.ultra-dense table {
+            font-size: 8px !important;
+          }
+          .print-area.ultra-dense table th, .print-area.ultra-dense table td {
+            padding: 3px 4px !important;
+          }
+          .print-area.ultra-dense table td .shrink-0 {
+            display: none !important;
+          }
+          .print-area.ultra-dense .bg-slate-50 {
+            padding: 8px !important;
+          }
+          .print-area.ultra-dense .text-5xl {
+            font-size: 1.35rem !important;
+          }
+          .print-area.ultra-dense .whitespace-pre-wrap {
+            font-size: 8px !important;
+            line-height: 1.2 !important;
+          }
+
+          /* 3. SUPER DENSE LAYOUT (16+ ítems) */
+          .print-area.super-dense {
+            padding: 4mm !important;
+          }
+          .print-area.super-dense .bg-slate-950 {
+            padding: 8px !important;
+            border-radius: 8px !important;
+          }
+          .print-area.super-dense .bg-slate-950 img {
+            height: 22px !important;
+            margin-bottom: 2px !important;
+          }
+          .print-area.super-dense .bg-slate-950 h2 {
+            font-size: 1.1rem !important;
+          }
+          .print-area.super-dense .bg-slate-950 h1 {
+            font-size: 1.25rem !important;
+          }
+          .print-area.super-dense .grid-cols-1 {
+            padding: 6px !important;
+            gap: 4px !important;
+          }
+          .print-area.super-dense .p-0, .print-area.super-dense .sm:p-6, .print-area.super-dense .lg:p-12 {
+            padding: 2px !important;
+          }
+          .print-area.super-dense table {
+            font-size: 7px !important;
+          }
+          .print-area.super-dense table th, .print-area.super-dense table td {
+            padding: 1.5px 3px !important;
+          }
+          .print-area.super-dense table td .shrink-0 {
+            display: none !important;
+          }
+          .print-area.super-dense .bg-slate-50 {
+            padding: 6px !important;
+          }
+          .print-area.super-dense .text-5xl {
+            font-size: 1.15rem !important;
+          }
+          .print-area.super-dense .whitespace-pre-wrap {
+            font-size: 7px !important;
+            line-height: 1.1 !important;
+          }
         }
       `}</style>
 
       <div className="mx-auto max-w-4xl">
-        <div className="print-area bg-white shadow-2xl rounded-[2rem] border border-slate-200 overflow-hidden">
+        <div className={`print-area bg-white shadow-2xl rounded-[2rem] border border-slate-200 overflow-hidden ${
+          items.length > 15 ? 'super-dense' : items.length > 10 ? 'ultra-dense' : items.length > 7 ? 'dense' : ''
+        }`}>
           <div className="bg-slate-950 p-8 text-white sm:p-12">
              <div className="flex flex-col sm:flex-row justify-between items-start gap-8">
                 <div className="flex-1">
