@@ -4,6 +4,11 @@ import { Arca } from '@arcasdk/core'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import https from 'https'
+
+// AFIP homologation servers use 1024-bit Diffie-Hellman keys. Modern Node/OpenSSL (>= 17) requires 2048-bit keys by default (@SECLEVEL=2).
+// Lowering the security level to 1 programmatically bypasses the 'dh key too small' error.
+https.globalAgent.options.ciphers = 'DEFAULT:@SECLEVEL=1'
 
 export async function POST(request: Request) {
   const tempDir = os.tmpdir()
