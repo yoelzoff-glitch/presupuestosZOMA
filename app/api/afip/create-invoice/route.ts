@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const keyPath = path.join(tempDir, `key_inv_${Date.now()}.key`)
 
   try {
-    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount, addIva } = await request.json()
+    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount, addIva, serviceDates } = await request.json()
     if (!budget_id) return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
 
     const supabaseAdmin = createSupabaseAdminClient()
@@ -30,6 +30,14 @@ export async function POST(request: Request) {
       .single()
 
     if (bError || !budget) throw new Error('Presupuesto no encontrado')
+
+    // Obtener tipo de negocio de la empresa
+    const { data: companyObj } = await supabaseAdmin
+      .from('companies')
+      .select('business_type')
+      .eq('id', budget.company_id)
+      .single()
+    const businessType = companyObj?.business_type || 'products'
     
 
     
@@ -199,7 +207,7 @@ export async function POST(request: Request) {
       CantReg: 1,
       PtoVta: config.punto_venta || 2,
       CbteTipo: cbteTipo,
-      Concepto: 1, // Productos
+      Concepto: businessType === 'services' ? 2 : 1, // 1: Productos, 2: Servicios
       DocTipo: docTipo,
       DocNro: docNro,
       CbteFch: new Date().toISOString().replace(/-/g, '').split('T')[0],
@@ -216,6 +224,30 @@ export async function POST(request: Request) {
       CondicionIVAReceptorId: condicionIvaReceptor,
       MonId: 'PES',
       MonCotiz: 1
+    }
+
+    if (businessType === 'services') {
+      const today = new Date()
+      const year = today.getFullYear()
+      const month = today.getMonth()
+
+      const formatDateForAfip = (d: Date) => {
+        const y = d.getFullYear()
+        const m = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        return `${y}${m}${day}`
+      }
+
+      const defaultDesde = formatDateForAfip(new Date(year, month, 1))
+      const defaultHasta = formatDateForAfip(new Date(year, month + 1, 0))
+      
+      const todayCopy = new Date()
+      todayCopy.setDate(todayCopy.getDate() + 10)
+      const defaultVto = formatDateForAfip(todayCopy)
+
+      voucherData.FchServDesde = serviceDates?.FchServDesde?.replace(/-/g, '') || defaultDesde
+      voucherData.FchServHasta = serviceDates?.FchServHasta?.replace(/-/g, '') || defaultHasta
+      voucherData.FchVtoPago = serviceDates?.FchVtoPago?.replace(/-/g, '') || defaultVto
     }
 
     if (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7) {
@@ -367,7 +399,12 @@ export async function POST(request: Request) {
           afip_comprobante_numero: cbteNro,
           afip_comprobante_tipo: cbteTipo,
           invoice_date: new Date().toISOString().split('T')[0],
-          invoice_number: cbteNro
+          invoice_number: cbteNro,
+          ...(businessType === 'services' ? {
+            afip_servicio_desde: voucherData.FchServDesde,
+            afip_servicio_hasta: voucherData.FchServHasta,
+            afip_servicio_vto: voucherData.FchVtoPago
+          } : {})
         })
     } else {
       // Flujo de factura estándar (guardado dual original)
@@ -390,7 +427,12 @@ export async function POST(request: Request) {
           afip_cae: cae,
           afip_cae_vencimiento: caeFchVto,
           afip_comprobante_numero: cbteNro,
-          afip_comprobante_tipo: cbteTipo
+          afip_comprobante_tipo: cbteTipo,
+          ...(businessType === 'services' ? {
+            afip_servicio_desde: voucherData.FchServDesde,
+            afip_servicio_hasta: voucherData.FchServHasta,
+            afip_servicio_vto: voucherData.FchVtoPago
+          } : {})
         })
         .eq('budget_id', budget_id);
 
