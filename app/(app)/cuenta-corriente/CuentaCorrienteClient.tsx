@@ -49,6 +49,7 @@ type PendingBudget = {
   total: number
   paid: number
   balance: number
+  date?: string
 }
 
 type Props = {
@@ -169,7 +170,26 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
     const grouped = new Map<string, PendingBudget>()
 
     movements.forEach((movement) => {
-      if (!movement.budget_id) return
+      if (!movement.budget_id) {
+        const current = grouped.get('MANUAL') || {
+          id: 'MANUAL',
+          label: 'Saldos y deudas sin presupuesto',
+          total: 0,
+          paid: 0,
+          balance: 0,
+          date: movement.movement_date,
+        }
+        current.total += Number(movement.debit || 0)
+        current.paid += Number(movement.credit || 0)
+        current.balance = current.total - current.paid
+        
+        if (!current.date || movement.movement_date < current.date) {
+          current.date = movement.movement_date
+        }
+
+        grouped.set('MANUAL', current)
+        return
+      }
 
       const budgetCode =
         movement.budgets?.budget_code ||
@@ -230,7 +250,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
   }, [paymentType, paymentFullAmount, selectedPaymentBudget, pendingBudgets.length])
 
   async function updateBudgetPaymentStatus(budgetId: string) {
-    if (!companyId || !budgetId) return
+    if (!companyId || !budgetId || budgetId === 'MANUAL') return
 
     const { data: movementsData } = await supabase
       .from('account_movements')
@@ -320,7 +340,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       const movementsToInsert = pendingBudgets.map((budget) => ({
         company_id: companyId,
         client_id: selectedClientId,
-        budget_id: budget.id,
+        budget_id: budget.id === 'MANUAL' ? null : budget.id,
         movement_type: 'Pago',
         payment_type: 'Pago total',
         description: `Pago completo ${budget.label}`,
@@ -372,11 +392,18 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       const { data: budgetDates } = await supabase
         .from('budgets')
         .select('id, budget_date, budget_number')
-        .in('id', sortedBudgets.map((b) => b.id))
+        .in('id', sortedBudgets.map((b) => b.id).filter((id) => id !== 'MANUAL'))
 
       const dateMap = new Map(
         (budgetDates || []).map((b) => [b.id, b.budget_date || '9999-12-31'])
       )
+
+      const manualItem = sortedBudgets.find((b) => b.id === 'MANUAL')
+      if (manualItem && manualItem.date) {
+        dateMap.set('MANUAL', manualItem.date)
+      } else if (manualItem) {
+        dateMap.set('MANUAL', '1900-01-01')
+      }
 
       const orderedBudgets = [...pendingBudgets].sort((a, b) => {
         const da = dateMap.get(a.id) || '9999-12-31'
@@ -410,7 +437,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       const movementsToInsert = cascadeItems.map((item) => ({
         company_id: companyId,
         client_id: selectedClientId,
-        budget_id: item.budget_id,
+        budget_id: item.budget_id === 'MANUAL' ? null : item.budget_id,
         movement_type: 'Pago',
         payment_type: item.paymentType,
         description:
@@ -457,7 +484,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
     const { error } = await supabase.from('account_movements').insert({
       company_id: companyId,
       client_id: selectedClientId,
-      budget_id: selectedPaymentBudgetId || null,
+      budget_id: selectedPaymentBudgetId === 'MANUAL' ? null : (selectedPaymentBudgetId || null),
       movement_type: 'Pago',
       payment_type: paymentType,
       description:

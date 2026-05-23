@@ -42,7 +42,7 @@ const navItems = [
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
-  { href: '/contador', label: 'Portal Contable 👔', icon: ShieldCheck },
+  { href: '/contador', label: 'Portal Contable', icon: ShieldCheck },
 ]
 
 function getPageTitle(pathname: string, businessType?: string) {
@@ -212,10 +212,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             {planType && (
               <div className="mt-1.5">
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${planType === 'ultra'
-                    ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[0_0_12px_rgba(168,85,247,0.1)]'
-                    : planType === 'pro' || planType === 'pro_plus'
-                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.1)]'
-                      : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                  ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[0_0_12px_rgba(168,85,247,0.1)]'
+                  : planType === 'pro' || planType === 'pro_plus'
+                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.1)]'
+                    : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
                   }`}>
                   PLAN {planType === 'pro_plus' ? 'PRO+' : planType}
                 </span>
@@ -241,8 +241,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 href={item.href}
                 onClick={onNavigate}
                 className={`group relative flex items-center gap-3.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-300 ${active
-                    ? 'bg-blue-600/10 text-white font-bold'
-                    : 'text-slate-450 hover:bg-white/[0.02] hover:text-slate-105'
+                  ? 'bg-blue-600/10 text-white font-bold'
+                  : 'text-slate-450 hover:bg-white/[0.02] hover:text-slate-105'
                   }`}
               >
                 {active && (
@@ -251,8 +251,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
                 <span
                   className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-300 ${active
-                      ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white border-blue-400 shadow-[0_8px_20px_-4px_rgba(37,99,235,0.4)] ring-4 ring-blue-500/10'
-                      : 'bg-white/[0.02] border-white/[0.04] text-slate-500 group-hover:bg-white/[0.06] group-hover:border-white/[0.08] group-hover:text-slate-350'
+                    ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white border-blue-400 shadow-[0_8px_20px_-4px_rgba(37,99,235,0.4)] ring-4 ring-blue-500/10'
+                    : 'bg-white/[0.02] border-white/[0.04] text-slate-500 group-hover:bg-white/[0.06] group-hover:border-white/[0.08] group-hover:text-slate-350'
                     }`}
                 >
                   <Icon size={16} strokeWidth={1.75} className={active ? "fill-white/15" : "fill-transparent group-hover:fill-white/5"} />
@@ -415,10 +415,10 @@ export default function AppShell({ children }: AppShellProps) {
                 <Link
                   href="/configuracion/suscripcion"
                   className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${diasRestantes <= 0
-                      ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
-                      : diasRestantes <= 3
-                        ? 'bg-amber-50 border-amber-200 text-amber-700'
-                        : 'bg-blue-50 border-blue-100 text-blue-600'
+                    ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
+                    : diasRestantes <= 3
+                      ? 'bg-amber-50 border-amber-200 text-amber-700'
+                      : 'bg-blue-50 border-blue-100 text-blue-600'
                     }`}
                 >
                   <Clock size={14} />
