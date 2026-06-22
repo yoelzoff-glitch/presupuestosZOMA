@@ -291,7 +291,7 @@ BEGIN
             (SELECT COUNT(*) FROM products WHERE company_id = company_id_param) as products_count,
             (SELECT COUNT(*) FROM budgets WHERE company_id = company_id_param AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as budgets_count,
             (SELECT COUNT(*) FROM orders WHERE company_id = company_id_param AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as orders_count,
-            (SELECT COALESCE(SUM(debit - credit), 0) FROM account_movements WHERE company_id = company_id_param AND created_at >= date_limit AND (seller_id_param IS NULL OR client_id IN (SELECT id FROM clients WHERE seller_id = seller_id_param))) as total_balance,
+            (SELECT COALESCE(SUM(debit - credit), 0) FROM account_movements WHERE company_id = company_id_param AND (seller_id_param IS NULL OR client_id IN (SELECT id FROM clients WHERE seller_id = seller_id_param))) as total_balance,
             (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status != 'cancelled' AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as total_budgeted,
             (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status = 'approved' AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as total_converted
     ),
