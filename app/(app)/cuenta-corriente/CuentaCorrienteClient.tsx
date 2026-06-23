@@ -75,7 +75,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
   const [paymentAmount, setPaymentAmount] = useState('')
   const [selectedPaymentBudgetId, setSelectedPaymentBudgetId] = useState('')
   const [paymentType, setPaymentType] =
-    useState<'Pago total' | 'Pago parcial' | 'A cuenta'>('Pago parcial')
+    useState<'Pago total' | 'Pago parcial' | 'A cuenta'>('A cuenta')
   const [paymentDescription, setPaymentDescription] = useState('Pago recibido')
 
   const [errorMsg, setErrorMsg] = useState('')
@@ -303,195 +303,23 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       return
     }
 
-    const amount =
-      paymentType === 'Pago total'
-        ? Number(paymentFullAmount)
-        : Number(paymentAmount)
+    const amount = Number(paymentAmount)
 
     if (!amount || isNaN(amount) || amount <= 0) {
       setErrorMsg('Ingresá un monto válido.')
       return
     }
 
-    if (selectedPaymentBudget && amount > selectedPaymentBudget.balance) {
-      setErrorMsg('El pago no puede superar la deuda del presupuesto seleccionado.')
-      return
-    }
-
-    if (
-      paymentType !== 'Pago total' &&
-      !selectedPaymentBudget &&
-      amount > totals.balance
-    ) {
-      setErrorMsg('El pago no puede superar la deuda total del cliente.')
-      return
-    }
-
     setSavingPayment(true)
 
-    // -----------------------------------------------------------------------
-    // BRANCH 1: "Pago total" sin presupuesto → salda todos los pendientes
-    // -----------------------------------------------------------------------
-    if (
-      paymentType === 'Pago total' &&
-      !selectedPaymentBudget &&
-      pendingBudgets.length > 0
-    ) {
-      const movementsToInsert = pendingBudgets.map((budget) => ({
-        company_id: companyId,
-        client_id: selectedClientId,
-        budget_id: budget.id === 'MANUAL' ? null : budget.id,
-        movement_type: 'Pago',
-        payment_type: 'Pago total',
-        description: `Pago completo ${budget.label}`,
-        payment_method: selectedPaymentMethod || null,
-        debit: 0,
-        credit: Number(budget.balance || 0),
-      }))
-
-      const { error } = await supabase
-        .from('account_movements')
-        .insert(movementsToInsert)
-
-      setSavingPayment(false)
-
-      if (error) {
-        setErrorMsg('Error al registrar el pago total.')
-        console.error(error)
-        return
-      }
-
-      for (const budget of pendingBudgets) {
-        await updateBudgetPaymentStatus(budget.id)
-      }
-
-      setSuccessMsg('Pago total registrado. Todos los presupuestos pendientes quedaron saldados.')
-      setPaymentAmount('')
-      setSelectedPaymentBudgetId('')
-      setPaymentType('Pago parcial')
-      setPaymentDescription('Pago recibido')
-      setShowPaymentForm(false)
-
-      await loadMovements(selectedClientId)
-      return
-    }
-
-    // -----------------------------------------------------------------------
-    // BRANCH 2: Sin presupuesto seleccionado → cascada automática
-    // -----------------------------------------------------------------------
-    if (!selectedPaymentBudgetId && pendingBudgets.length > 0) {
-      // Sort pending budgets by date ascending (oldest first)
-      // pendingBudgets already comes from movements ordered by date desc,
-      // so we need to re-sort: we'll use the order from the budgets query
-      // For now we sort by label (000-XXXX) ascending as a proxy for date
-      const sortedBudgets = [...pendingBudgets].sort((a, b) =>
-        a.label.localeCompare(b.label)
-      )
-
-      // Fetch real dates for proper ordering
-      const { data: budgetDates } = await supabase
-        .from('budgets')
-        .select('id, budget_date, budget_number')
-        .in('id', sortedBudgets.map((b) => b.id).filter((id) => id !== 'MANUAL'))
-
-      const dateMap = new Map(
-        (budgetDates || []).map((b) => [b.id, b.budget_date || '9999-12-31'])
-      )
-
-      const manualItem = sortedBudgets.find((b) => b.id === 'MANUAL')
-      if (manualItem && manualItem.date) {
-        dateMap.set('MANUAL', manualItem.date)
-      } else if (manualItem) {
-        dateMap.set('MANUAL', '1900-01-01')
-      }
-
-      const orderedBudgets = [...pendingBudgets].sort((a, b) => {
-        const da = dateMap.get(a.id) || '9999-12-31'
-        const db = dateMap.get(b.id) || '9999-12-31'
-        return da.localeCompare(db)
-      })
-
-      // Run cascade algorithm
-      const cascadeItems: Array<{
-        budget_id: string
-        label: string
-        allocated: number
-        paymentType: 'Pago total' | 'Pago parcial'
-      }> = []
-
-      let remaining = amount
-
-      for (const budget of orderedBudgets) {
-        if (remaining <= 0) break
-        const allocated = Math.min(remaining, budget.balance)
-        cascadeItems.push({
-          budget_id: budget.id,
-          label: budget.label,
-          allocated,
-          paymentType: allocated >= budget.balance ? 'Pago total' : 'Pago parcial',
-        })
-        remaining -= allocated
-      }
-
-      // Insert one movement per affected budget
-      const movementsToInsert = cascadeItems.map((item) => ({
-        company_id: companyId,
-        client_id: selectedClientId,
-        budget_id: item.budget_id === 'MANUAL' ? null : item.budget_id,
-        movement_type: 'Pago',
-        payment_type: item.paymentType,
-        description:
-          paymentDescription.trim() ||
-          `Pago ${item.paymentType === 'Pago total' ? 'completo' : 'parcial'} ${item.label}`,
-        payment_method: selectedPaymentMethod || null,
-        debit: 0,
-        credit: item.allocated,
-      }))
-
-      const { error } = await supabase
-        .from('account_movements')
-        .insert(movementsToInsert)
-
-      setSavingPayment(false)
-
-      if (error) {
-        setErrorMsg('Error al registrar el pago en cascada.')
-        console.error(error)
-        return
-      }
-
-      for (const item of cascadeItems) {
-        await updateBudgetPaymentStatus(item.budget_id)
-      }
-
-      const affected = cascadeItems.length
-      setSuccessMsg(
-        `Pago registrado. Se distribuyó en cascada entre ${affected} presupuesto${affected !== 1 ? 's' : ''} (del más antiguo al más reciente).`
-      )
-      setPaymentAmount('')
-      setSelectedPaymentBudgetId('')
-      setPaymentType('Pago parcial')
-      setPaymentDescription('Pago recibido')
-      setShowPaymentForm(false)
-
-      await loadMovements(selectedClientId)
-      return
-    }
-
-    // -----------------------------------------------------------------------
-    // BRANCH 3: Con presupuesto seleccionado → pago directo al presupuesto
-    // -----------------------------------------------------------------------
+    // Registrar pago directo en la cuenta corriente (sin asociar a presupuesto)
     const { error } = await supabase.from('account_movements').insert({
       company_id: companyId,
       client_id: selectedClientId,
-      budget_id: selectedPaymentBudgetId === 'MANUAL' ? null : (selectedPaymentBudgetId || null),
+      budget_id: null,
       movement_type: 'Pago',
-      payment_type: paymentType,
-      description:
-        paymentDescription.trim() ||
-        (selectedPaymentBudget
-          ? `Pago ${selectedPaymentBudget.label}`
-          : 'Pago recibido'),
+      payment_type: 'A cuenta',
+      description: paymentDescription.trim() || 'Pago recibido',
       payment_method: selectedPaymentMethod || null,
       debit: 0,
       credit: amount,
@@ -505,14 +333,10 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       return
     }
 
-    if (selectedPaymentBudgetId) {
-      await updateBudgetPaymentStatus(selectedPaymentBudgetId)
-    }
-
     setSuccessMsg('Pago registrado correctamente.')
     setPaymentAmount('')
     setSelectedPaymentBudgetId('')
-    setPaymentType('Pago parcial')
+    setPaymentType('A cuenta')
     setPaymentDescription('Pago recibido')
     setShowPaymentForm(false)
 
@@ -851,138 +675,42 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
                         Registrar pago
                       </h3>
                       <p className="text-sm font-semibold text-slate-500">
-                        Podés asociar el pago a un presupuesto pendiente o usar pago total para saldar todos.
+                        Registrá un pago para disminuir el saldo pendiente de la cuenta corriente.
                       </p>
                     </div>
-
-                    {selectedPaymentBudget ? (
-                      <div className="rounded-2xl bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">
-                        Deuda: {formatCurrency(selectedPaymentBudget.balance)}
-                      </div>
-                    ) : paymentType === 'Pago total' && pendingBudgets.length > 0 ? (
-                      <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">
-                        Saldará {pendingBudgets.length} presupuesto
-                        {pendingBudgets.length === 1 ? '' : 's'} pendiente
-                        {pendingBudgets.length === 1 ? '' : 's'}
-                      </div>
-                    ) : null}
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <label className="block xl:col-span-2">
-                      <span className="mb-2 block text-sm font-bold text-slate-700">
-                        Presupuesto asociado
-                      </span>
-
-                      <select
-                        value={selectedPaymentBudgetId}
-                        onChange={(e) => handleBudgetSelection(e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                      >
-                        <option value="">
-                          {paymentType === 'Pago total'
-                            ? 'Sin asociar: saldar todos los pendientes'
-                            : 'Sin asociar a presupuesto'}
-                        </option>
-
-                        {pendingBudgets.map((budget) => (
-                          <option key={budget.id} value={budget.id}>
-                            {budget.label} - deuda {formatCurrency(budget.balance)}
-                          </option>
-                        ))}
-                      </select>
-
-                      {pendingBudgets.length === 0 && (
-                        <p className="mt-2 text-xs font-bold text-slate-400">
-                          Este cliente no tiene presupuestos pendientes para asociar.
-                        </p>
-                      )}
-
-                      {paymentType !== 'Pago total' &&
-                        !selectedPaymentBudget &&
-                        pendingBudgets.length > 0 && (
-                          <p className="mt-2 text-xs font-bold text-blue-600">
-                            ⚡ Sin presupuesto asignado: el monto se distribuirá en cascada del más antiguo al más reciente.
-                          </p>
-                        )}
-
-                      {paymentType === 'Pago total' &&
-                        !selectedPaymentBudget &&
-                        pendingBudgets.length > 0 && (
-                          <p className="mt-2 text-xs font-bold text-emerald-600">
-                            Al no elegir un presupuesto puntual, se generará un pago por cada presupuesto pendiente.
-                          </p>
-                        )}
-                    </label>
-
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-bold text-slate-700">
-                        Tipo de pago
-                      </span>
-
-                      <select
-                        value={paymentType}
-                        onChange={(e) =>
-                          handlePaymentTypeChange(
-                            e.target.value as
-                              | 'Pago total'
-                              | 'Pago parcial'
-                              | 'A cuenta'
-                          )
-                        }
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                      >
-                        <option value="Pago parcial">Pago parcial</option>
-                        <option value="Pago total">Pago total</option>
-                        <option value="A cuenta">A cuenta</option>
-                      </select>
-                    </label>
-
                     <label className="block">
                       <span className="mb-2 block text-sm font-bold text-slate-700">
                         Monto
                       </span>
 
-                      <input
-                        type="number"
-                        value={paymentAmount}
-                        readOnly={paymentType === 'Pago total'}
-                        onChange={(e) => setPaymentAmount(e.target.value)}
-                        placeholder="Ej: 15000"
-                        className={`w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 ${
-                          paymentType === 'Pago total'
-                            ? 'cursor-not-allowed bg-slate-100 text-slate-500'
-                            : 'bg-slate-50'
-                        }`}
-                      />
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={paymentAmount}
+                          onChange={(e) => setPaymentAmount(e.target.value)}
+                          placeholder="0.00"
+                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-8 pr-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </div>
 
-                      {paymentType === 'Pago total' && (
-                        <p className="mt-2 text-xs font-bold text-blue-600">
-                          Se completa automáticamente con la deuda{' '}
-                          {selectedPaymentBudget
-                            ? 'del presupuesto'
-                            : pendingBudgets.length > 0
-                              ? 'de todos los presupuestos pendientes'
-                              : 'total del cliente'}
-                          .
-                        </p>
+                      {totals.balance > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentAmount(String(Number(totals.balance.toFixed(2))))}
+                          className="mt-2 text-xs font-bold text-blue-600 hover:underline"
+                        >
+                          Saldar deuda total: {formatCurrency(totals.balance)}
+                        </button>
                       )}
                     </label>
 
-                    <label className="block xl:col-span-4">
-                      <span className="mb-2 block text-sm font-bold text-slate-700">
-                        Descripción
-                      </span>
-
-                      <input
-                        value={paymentDescription}
-                        onChange={(e) => setPaymentDescription(e.target.value)}
-                        placeholder="Pago recibido"
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                      />
-                    </label>
-
-                    <label className="block xl:col-span-2">
+                    <label className="block">
                       <span className="mb-2 block text-sm font-bold text-slate-700">
                         Método de pago
                       </span>
@@ -1000,6 +728,19 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
                         ))}
                       </select>
                     </label>
+
+                    <label className="block xl:col-span-2">
+                      <span className="mb-2 block text-sm font-bold text-slate-700">
+                        Descripción / Detalle del pago
+                      </span>
+
+                      <input
+                        value={paymentDescription}
+                        onChange={(e) => setPaymentDescription(e.target.value)}
+                        placeholder="Ej: Pago con cheques"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </label>
                   </div>
 
                   <div className="mt-5 flex justify-end gap-3">
@@ -1009,7 +750,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
                         setShowPaymentForm(false)
                         setPaymentAmount('')
                         setSelectedPaymentBudgetId('')
-                        setPaymentType('Pago parcial')
+                        setPaymentType('A cuenta')
                         setPaymentDescription('Pago recibido')
                       }}
                       className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"

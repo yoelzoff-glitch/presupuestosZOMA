@@ -17,7 +17,16 @@ BEGIN
             (SELECT COUNT(*) FROM clients WHERE company_id = company_id_param) as clients_count,
             (SELECT COUNT(*) FROM products WHERE company_id = company_id_param) as products_count,
             (SELECT COUNT(*) FROM budgets WHERE company_id = company_id_param AND created_at >= date_limit) as budgets_count,
-            (SELECT COALESCE(SUM(debit - credit), 0) FROM account_movements WHERE company_id = company_id_param AND created_at >= date_limit) as total_balance,
+            (
+                SELECT COALESCE(SUM(client_balance), 0)
+                FROM (
+                    SELECT SUM(debit - credit) as client_balance
+                    FROM public.account_movements
+                    WHERE company_id = company_id_param
+                    GROUP BY client_id
+                ) cb
+                WHERE client_balance > 0
+            ) as total_balance,
             (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status != 'cancelled' AND created_at >= date_limit) as total_budgeted,
             (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status = 'approved' AND created_at >= date_limit) as total_converted,
             (
