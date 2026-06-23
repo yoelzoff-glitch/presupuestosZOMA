@@ -61,15 +61,14 @@ type Props = {
 export default function CuentaCorrienteClient({ initialClients, companyId, initialPaymentMethods }: Props) {
   const [clients] = useState<Client[]>(initialClients)
   const [selectedClientId, setSelectedClientId] = useState('')
-  const [movements, setMovements] = useState<Movement[]>([])
+  const [allMovements, setAllMovements] = useState<Movement[]>([])
 
   const [clientSearch, setClientSearch] = useState('')
   const [loading] = useState(false)
   const [movementsLoading, setMovementsLoading] = useState(false)
   const [savingPayment, setSavingPayment] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [daysFilter, setDaysFilter] = useState('30')
-  const [prevBalance, setPrevBalance] = useState(0)
+  const [daysFilter, setDaysFilter] = useState('all')
 
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState('')
@@ -93,15 +92,14 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
     if (!companyId) return
     setMovementsLoading(true)
     setErrorMsg("")
-    let query = supabase.from("account_movements").select("id, client_id, budget_id, movement_date, movement_type, payment_type, payment_method, description, debit, credit, created_at, budgets ( budget_code, budget_number, status )").eq("company_id", companyId).eq("client_id", clientId).order("movement_date", { ascending: false }).order("created_at", { ascending: false })
-    let previousBalance = 0
-    if (daysFilter !== "all") {
-      const dateLimit = new Date(); dateLimit.setDate(dateLimit.getDate() - parseInt(daysFilter))
-      const isoDate = dateLimit.toISOString(); query = query.gte("created_at", isoDate)
-      const { data: prevData } = await supabase.from("account_movements").select("debit, credit").eq("company_id", companyId).eq("client_id", clientId).lt("created_at", isoDate)
-      previousBalance = (prevData || []).reduce((acc, m) => acc + (Number(m.debit || 0) - Number(m.credit || 0)), 0)
-    }
-    const { data, error } = await query
+    const { data, error } = await supabase
+      .from("account_movements")
+      .select("id, client_id, budget_id, movement_date, movement_type, payment_type, payment_method, description, debit, credit, created_at, budgets ( budget_code, budget_number, status )")
+      .eq("company_id", companyId)
+      .eq("client_id", clientId)
+      .order("movement_date", { ascending: false })
+      .order("created_at", { ascending: false })
+
     if (error) { 
       setErrorMsg("Error al cargar movimientos: " + error.message)
       setMovementsLoading(false)
@@ -120,20 +118,30 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       return item.budgets.status !== "cancelled"
     })
 
-    setPrevBalance(previousBalance)
-    setMovements(finalMovements)
+    setAllMovements(finalMovements)
     setMovementsLoading(false)
   }
-
 
   useEffect(() => {
     if (selectedClientId) {
       loadMovements(selectedClientId)
     } else {
-      setMovements([])
-      setPrevBalance(0)
+      setAllMovements([])
     }
-  }, [selectedClientId, daysFilter])
+  }, [selectedClientId])
+
+  const movements = useMemo(() => {
+    if (daysFilter === 'all') return allMovements
+
+    const limitDate = new Date()
+    limitDate.setDate(limitDate.getDate() - parseInt(daysFilter))
+    limitDate.setHours(0, 0, 0, 0)
+
+    return allMovements.filter((m) => {
+      const date = new Date(m.created_at)
+      return date >= limitDate
+    })
+  }, [allMovements, daysFilter])
 
   const selectedClient = clients.find((c) => c.id === selectedClientId)
 
@@ -150,11 +158,11 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
   }, [clients, clientSearch])
 
   const totals = useMemo(() => {
-    const debit = movements.reduce(
+    const debit = allMovements.reduce(
       (acc, item) => acc + Number(item.debit || 0),
       0
     )
-    const credit = movements.reduce(
+    const credit = allMovements.reduce(
       (acc, item) => acc + Number(item.credit || 0),
       0
     )
@@ -162,9 +170,9 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
     return {
       debit,
       credit,
-      balance: prevBalance + debit - credit,
+      balance: debit - credit,
     }
-  }, [movements])
+  }, [allMovements])
 
   const pendingBudgets = useMemo<PendingBudget[]>(() => {
     const grouped = new Map<string, PendingBudget>()
