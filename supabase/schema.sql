@@ -272,7 +272,11 @@ using (
 -- ─── FUNCIONES Y PROCEDIMIENTOS (FUNCTIONS) ───────────────────────────────
 
 -- 1. Función RPC para obtener estadísticas del dashboard de forma eficiente
-CREATE OR REPLACE FUNCTION public.get_dashboard_stats(company_id_param UUID, days_filter INT DEFAULT 30, seller_id_param UUID DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.get_dashboard_stats(
+    company_id_param UUID, 
+    days_filter INT DEFAULT 30, 
+    seller_id_param UUID DEFAULT NULL
+)
 RETURNS JSON AS $$
 DECLARE
     date_limit TIMESTAMP;
@@ -287,19 +291,29 @@ BEGIN
 
     WITH stats AS (
         SELECT
-            (SELECT COUNT(*) FROM clients WHERE company_id = company_id_param AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as clients_count,
-            (SELECT COUNT(*) FROM products WHERE company_id = company_id_param) as products_count,
-            (SELECT COUNT(*) FROM budgets WHERE company_id = company_id_param AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as budgets_count,
-            (SELECT COUNT(*) FROM orders WHERE company_id = company_id_param AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as orders_count,
-            (SELECT COALESCE(SUM(debit - credit), 0) FROM account_movements WHERE company_id = company_id_param AND created_at >= date_limit AND (seller_id_param IS NULL OR client_id IN (SELECT id FROM clients WHERE seller_id = seller_id_param))) as total_balance,
-            (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status != 'cancelled' AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as total_budgeted,
-            (SELECT COALESCE(SUM(total_amount), 0) FROM budgets WHERE company_id = company_id_param AND status = 'approved' AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as total_converted
+            (SELECT COUNT(*) FROM public.clients WHERE company_id = company_id_param AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as clients_count,
+            (SELECT COUNT(*) FROM public.products WHERE company_id = company_id_param) as products_count,
+            (SELECT COUNT(*) FROM public.budgets WHERE company_id = company_id_param AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as budgets_count,
+            (SELECT COUNT(*) FROM public.orders WHERE company_id = company_id_param AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as orders_count,
+            (SELECT COALESCE(SUM(debit - credit), 0) FROM public.account_movements WHERE company_id = company_id_param AND (seller_id_param IS NULL OR client_id IN (SELECT id FROM public.clients WHERE seller_id = seller_id_param))) as total_balance,
+            (SELECT COALESCE(SUM(total_amount), 0) FROM public.budgets WHERE company_id = company_id_param AND status != 'cancelled' AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as total_budgeted,
+            (SELECT COALESCE(SUM(total_amount), 0) FROM public.budgets WHERE company_id = company_id_param AND status = 'approved' AND created_at >= date_limit AND (seller_id_param IS NULL OR seller_id = seller_id_param)) as total_converted,
+            (
+                SELECT COALESCE(SUM(bi.quantity * p.cost_price), 0)
+                FROM public.budget_items bi
+                JOIN public.budgets b ON bi.budget_id = b.id
+                JOIN public.products p ON bi.product_id = p.id
+                WHERE b.company_id = company_id_param 
+                  AND b.status = 'approved' 
+                  AND b.created_at >= date_limit
+                  AND (seller_id_param IS NULL OR b.seller_id = seller_id_param)
+            ) as total_cost
     ),
     history AS (
         SELECT 
             TO_CHAR(created_at, 'Mon YY') as month_key,
             SUM(total_amount) as total
-        FROM budgets 
+        FROM public.budgets 
         WHERE company_id = company_id_param 
           AND status != 'cancelled' 
           AND created_at >= date_limit
@@ -312,8 +326,8 @@ BEGIN
         SELECT 
             bi.product_name as name,
             SUM(bi.quantity) as quantity
-        FROM budget_items bi
-        JOIN budgets b ON bi.budget_id = b.id
+        FROM public.budget_items bi
+        JOIN public.budgets b ON bi.budget_id = b.id
         WHERE b.company_id = company_id_param 
           AND b.created_at >= date_limit
           AND (seller_id_param IS NULL OR b.seller_id = seller_id_param)
@@ -325,7 +339,7 @@ BEGIN
         SELECT 
             COALESCE(payment_status, 'unpaid') as status,
             COUNT(*) as count
-        FROM budgets
+        FROM public.budgets
         WHERE company_id = company_id_param 
           AND created_at >= date_limit
           AND (seller_id_param IS NULL OR seller_id = seller_id_param)
@@ -339,6 +353,8 @@ BEGIN
         'balance', (SELECT total_balance FROM stats),
         'totalBudgeted', (SELECT total_budgeted FROM stats),
         'totalConverted', (SELECT total_converted FROM stats),
+        'totalCost', (SELECT total_cost FROM stats),
+        'profitability', (SELECT total_converted - total_cost FROM stats),
         'conversionRate', CASE WHEN (SELECT total_budgeted FROM stats) > 0 THEN ((SELECT total_converted FROM stats)::FLOAT / (SELECT total_budgeted FROM stats)::FLOAT) * 100 ELSE 0 END,
         'salesHistory', COALESCE((SELECT json_agg(json_build_object('month', month_key, 'total', total)) FROM (SELECT * FROM history ORDER BY month_key ASC) h), '[]'::json),
         'topProducts', COALESCE((SELECT json_agg(json_build_object('name', name, 'quantity', quantity)) FROM top_products), '[]'::json),
