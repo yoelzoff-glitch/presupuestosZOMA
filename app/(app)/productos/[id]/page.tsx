@@ -72,6 +72,10 @@ export default function EditarProductoPage() {
   const [recipe, setRecipe] = useState<RecipeItem[]>([])
   const [catalog, setCatalog] = useState<CatalogProduct[]>([])
   
+  // String states for price inputs to allow free editing (empty field, etc.)
+  const [salePriceStr, setSalePriceStr] = useState('')
+  const [costPriceStr, setCostPriceStr] = useState('')
+
   const [searchComponent, setSearchComponent] = useState('')
   const [selectedCompId, setSelectedCompId] = useState('')
   const [compQty, setCompQty] = useState('1')
@@ -120,6 +124,9 @@ export default function EditarProductoPage() {
 
       if (prodErr || !prod) throw new Error('Producto no encontrado')
       setProduct(prod)
+      // Initialize string states for price inputs
+      setSalePriceStr(String(prod.sale_price ?? 0))
+      setCostPriceStr(String(prod.cost_price ?? 0))
 
       // Load recipe if exists
       const { data: recData } = await supabase
@@ -163,6 +170,9 @@ export default function EditarProductoPage() {
 
     try {
       const isServices = businessType === 'services'
+      // Parse string prices to numbers for saving
+      const parsedSalePrice = salePriceStr === '' ? 0 : Number(salePriceStr)
+      const parsedCostPrice = costPriceStr === '' ? 0 : Number(costPriceStr)
       // 1. Update Product
       const { error: prodErr } = await supabase
         .from('products')
@@ -171,8 +181,8 @@ export default function EditarProductoPage() {
           name: product.name,
           supplier: isServices ? null : product.supplier,
           category: product.category,
-          cost_price: isServices ? 0 : product.cost_price,
-          sale_price: product.sale_price,
+          cost_price: isServices ? 0 : parsedCostPrice,
+          sale_price: parsedSalePrice,
           stock_quantity: isServices ? 0 : product.stock_quantity,
           min_stock_level: isServices ? 0 : product.min_stock_level,
           track_stock: isServices ? false : product.track_stock,
@@ -349,8 +359,8 @@ export default function EditarProductoPage() {
                 <InputGroup label="Código interno" value={product.internal_code || ''} onChange={v => setProduct({...product, internal_code: v})} icon={Hash} />
                 {businessType !== 'services' && <InputGroup label="Proveedor" value={product.supplier || ''} onChange={v => setProduct({...product, supplier: v})} icon={Truck} />}
                 <InputGroup label="Categoría" value={product.category || ''} onChange={v => setProduct({...product, category: v})} icon={Layers} />
-                <InputGroup label="Precio de venta ($)" type="number" value={(product.sale_price || product.cost_price || 0).toString()} onChange={v => setProduct({...product, sale_price: Number(v)})} icon={DollarSign} />
-                {businessType !== 'services' && <InputGroup label="Precio de costo ($)" type="number" value={(product.cost_price || 0).toString()} onChange={v => setProduct({...product, cost_price: Number(v)})} icon={DollarSign} />}
+                <InputGroup label="Precio de venta ($)" type="number" value={salePriceStr} onChange={v => setSalePriceStr(v)} onBlur={() => { if (salePriceStr === '') setSalePriceStr('0') }} icon={DollarSign} />
+                {businessType !== 'services' && <InputGroup label="Precio de costo ($)" type="number" value={costPriceStr} onChange={v => setCostPriceStr(v)} onBlur={() => { if (costPriceStr === '') setCostPriceStr('0') }} icon={DollarSign} />}
               </div>
 
               {enableStockModule && businessType !== 'services' && (
@@ -573,7 +583,7 @@ export default function EditarProductoPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50">
                     <span className="text-xs font-bold text-slate-500">Costo Base</span>
-                    <span className="text-sm font-black text-slate-900">${product.cost_price.toLocaleString('es-AR')}</span>
+                    <span className="text-sm font-black text-slate-900">${(Number(costPriceStr) || 0).toLocaleString('es-AR')}</span>
                   </div>
                   
                   {recipe.length > 0 && (
@@ -586,7 +596,7 @@ export default function EditarProductoPage() {
                   <div className="pt-4 border-t border-slate-100">
                     <div className="flex items-center justify-between px-2">
                       <span className="text-xs font-black uppercase tracking-widest text-slate-400">Costo Total Estimado</span>
-                      <span className="text-xl font-black text-slate-950">${(product.cost_price + calculatedCost).toLocaleString('es-AR')}</span>
+                      <span className="text-xl font-black text-slate-950">${((Number(costPriceStr) || 0) + calculatedCost).toLocaleString('es-AR')}</span>
                     </div>
                   </div>
                 </div>
@@ -635,7 +645,7 @@ function TabButton({ active, onClick, icon: Icon, label }: { active: boolean, on
   )
 }
 
-function InputGroup({ label, value, onChange, icon: Icon, type = 'text' }: { label: string, value: string, onChange: (v: string) => void, icon: any, type?: string }) {
+function InputGroup({ label, value, onChange, onBlur, icon: Icon, type = 'text' }: { label: string, value: string, onChange: (v: string) => void, onBlur?: () => void, icon: any, type?: string }) {
   return (
     <div className="space-y-2">
       <label className="text-sm font-black text-slate-700 ml-1">{label}</label>
@@ -645,6 +655,7 @@ function InputGroup({ label, value, onChange, icon: Icon, type = 'text' }: { lab
           type={type}
           value={value}
           onChange={e => onChange(e.target.value)}
+          onBlur={onBlur}
           className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-10 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white"
         />
       </div>
