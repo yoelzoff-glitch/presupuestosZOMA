@@ -118,18 +118,25 @@ export default function PortalPage() {
 
   function exportarListaPrecios() {
     const filas = productos.map((p) => ({
-      Código: p.internal_code || '',
+      Codigo: p.internal_code || '',
       Producto: p.name || '',
-      Categoría: p.category || '',
+      Categoria: p.category || '',
       Precio: Number(p.sale_price || p.cost_price || 0),
+      Fecha: new Date().toLocaleDateString('es-AR'),
     }))
 
     const hoja = XLSX.utils.json_to_sheet(filas)
-    hoja['!cols'] = [{ wch: 18 }, { wch: 45 }, { wch: 25 }, { wch: 15 }]
+    hoja['!cols'] = [
+      { wch: 18 }, // Codigo
+      { wch: 45 }, // Producto
+      { wch: 25 }, // Categoria
+      { wch: 15 }, // Precio
+      { wch: 15 }, // Fecha
+    ]
 
     const libro = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(libro, hoja, 'Lista de precios')
-    XLSX.writeFile(libro, 'lista-de-precios.xlsm', { bookType: 'xlsm' })
+    XLSX.writeFile(libro, 'lista-de-precios.xlsx', { bookType: 'xlsx' })
   }
 
   // ─── Operaciones Carrito ──────────────────────────────────────────────────
