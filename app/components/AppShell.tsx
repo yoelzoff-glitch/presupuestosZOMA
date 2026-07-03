@@ -23,6 +23,7 @@ import {
   Receipt,
   CalendarRange,
   ShoppingCart,
+  BookOpen,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
@@ -44,6 +45,7 @@ const navItems = [
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
+  { href: '/libro-diario', label: 'Libro Diario', icon: BookOpen },
   { href: '/contador', label: 'Portal Contable 👔', icon: ShieldCheck },
 ]
 
@@ -58,6 +60,7 @@ function getPageTitle(pathname: string, businessType?: string) {
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
   if (pathname.startsWith('/facturas')) return 'Facturación'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
+  if (pathname.startsWith('/libro-diario')) return 'Libro Diario'
   if (pathname.startsWith('/notificaciones')) return 'Notificaciones'
   if (pathname.startsWith('/configuracion')) return 'Configuración'
   if (pathname.startsWith('/contador')) return 'Portal del Contador'
@@ -76,6 +79,7 @@ function getPageDescription(pathname: string, businessType?: string) {
   if (pathname.startsWith('/facturas')) return 'Gestión de comprobantes y CAE'
   if (pathname.startsWith('/pedidos')) return businessType === 'services' ? 'Gestión de trabajos y servicios aceptados' : 'Gestión de órdenes de venta confirmadas'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
+  if (pathname.startsWith('/libro-diario')) return 'Balance y Libro Diario de caja'
   if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'
   if (pathname.startsWith('/contador')) return 'Espacio fiscal y reportes para tu estudio contable'
@@ -128,7 +132,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // Filtrar navItems based on stock module activation and business type
   let baseNavItems = navItems.filter(item => {
     if (businessType === 'services') {
-      if (item.href === '/inventario' || item.href === '/cuenta-corriente' || item.href === '/compras') {
+      if (item.href === '/inventario' || item.href === '/cuenta-corriente' || item.href === '/compras' || item.href === '/libro-diario') {
         return false
       }
     } else {

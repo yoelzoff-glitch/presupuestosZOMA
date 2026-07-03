@@ -182,6 +182,7 @@ export type Purchase = {
   product_name: string
   product_code: string | null
   supplier: string | null
+  supplier_id: string | null
   quantity: number
   unit_cost: number
   total_cost: number
@@ -190,7 +191,64 @@ export type Purchase = {
   purchase_date: string
   provider_invoice: string | null
   payment_method: string | null
+  payment_status: 'paid' | 'pending'
+  amount_paid: number
   notes: string | null
   created_at: string
 }
+
+// ─── Proveedores ────────────────────────────────────────────────────────────
+
+export type Supplier = {
+  id: string
+  company_id: string
+  name: string
+  cuit: string | null
+  phone: string | null
+  email: string | null
+  created_at: string
+}
+
+// ─── Pagos a Proveedores ─────────────────────────────────────────────────────
+
+export type SupplierPayment = {
+  id: string
+  company_id: string
+  supplier_id: string
+  purchase_id: string | null
+  amount: number
+  payment_date: string
+  payment_method: string | null
+  description: string | null
+  user_id: string | null
+  created_at: string
+  supplier?: Supplier
+}
+
+// ─── Libro Diario ────────────────────────────────────────────────────────────
+
+export type LedgerEntry = {
+  id: string
+  company_id: string
+  entry_date: string
+  entry_type: 'ingreso' | 'egreso'
+  concept: string
+  amount: number
+  payment_method: string | null
+  created_at: string
+  source_table: string
+  source_id: string
+}
+
+// ─── Balances por Proveedor ──────────────────────────────────────────────────
+
+export type SupplierBalance = {
+  supplier: string
+  supplier_id: string
+  total_purchased: number
+  total_paid: number
+  balance_due: number
+  purchase_count: number
+}
+
 

@@ -27,10 +27,26 @@ export default async function ComprasPage() {
     .order('created_at', { ascending: false })
     .range(0, 999)
 
+  // 3. Cargar proveedores normalizados
+  const { data: proveedores } = await supabase
+    .from('suppliers')
+    .select('*')
+    .eq('company_id', contexto.idEmpresa)
+    .order('name', { ascending: true })
+
+  // 4. Cargar pagos a proveedores
+  const { data: pagosProveedores } = await supabase
+    .from('supplier_payments')
+    .select('*')
+    .eq('company_id', contexto.idEmpresa)
+    .order('payment_date', { ascending: false })
+
   return (
     <ComprasClient
       productosIniciales={productos || []}
       comprasIniciales={compras || []}
+      proveedoresIniciales={proveedores || []}
+      pagosProveedoresIniciales={pagosProveedores || []}
       idEmpresa={contexto.idEmpresa}
     />
   )

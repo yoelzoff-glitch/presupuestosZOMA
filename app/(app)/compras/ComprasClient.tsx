@@ -26,6 +26,7 @@ import {
   Info,
   CheckCircle,
   HelpCircle,
+  X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { formatCurrency } from '@/lib/formatCurrency'
@@ -47,6 +48,7 @@ type Purchase = {
   product_name: string
   product_code: string | null
   supplier: string | null
+  supplier_id: string | null
   quantity: number
   unit_cost: number
   total_cost: number
@@ -55,19 +57,63 @@ type Purchase = {
   purchase_date: string
   provider_invoice: string | null
   payment_method: string | null
+  payment_status: 'paid' | 'pending'
+  amount_paid: number
   notes: string | null
   created_at: string
+}
+
+type Supplier = {
+  id: string
+  company_id: string
+  name: string
+  cuit: string | null
+  phone: string | null
+  email: string | null
+  created_at: string
+}
+
+type SupplierPayment = {
+  id: string
+  company_id: string
+  supplier_id: string
+  purchase_id: string | null
+  amount: number
+  payment_date: string
+  payment_method: string | null
+  description: string | null
+  user_id: string | null
+  created_at: string
+}
+
+type SupplierBalance = {
+  supplier: string
+  supplier_id: string
+  total_purchased: number
+  total_paid: number
+  balance_due: number
+  purchase_count: number
 }
 
 type Props = {
   productosIniciales: Producto[]
   comprasIniciales: Purchase[]
+  proveedoresIniciales: Supplier[]
+  pagosProveedoresIniciales: SupplierPayment[]
   idEmpresa: string
 }
 
-export default function ComprasClient({ productosIniciales, idEmpresa, comprasIniciales }: Props) {
+export default function ComprasClient({
+  productosIniciales,
+  idEmpresa,
+  comprasIniciales,
+  proveedoresIniciales,
+  pagosProveedoresIniciales,
+}: Props) {
   const [productos, setProductos] = useState<Producto[]>(productosIniciales)
   const [compras, setCompras] = useState<Purchase[]>(comprasIniciales)
+  const [proveedores, setProveedores] = useState<Supplier[]>(proveedoresIniciales)
+  const [pagosProveedores, setPagosProveedores] = useState<SupplierPayment[]>(pagosProveedoresIniciales)
   
   // Estados para la calculadora/formulario
   const [busquedaProducto, setBusquedaProducto] = useState('')
@@ -77,21 +123,43 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
   const [cantidad, setCantidad] = useState('1')
   const [costoUnitario, setCostoUnitario] = useState('0')
   const [proveedor, setProveedor] = useState('')
+  const [supplierId, setSupplierId] = useState('')
   const [fechaCompra, setFechaCompra] = useState(new Date().toISOString().split('T')[0])
   const [facturaProveedor, setFacturaProveedor] = useState('')
   const [medioPago, setMedioPago] = useState('Transferencia')
+  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending'>('paid')
+  const [amountPaid, setAmountPaid] = useState('')
   const [observaciones, setObservaciones] = useState('')
 
   // Opciones de precio de venta sugerido
   const [actualizarPrecioVenta, setActualizarPrecioVenta] = useState(false)
   const [precioVentaNuevo, setPrecioVentaNuevo] = useState('0')
   
-  // Estados UI
+  // Estados UI / Pestañas
+  const [pestanaActiva, setPestanaActiva] = useState<'historial' | 'deudas'>('historial')
+  const [filtroProveedor, setFiltroProveedor] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
   const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false)
   const [filtroBusqueda, setFiltroBusqueda] = useState('')
   const [paginaActual, setPaginaActual] = useState(1)
+
+  // Estados para Modal Crear Proveedor
+  const [mostrandoFormProveedor, setMostrandoFormProveedor] = useState(false)
+  const [guardandoProveedor, setGuardandoProveedor] = useState(false)
+  const [nuevoProveedorNombre, setNuevoProveedorNombre] = useState('')
+  const [nuevoProveedorCuit, setNuevoProveedorCuit] = useState('')
+  const [nuevoProveedorPhone, setNuevoProveedorPhone] = useState('')
+  const [nuevoProveedorEmail, setNuevoProveedorEmail] = useState('')
+
+  // Estados para Modal Registrar Pago
+  const [selectedSupplierForPayment, setSelectedSupplierForPayment] = useState<SupplierBalance | null>(null)
+  const [pagoMonto, setPagoMonto] = useState('')
+  const [pagoMetodo, setPagoMetodo] = useState('Transferencia')
+  const [pagoFecha, setPagoFecha] = useState(new Date().toISOString().split('T')[0])
+  const [pagoDescripcion, setPagoDescripcion] = useState('Pago de deuda')
+  const [pagoPurchaseId, setPagoPurchaseId] = useState('')
+  const [guardandoPago, setGuardandoPago] = useState(false)
   
   // Cargar perfil del usuario para auditoría
   const [userId, setUserId] = useState<string | null>(null)
@@ -168,9 +236,12 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
     setCantidad('1')
     setCostoUnitario('0')
     setProveedor('')
+    setSupplierId('')
     setFechaCompra(new Date().toISOString().split('T')[0])
     setFacturaProveedor('')
     setMedioPago('Transferencia')
+    setPaymentStatus('paid')
+    setAmountPaid('')
     setObservaciones('')
     setActualizarPrecioVenta(false)
   }
@@ -194,6 +265,23 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
     setCargandoHistorial(false)
   }
 
+  // Recargar proveedores y pagos a proveedores
+  async function recargarPagosYProveedores() {
+    const { data: provs } = await supabase
+      .from('suppliers')
+      .select('*')
+      .eq('company_id', idEmpresa)
+      .order('name', { ascending: true })
+    if (provs) setProveedores(provs)
+
+    const { data: pgs } = await supabase
+      .from('supplier_payments')
+      .select('*')
+      .eq('company_id', idEmpresa)
+      .order('payment_date', { ascending: false })
+    if (pgs) setPagosProveedores(pgs)
+  }
+
   // Confirmar y Guardar la compra
   async function guardarCompra() {
     if (!productoSeleccionado) return
@@ -204,6 +292,8 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
       const nuevoCostoNum = Number(costoUnitario) || 0
       const nuevoVentaNum = Number(precioVentaNuevo) || 0
       const cantidadNum = Number(cantidad) || 0
+      const totalCompra = cantidadNum * nuevoCostoNum
+      const pagadoActual = paymentStatus === 'paid' ? totalCompra : (Number(amountPaid) || 0)
 
       // 1. Registrar compra en el historial
       const { error: purchaseErr } = await supabase
@@ -215,12 +305,15 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
           product_name: productoSeleccionado.name,
           product_code: productoSeleccionado.internal_code,
           supplier: proveedor || null,
+          supplier_id: supplierId || null,
           quantity: cantidadNum,
           unit_cost: nuevoCostoNum,
           previous_cost: productoSeleccionado.cost_price || 0,
           purchase_date: fechaCompra,
           provider_invoice: facturaProveedor || null,
           payment_method: medioPago || null,
+          payment_status: paymentStatus,
+          amount_paid: pagadoActual,
           notes: observaciones || null
         })
 
@@ -244,7 +337,7 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
 
       if (productErr) throw productErr
 
-      toast.success('Compra guardada y precio de costo actualizado.')
+      toast.success('Compra guardada y costo del producto actualizado.')
       
       // Actualizar localmente la lista de productos
       setProductos(prev => prev.map(p => {
@@ -262,11 +355,193 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
       // Resetear simulador y recargar historial
       limpiarSimulador()
       await actualizarHistorial()
+      await recargarPagosYProveedores()
 
     } catch (err: any) {
       toast.error('Error al guardar compra: ' + err.message)
     } finally {
       setGuardando(false)
+    }
+  }
+
+  // ─── LÓGICA DE PROVEEDORES Y DEUDAS ────────────────────────────────────────
+
+  // Crear nuevo proveedor en la base de datos
+  async function handleCrearProveedor() {
+    if (!nuevoProveedorNombre.trim()) return
+    setGuardandoProveedor(true)
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .insert({
+          company_id: idEmpresa,
+          name: nuevoProveedorNombre.trim(),
+          cuit: nuevoProveedorCuit.trim() || null,
+          phone: nuevoProveedorPhone.trim() || null,
+          email: nuevoProveedorEmail.trim() || null
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      toast.success('Proveedor registrado correctamente.')
+      setProveedores(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setSupplierId(data.id)
+      setProveedor(data.name)
+      // resetear form
+      setNuevoProveedorNombre('')
+      setNuevoProveedorCuit('')
+      setNuevoProveedorPhone('')
+      setNuevoProveedorEmail('')
+      setMostrandoFormProveedor(false)
+    } catch (err: any) {
+      toast.error('Error al registrar proveedor: ' + err.message)
+    } finally {
+      setGuardandoProveedor(false)
+    }
+  }
+
+  // Calcular balances agrupados por proveedor
+  const balancesProveedores = useMemo<SupplierBalance[]>(() => {
+    const balances: Record<string, SupplierBalance> = {}
+
+    // Inicializar todos los proveedores
+    proveedores.forEach(p => {
+      balances[p.id] = {
+        supplier: p.name,
+        supplier_id: p.id,
+        total_purchased: 0,
+        total_paid: 0,
+        balance_due: 0,
+        purchase_count: 0
+      }
+    })
+
+    // Sumar compras históricas
+    compras.forEach(c => {
+      if (c.supplier_id && balances[c.supplier_id]) {
+        const total = c.total_cost || 0
+        const paid = c.amount_paid || 0
+        balances[c.supplier_id].total_purchased += total
+        balances[c.supplier_id].total_paid += paid
+        balances[c.supplier_id].balance_due += (total - paid)
+        balances[c.supplier_id].purchase_count += 1
+      }
+    })
+
+    // Restar pagos realizados
+    pagosProveedores.forEach(sp => {
+      if (sp.supplier_id && balances[sp.supplier_id]) {
+        balances[sp.supplier_id].total_paid += sp.amount
+        balances[sp.supplier_id].balance_due -= sp.amount
+      }
+    })
+
+    // Solo devolver proveedores con compras o deudas registradas
+    return Object.values(balances)
+  }, [proveedores, compras, pagosProveedores])
+
+  // Filtrar balances por búsqueda de texto
+  const balancesFiltrados = useMemo(() => {
+    const q = filtroProveedor.toLowerCase().trim()
+    if (!q) return balancesProveedores
+    return balancesProveedores.filter(b => b.supplier.toLowerCase().includes(q))
+  }, [balancesProveedores, filtroProveedor])
+
+  // Obtener compras pendientes de pago para el proveedor seleccionado en el modal
+  const comprasPendientesProveedor = useMemo(() => {
+    if (!selectedSupplierForPayment) return []
+    return compras.filter(c => 
+      c.supplier_id === selectedSupplierForPayment.supplier_id && 
+      c.payment_status === 'pending'
+    )
+  }, [compras, selectedSupplierForPayment])
+
+  // Registrar un pago y liquidar deudas (con imputación FIFO si es "a cuenta")
+  async function registrarPagoProveedor() {
+    if (!selectedSupplierForPayment || !pagoMonto) return
+    const montoNum = Number(pagoMonto)
+    if (isNaN(montoNum) || montoNum <= 0) {
+      toast.error('Ingresá un monto válido.')
+      return
+    }
+
+    setGuardandoPago(true)
+    try {
+      // 1. Registrar el pago en supplier_payments
+      const { error: spErr } = await supabase
+        .from('supplier_payments')
+        .insert({
+          company_id: idEmpresa,
+          supplier_id: selectedSupplierForPayment.supplier_id,
+          purchase_id: pagoPurchaseId || null,
+          amount: montoNum,
+          payment_date: pagoFecha,
+          payment_method: pagoMetodo,
+          description: pagoDescripcion || 'Pago de deuda',
+          user_id: userId
+        })
+
+      if (spErr) throw spErr
+
+      // 2. Imputar pago a compras pendientes
+      if (pagoPurchaseId) {
+        // Imputación directa a una compra específica
+        const compra = compras.find(c => c.id === pagoPurchaseId)
+        if (compra) {
+          const nuevoMontoPagado = (compra.amount_paid || 0) + montoNum
+          const nuevoEstado = nuevoMontoPagado >= (compra.total_cost || 0) ? 'paid' : 'pending'
+          
+          const { error: purchaseUpdErr } = await supabase
+            .from('purchases')
+            .update({
+              amount_paid: nuevoMontoPagado,
+              payment_status: nuevoEstado
+            })
+            .eq('id', pagoPurchaseId)
+            
+          if (purchaseUpdErr) throw purchaseUpdErr
+        }
+      } else {
+        // Imputación automática FIFO (el pago se distribuye de las compras pendientes más antiguas a las más recientes)
+        let remanente = montoNum
+        const pendientes = compras
+          .filter(c => c.supplier_id === selectedSupplierForPayment.supplier_id && c.payment_status === 'pending')
+          .sort((a, b) => new Date(a.purchase_date).getTime() - new Date(b.purchase_date).getTime())
+
+        for (const c of pendientes) {
+          if (remanente <= 0) break
+          const pendienteCompra = (c.total_cost || 0) - (c.amount_paid || 0)
+          const abonar = Math.min(remanente, pendienteCompra)
+          const nuevoMontoPagado = (c.amount_paid || 0) + abonar
+          const nuevoEstado = nuevoMontoPagado >= (c.total_cost || 0) ? 'paid' : 'pending'
+
+          const { error: purchaseUpdErr } = await supabase
+            .from('purchases')
+            .update({
+              amount_paid: nuevoMontoPagado,
+              payment_status: nuevoEstado
+            })
+            .eq('id', c.id)
+
+          if (purchaseUpdErr) throw purchaseUpdErr
+          remanente -= abonar
+        }
+      }
+
+      toast.success('Pago registrado correctamente y deudas imputadas.')
+      setSelectedSupplierForPayment(null)
+      setPagoMonto('')
+      setPagoPurchaseId('')
+      setPagoDescripcion('Pago de deuda')
+      
+      await actualizarHistorial()
+      await recargarPagosYProveedores()
+    } catch (err: any) {
+      toast.error('Error al registrar el pago: ' + err.message)
+    } finally {
+      setGuardandoPago(false)
     }
   }
 
@@ -555,18 +830,35 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
 
             {/* Proveedor */}
             <div className="space-y-2">
-              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                Proveedor de la Compra
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                  Proveedor de la Compra
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setMostrandoFormProveedor(true)}
+                  className="text-[10px] font-bold text-blue-600 hover:text-blue-500 flex items-center gap-1"
+                >
+                  <Plus size={10} /> Nuevo Proveedor
+                </button>
+              </div>
               <div className="relative">
-                <Truck size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Ej: Distribuidora Z"
-                  value={proveedor}
-                  onChange={(e) => setProveedor(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-10 py-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
-                />
+                <Truck size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <select
+                  value={supplierId}
+                  onChange={(e) => {
+                    const id = e.target.value
+                    setSupplierId(id)
+                    const prov = proveedores.find(p => p.id === id)
+                    setProveedor(prov ? prov.name : '')
+                  }}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white appearance-none"
+                >
+                  <option value="">Seleccionar proveedor...</option>
+                  {proveedores.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} {p.cuit ? `(CUIT: ${p.cuit})` : ''}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -656,6 +948,50 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
                 <option value="Otro">Otro</option>
               </select>
             </div>
+
+            {/* Estado de Pago */}
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                Estado de Pago
+              </label>
+              <select
+                value={paymentStatus}
+                onChange={(e) => {
+                  const val = e.target.value as 'paid' | 'pending'
+                  setPaymentStatus(val)
+                  if (val === 'paid') {
+                    setAmountPaid('')
+                  } else {
+                    setAmountPaid('0')
+                  }
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
+              >
+                <option value="paid">Pagado Completo</option>
+                <option value="pending">Pendiente / Cuenta Corriente</option>
+              </select>
+            </div>
+
+            {/* Monto Abonado Inicial */}
+            {paymentStatus === 'pending' && (
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                  Monto Abonado Inicial ($)
+                </label>
+                <div className="relative">
+                  <DollarSign size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    min="0"
+                    max={totalSimulado}
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    placeholder="Monto pagado al iniciar..."
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-10 py-3 text-sm font-black outline-none transition focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Observaciones */}
             <div className="space-y-2 md:col-span-2">
@@ -869,175 +1205,296 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
         </aside>
       </div>
 
-      {/* 3. HISTORIAL DE COMPRAS REGISTRADAS (TABLA) */}
-      <section className="w-full max-w-full overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
-        
-        {/* Cabecera del Historial */}
-        <div className="border-b border-slate-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-black text-slate-950">
-              Historial de Actualizaciones de Costo
-            </h2>
-            <p className="text-xs text-slate-500">
-              Evolución de costos a lo largo del tiempo de reabastecimiento.
-            </p>
-          </div>
-          
-          <div className="relative w-full md:w-72">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={filtroBusqueda}
-              onChange={(e) => {
-                setFiltroBusqueda(e.target.value)
-                setPaginaActual(1)
-              }}
-              placeholder="Buscar por producto, proveedor, factura..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white"
-            />
-          </div>
-        </div>
+      {/* 3. SELECCIÓN DE PESTAÑAS (HISTORIAL VS DEUDAS PROVEEDORES) */}
+      <div className="flex border-b border-slate-200 gap-6 mt-4">
+        <button
+          onClick={() => setPestanaActiva('historial')}
+          className={`pb-3 text-sm font-bold border-b-2 transition outline-none cursor-pointer ${
+            pestanaActiva === 'historial'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Historial de Compras
+        </button>
+        <button
+          onClick={() => setPestanaActiva('deudas')}
+          className={`pb-3 text-sm font-bold border-b-2 transition outline-none cursor-pointer ${
+            pestanaActiva === 'deudas'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Deudas con Proveedores
+        </button>
+      </div>
 
-        {/* Tabla */}
-        <div className="w-full max-w-full overflow-x-auto">
-          {comprasFiltradas.length === 0 ? (
-            <div className="flex min-h-[240px] flex-col items-center justify-center text-center p-6">
-              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-                <Boxes size={24} />
-              </div>
-              <h3 className="text-sm font-black text-slate-900">No se encontraron registros</h3>
-              <p className="mt-1 text-xs text-slate-500 max-w-xs">
-                Registrá una compra en el simulador o cambiá la búsqueda del historial.
+      {pestanaActiva === 'historial' ? (
+        /* HISTORIAL DE COMPRAS REGISTRADAS (TABLA) */
+        <section className="w-full max-w-full overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+          
+          {/* Cabecera del Historial */}
+          <div className="border-b border-slate-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-black text-slate-950">
+                Historial de Actualizaciones de Costo
+              </h2>
+              <p className="text-xs text-slate-500">
+                Evolución de costos a lo largo del tiempo de reabastecimiento.
               </p>
             </div>
-          ) : (
-            <div className="min-w-[1000px]">
+            
+            <div className="relative w-full md:w-72">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={filtroBusqueda}
+                onChange={(e) => {
+                  setFiltroBusqueda(e.target.value)
+                  setPaginaActual(1)
+                }}
+                placeholder="Buscar por producto, proveedor, factura..."
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white"
+              />
+            </div>
+          </div>
+
+          {/* Tabla */}
+          <div className="w-full max-w-full overflow-x-auto">
+            {comprasFiltradas.length === 0 ? (
+              <div className="flex min-h-[240px] flex-col items-center justify-center text-center p-6">
+                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+                  <Boxes size={24} />
+                </div>
+                <h3 className="text-sm font-black text-slate-900">No se encontraron registros</h3>
+                <p className="mt-1 text-xs text-slate-500 max-w-xs">
+                  Registrá una compra en el simulador o cambiá la búsqueda del historial.
+                </p>
+              </div>
+            ) : (
+              <div className="min-w-[1000px]">
+                <table className="w-full border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <CabeceraTabla>Fecha</CabeceraTabla>
+                      <CabeceraTabla>Producto</CabeceraTabla>
+                      <CabeceraTabla>Código</CabeceraTabla>
+                      <CabeceraTabla>Proveedor</CabeceraTabla>
+                      <CabeceraTabla alineacion="right">Cant.</CabeceraTabla>
+                      <CabeceraTabla alineacion="right">Costo Unitario</CabeceraTabla>
+                      <CabeceraTabla alineacion="right">Total</CabeceraTabla>
+                      <CabeceraTabla alineacion="right">Costo Ant.</CabeceraTabla>
+                      <CabeceraTabla alineacion="center">Variación</CabeceraTabla>
+                      <CabeceraTabla alineacion="center">Estado</CabeceraTabla>
+                      <CabeceraTabla>Comprobante</CabeceraTabla>
+                      <CabeceraTabla>Detalle</CabeceraTabla>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {comprasPaginadas.map((compra) => {
+                      const sign = compra.cost_variation > 0 ? '+' : ''
+                      const isNewCost = compra.previous_cost <= 0
+                      
+                      return (
+                        <tr key={compra.id} className="h-12 transition hover:bg-blue-50/40 text-xs text-slate-700">
+                          <td className="px-4 py-2 font-semibold">
+                            {new Date(compra.purchase_date).toLocaleDateString('es-AR')}
+                          </td>
+                          <td className="px-4 py-2 font-bold text-slate-900">
+                            {compra.product_name}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-semibold text-slate-650">
+                              {compra.product_code || '-'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 max-w-[130px] truncate" title={compra.supplier || ''}>
+                            {compra.supplier || '-'}
+                          </td>
+                          <td className="px-4 py-2 text-right font-black">
+                            {compra.quantity}
+                          </td>
+                          <td className="px-4 py-2 text-right font-bold text-slate-900">
+                            {formatCurrency(compra.unit_cost)}
+                          </td>
+                          <td className="px-4 py-2 text-right font-black text-slate-950">
+                            {formatCurrency(compra.total_cost)}
+                          </td>
+                          <td className="px-4 py-2 text-right font-semibold text-slate-400">
+                            {isNewCost ? '-' : formatCurrency(compra.previous_cost)}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            {isNewCost ? (
+                              <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600">
+                                Inicial
+                              </span>
+                            ) : (
+                              <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black ${
+                                compra.cost_variation > 0 ? 'bg-red-50 text-red-600' : compra.cost_variation < 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {sign}{compra.cost_variation}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black leading-none ${
+                              compra.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {compra.payment_status === 'paid' ? 'Pagado' : `Debe ${formatCurrency((compra.total_cost || 0) - (compra.amount_paid || 0))}`}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 font-semibold max-w-[120px] truncate" title={compra.provider_invoice || ''}>
+                            {compra.provider_invoice || '-'}
+                          </td>
+                          <td className="px-4 py-2 max-w-[150px] truncate text-slate-400 italic" title={compra.notes || ''}>
+                            {compra.notes || '-'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Paginación */}
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
+              <div className="flex flex-1 justify-between sm:hidden">
+                <button
+                  onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
+                  disabled={paginaActual === 1}
+                  className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => setPaginaActual((prev) => Math.min(prev + 1, totalPaginas))}
+                  disabled={paginaActual === totalPaginas}
+                  className="relative ml-3 inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Siguiente
+                </button>
+              </div>
+              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs text-slate-700 font-semibold">
+                    Mostrando <span className="font-black">{(paginaActual - 1) * ITEMS_POR_PAGINA + 1}</span> a <span className="font-black">{Math.min(paginaActual * ITEMS_POR_PAGINA, comprasFiltradas.length)}</span> de <span className="font-black">{comprasFiltradas.length}</span> registros
+                  </p>
+                </div>
+                <div>
+                  <nav className="isolate inline-flex -space-x-px rounded-xl shadow-sm gap-1" aria-label="Paginación">
+                    <button
+                      onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
+                      disabled={paginaActual === 1}
+                      className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white p-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="relative inline-flex items-center bg-white px-4 py-2 text-xs font-black text-slate-700 rounded-xl border border-slate-300">
+                      Página {paginaActual} de {totalPaginas}
+                    </span>
+                    <button
+                      onClick={() => setPaginaActual((prev) => Math.min(prev + 1, totalPaginas))}
+                      disabled={paginaActual === totalPaginas}
+                      className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white p-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      ) : (
+        /* SALDOS Y DEUDAS POR PROVEEDOR */
+        <section className="w-full max-w-full overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm animate-in fade-in duration-200">
+          
+          {/* Cabecera de Deudas */}
+          <div className="border-b border-slate-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-black text-slate-950">
+                Saldos y Deudas por Proveedor
+              </h2>
+              <p className="text-xs text-slate-500">
+                Resumen de importes adeudados y registro de pagos a cuenta.
+              </p>
+            </div>
+            
+            <div className="relative w-full md:w-72">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={filtroProveedor}
+                onChange={(e) => setFiltroProveedor(e.target.value)}
+                placeholder="Buscar proveedor..."
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white"
+              />
+            </div>
+          </div>
+
+          {/* Tabla de Proveedores */}
+          <div className="w-full max-w-full overflow-x-auto">
+            {balancesFiltrados.length === 0 ? (
+              <div className="flex min-h-[240px] flex-col items-center justify-center text-center p-6">
+                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+                  <Truck size={24} />
+                </div>
+                <h3 className="text-sm font-black text-slate-900">No hay deudas registradas</h3>
+                <p className="mt-1 text-xs text-slate-500 max-w-xs">
+                  No se encontraron proveedores o no hay compras cargadas.
+                </p>
+              </div>
+            ) : (
               <table className="w-full border-collapse">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <CabeceraTabla>Fecha</CabeceraTabla>
-                    <CabeceraTabla>Producto</CabeceraTabla>
-                    <CabeceraTabla>Código</CabeceraTabla>
                     <CabeceraTabla>Proveedor</CabeceraTabla>
-                    <CabeceraTabla alineacion="right">Cant.</CabeceraTabla>
-                    <CabeceraTabla alineacion="right">Costo Unitario</CabeceraTabla>
-                    <CabeceraTabla alineacion="right">Total</CabeceraTabla>
-                    <CabeceraTabla alineacion="right">Costo Ant.</CabeceraTabla>
-                    <CabeceraTabla alineacion="center">Variación</CabeceraTabla>
-                    <CabeceraTabla>Comprobante</CabeceraTabla>
-                    <CabeceraTabla>Detalle</CabeceraTabla>
+                    <CabeceraTabla alineacion="center">Compras Realizadas</CabeceraTabla>
+                    <CabeceraTabla alineacion="right">Total Comprado</CabeceraTabla>
+                    <CabeceraTabla alineacion="right">Total Pagado</CabeceraTabla>
+                    <CabeceraTabla alineacion="right">Saldo Adeudado</CabeceraTabla>
+                    <CabeceraTabla alineacion="center">Acciones</CabeceraTabla>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {comprasPaginadas.map((compra) => {
-                    const sign = compra.cost_variation > 0 ? '+' : ''
-                    const isNewCost = compra.previous_cost <= 0
-                    
-                    return (
-                      <tr key={compra.id} className="h-12 transition hover:bg-blue-50/40 text-xs text-slate-700">
-                        <td className="px-4 py-2 font-semibold">
-                          {new Date(compra.purchase_date).toLocaleDateString('es-AR')}
-                        </td>
-                        <td className="px-4 py-2 font-bold text-slate-900">
-                          {compra.product_name}
-                        </td>
-                        <td className="px-4 py-2">
-                          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-semibold text-slate-650">
-                            {compra.product_code || '-'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 max-w-[130px] truncate" title={compra.supplier || ''}>
-                          {compra.supplier || '-'}
-                        </td>
-                        <td className="px-4 py-2 text-right font-black">
-                          {compra.quantity}
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold text-slate-900">
-                          {formatCurrency(compra.unit_cost)}
-                        </td>
-                        <td className="px-4 py-2 text-right font-black text-slate-950">
-                          {formatCurrency(compra.total_cost)}
-                        </td>
-                        <td className="px-4 py-2 text-right font-semibold text-slate-400">
-                          {isNewCost ? '-' : formatCurrency(compra.previous_cost)}
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          {isNewCost ? (
-                            <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600">
-                              Inicial
-                            </span>
-                          ) : (
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black ${
-                              compra.cost_variation > 0 ? 'bg-red-50 text-red-600' : compra.cost_variation < 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {sign}{compra.cost_variation}%
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 font-semibold max-w-[120px] truncate" title={compra.provider_invoice || ''}>
-                          {compra.provider_invoice || '-'}
-                        </td>
-                        <td className="px-4 py-2 max-w-[150px] truncate text-slate-400 italic" title={compra.notes || ''}>
-                          {compra.notes || '-'}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {balancesFiltrados.map((bal) => (
+                    <tr key={bal.supplier_id} className="h-12 transition hover:bg-blue-50/40 text-xs text-slate-700">
+                      <td className="px-4 py-2 font-bold text-slate-900">
+                        {bal.supplier}
+                      </td>
+                      <td className="px-4 py-2 text-center font-black">
+                        {bal.purchase_count}
+                      </td>
+                      <td className="px-4 py-2 text-right font-bold text-slate-900">
+                        {formatCurrency(bal.total_purchased)}
+                      </td>
+                      <td className="px-4 py-2 text-right font-bold text-emerald-700">
+                        {formatCurrency(bal.total_paid)}
+                      </td>
+                      <td className={`px-4 py-2 text-right font-black ${bal.balance_due > 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                        {formatCurrency(bal.balance_due)}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSupplierForPayment(bal)
+                            setPagoMonto(String(bal.balance_due > 0 ? bal.balance_due : ''))
+                          }}
+                          className="rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-black text-blue-700 hover:bg-blue-100 transition cursor-pointer"
+                        >
+                          Registrar Pago
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
-            </div>
-          )}
-        </div>
-
-        {/* Paginación */}
-        {totalPaginas > 1 && (
-          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
-            <div className="flex flex-1 justify-between sm:hidden">
-              <button
-                onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
-                disabled={paginaActual === 1}
-                className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setPaginaActual((prev) => Math.min(prev + 1, totalPaginas))}
-                disabled={paginaActual === totalPaginas}
-                className="relative ml-3 inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Siguiente
-              </button>
-            </div>
-            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs text-slate-700 font-semibold">
-                  Mostrando <span className="font-black">{(paginaActual - 1) * ITEMS_POR_PAGINA + 1}</span> a <span className="font-black">{Math.min(paginaActual * ITEMS_POR_PAGINA, comprasFiltradas.length)}</span> de <span className="font-black">{comprasFiltradas.length}</span> registros
-                </p>
-              </div>
-              <div>
-                <nav className="isolate inline-flex -space-x-px rounded-xl shadow-sm gap-1" aria-label="Paginación">
-                  <button
-                    onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
-                    disabled={paginaActual === 1}
-                    className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white p-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="relative inline-flex items-center bg-white px-4 py-2 text-xs font-black text-slate-700 rounded-xl border border-slate-300">
-                    Página {paginaActual} de {totalPaginas}
-                  </span>
-                  <button
-                    onClick={() => setPaginaActual((prev) => Math.min(prev + 1, totalPaginas))}
-                    disabled={paginaActual === totalPaginas}
-                    className="relative inline-flex items-center rounded-xl border border-slate-300 bg-white p-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </nav>
-              </div>
-            </div>
+            )}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* 4. MODAL DE CONFIRMACIÓN AL GUARDAR */}
       {mostrarConfirmacion && productoSeleccionado && (
@@ -1065,6 +1522,12 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
                 <div className="flex justify-between">
                   <span className="text-slate-500">Total Compra:</span>
                   <span className="font-black text-slate-950">{formatCurrency(totalSimulado)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Estado de Pago:</span>
+                  <span className={`font-black ${paymentStatus === 'paid' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {paymentStatus === 'paid' ? 'Pagado Completo' : `Pendiente (Abonado inicial: ${formatCurrency(Number(amountPaid) || 0)})`}
+                  </span>
                 </div>
               </div>
 
@@ -1116,6 +1579,212 @@ export default function ComprasClient({ productosIniciales, idEmpresa, comprasIn
                 </button>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CREAR PROVEEDOR */}
+      {mostrandoFormProveedor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-[2rem] bg-white p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Truck size={20} className="text-blue-600" />
+                Registrar Nuevo Proveedor
+              </h3>
+              <button
+                onClick={() => setMostrandoFormProveedor(false)}
+                className="rounded-lg p-1 text-slate-450 hover:bg-slate-100 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Nombre / Razón Social *</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Distribuidora Zoma"
+                  value={nuevoProveedorNombre}
+                  onChange={(e) => setNuevoProveedorNombre(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">CUIT (opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Ej: 30-12345678-9"
+                  value={nuevoProveedorCuit}
+                  onChange={(e) => setNuevoProveedorCuit(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Teléfono</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: 1122334455"
+                    value={nuevoProveedorPhone}
+                    onChange={(e) => setNuevoProveedorPhone(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Email</label>
+                  <input
+                    type="email"
+                    placeholder="Ej: ventas@distri.com"
+                    value={nuevoProveedorEmail}
+                    onChange={(e) => setNuevoProveedorEmail(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setMostrandoFormProveedor(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCrearProveedor}
+                disabled={guardandoProveedor || !nuevoProveedorNombre.trim()}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+              >
+                {guardandoProveedor ? <Loader2 className="animate-spin" size={14} /> : null}
+                Guardar Proveedor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL REGISTRAR PAGO A PROVEEDOR */}
+      {selectedSupplierForPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <h3 className="text-lg font-black text-slate-900 flex flex-col">
+                <span className="flex items-center gap-2">
+                  <DollarSign size={20} className="text-emerald-600" />
+                  Registrar Pago de Deuda
+                </span>
+                <span className="text-xs text-slate-450 mt-1 font-semibold">
+                  Proveedor: {selectedSupplierForPayment.supplier}
+                </span>
+              </h3>
+              <button
+                onClick={() => setSelectedSupplierForPayment(null)}
+                className="rounded-lg p-1 text-slate-450 hover:bg-slate-100 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500">Saldo Adeudado Actual:</span>
+                <span className="text-sm font-black text-red-600">{formatCurrency(selectedSupplierForPayment.balance_due)}</span>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Monto a pagar ($) *</label>
+                <div className="relative">
+                  <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-450" />
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    placeholder="Monto..."
+                    value={pagoMonto}
+                    onChange={(e) => setPagoMonto(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 pl-8 pr-3 py-2 text-sm font-black outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Imputar a compra específica (opcional)</label>
+                <select
+                  value={pagoPurchaseId}
+                  onChange={(e) => setPagoPurchaseId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                >
+                  <option value="">A Cuenta / Prorrateo Automático (FIFO)</option>
+                  {comprasPendientesProveedor.map(c => {
+                    const pendiente = (c.total_cost || 0) - (c.amount_paid || 0)
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {new Date(c.purchase_date).toLocaleDateString('es-AR')} - {c.product_name} (Pendiente: {formatCurrency(pendiente)})
+                      </option>
+                    )
+                  })}
+                </select>
+                <p className="text-[9px] text-slate-400 mt-1 leading-normal">
+                  * Si seleccionás "Prorrateo Automático", el pago se imputará de forma FIFO (primero a las compras más antiguas).
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Fecha de Pago</label>
+                  <input
+                    type="date"
+                    value={pagoFecha}
+                    onChange={(e) => setPagoFecha(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Medio de Pago</label>
+                  <select
+                    value={pagoMetodo}
+                    onChange={(e) => setPagoMetodo(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                  >
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Transferencia">Transferencia Bancaria</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="MercadoPago">MercadoPago</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Descripción / Notas</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Pago parcial de deudas"
+                  value={pagoDescripcion}
+                  onChange={(e) => setPagoDescripcion(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setSelectedSupplierForPayment(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={registrarPagoProveedor}
+                disabled={guardandoPago || !pagoMonto}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+              >
+                {guardandoPago ? <Loader2 className="animate-spin" size={14} /> : null}
+                Registrar Pago
+              </button>
             </div>
           </div>
         </div>
