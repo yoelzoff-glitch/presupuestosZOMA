@@ -153,7 +153,7 @@ export default function AumentoPrecios() {
     }
 
     if (mode === 'proveedor' && !supplier) {
-      toast.error('Seleccioná un proveedor.')
+      toast.error('Seleccioná un proveedor. ')
       return
     }
 
@@ -273,11 +273,10 @@ export default function AumentoPrecios() {
                 setSearchProduct('')
                 setIsOpen(false)
               }}
-              className={`rounded-xl px-4 py-3 text-sm font-black transition ${
-                mode === 'proveedor'
+              className={`rounded-xl px-4 py-3 text-sm font-black transition ${mode === 'proveedor'
                   ? 'bg-white text-blue-700 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900'
-              }`}
+                }`}
             >
               Por proveedor
             </button>
@@ -289,11 +288,10 @@ export default function AumentoPrecios() {
                 setSearchProduct('')
                 setIsOpen(false)
               }}
-              className={`rounded-xl px-4 py-3 text-sm font-black transition ${
-                mode === 'producto'
+              className={`rounded-xl px-4 py-3 text-sm font-black transition ${mode === 'producto'
                   ? 'bg-white text-blue-700 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900'
-              }`}
+                }`}
             >
               Por producto
             </button>
@@ -356,9 +354,8 @@ export default function AumentoPrecios() {
                             setSearchProduct(p.name)
                             setIsOpen(false)
                           }}
-                          className={`flex w-full flex-col rounded-xl px-4 py-2 text-left transition hover:bg-blue-50 ${
-                            productId === p.id ? 'bg-blue-50' : ''
-                          }`}
+                          className={`flex w-full flex-col rounded-xl px-4 py-2 text-left transition hover:bg-blue-50 ${productId === p.id ? 'bg-blue-50' : ''
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-black text-slate-900">
