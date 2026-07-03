@@ -274,8 +274,8 @@ export default function AumentoPrecios() {
                 setIsOpen(false)
               }}
               className={`rounded-xl px-4 py-3 text-sm font-black transition ${mode === 'proveedor'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
+                ? 'bg-white text-blue-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
                 }`}
             >
               Por proveedor
@@ -289,8 +289,8 @@ export default function AumentoPrecios() {
                 setIsOpen(false)
               }}
               className={`rounded-xl px-4 py-3 text-sm font-black transition ${mode === 'producto'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
+                ? 'bg-white text-blue-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
                 }`}
             >
               Por producto
