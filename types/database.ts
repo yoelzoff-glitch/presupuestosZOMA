@@ -171,3 +171,26 @@ export type DashboardStats = {
   topProducts: { name: string; quantity: number }[]
   paymentStatus: { name: string; value: number; color: string }[]
 }
+
+// ─── Compras / Reabastecimiento ─────────────────────────────────────────────
+
+export type Purchase = {
+  id: string
+  company_id: string
+  product_id: string
+  user_id: string | null
+  product_name: string
+  product_code: string | null
+  supplier: string | null
+  quantity: number
+  unit_cost: number
+  total_cost: number
+  previous_cost: number
+  cost_variation: number
+  purchase_date: string
+  provider_invoice: string | null
+  payment_method: string | null
+  notes: string | null
+  created_at: string
+}
+
