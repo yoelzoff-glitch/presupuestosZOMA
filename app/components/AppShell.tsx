@@ -22,8 +22,7 @@ import {
   Clock,
   Receipt,
   CalendarRange,
-  ShoppingCart,
-  BookOpen,
+  Landmark,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
@@ -39,13 +38,12 @@ const navItems = [
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/abonos', label: 'Abonos Mensuales', icon: CalendarRange },
   { href: '/productos', label: 'Productos', icon: Package },
-  { href: '/compras', label: 'Compras', icon: ShoppingCart },
+  { href: '/tesoreria', label: 'Tesorería', icon: Landmark },
   { href: '/inventario', label: 'Inventario', icon: Boxes, isProFeature: true },
   { href: '/presupuestos', label: 'Presupuestos', icon: FileText },
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
-  { href: '/libro-diario', label: 'Libro Diario', icon: BookOpen },
   { href: '/contador', label: 'Portal Contable 👔', icon: ShieldCheck },
 ]
 
@@ -54,13 +52,13 @@ function getPageTitle(pathname: string, businessType?: string) {
   if (pathname.startsWith('/clientes')) return 'Clientes'
   if (pathname.startsWith('/abonos')) return 'Abonos Mensuales'
   if (pathname.startsWith('/productos')) return businessType === 'services' ? 'Servicios' : 'Productos'
+  if (pathname.startsWith('/tesoreria')) return 'Tesorería'
   if (pathname.startsWith('/compras')) return 'Compras'
   if (pathname.startsWith('/inventario')) return 'Inventario'
   if (pathname.startsWith('/pedidos')) return businessType === 'services' ? 'Trabajos' : 'Pedidos'
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
   if (pathname.startsWith('/facturas')) return 'Facturación'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
-  if (pathname.startsWith('/libro-diario')) return 'Libro Diario'
   if (pathname.startsWith('/notificaciones')) return 'Notificaciones'
   if (pathname.startsWith('/configuracion')) return 'Configuración'
   if (pathname.startsWith('/contador')) return 'Portal del Contador'
@@ -73,13 +71,13 @@ function getPageDescription(pathname: string, businessType?: string) {
   if (pathname.startsWith('/clientes')) return 'Administración de clientes y datos comerciales'
   if (pathname.startsWith('/abonos')) return 'Gestión de abonos recurrentes y suscripciones de servicios'
   if (pathname.startsWith('/productos')) return businessType === 'services' ? 'Gestión de servicios y catálogo' : 'Gestión de productos, precios y catálogo'
+  if (pathname.startsWith('/tesoreria')) return 'Centro de control financiero: balance, compras, deudas y cobros'
   if (pathname.startsWith('/compras')) return 'Registro de compras y calculadora de costos'
   if (pathname.startsWith('/inventario')) return 'Control de stock y movimientos de mercadería'
   if (pathname.startsWith('/presupuestos')) return 'Creación de propuestas comerciales'
   if (pathname.startsWith('/facturas')) return 'Gestión de comprobantes y CAE'
   if (pathname.startsWith('/pedidos')) return businessType === 'services' ? 'Gestión de trabajos y servicios aceptados' : 'Gestión de órdenes de venta confirmadas'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
-  if (pathname.startsWith('/libro-diario')) return 'Balance y Libro Diario de caja'
   if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'
   if (pathname.startsWith('/contador')) return 'Espacio fiscal y reportes para tu estudio contable'
@@ -132,7 +130,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // Filtrar navItems based on stock module activation and business type
   let baseNavItems = navItems.filter(item => {
     if (businessType === 'services') {
-      if (item.href === '/inventario' || item.href === '/cuenta-corriente' || item.href === '/compras' || item.href === '/libro-diario') {
+      if (item.href === '/inventario' || item.href === '/cuenta-corriente' || item.href === '/tesoreria') {
         return false
       }
     } else {

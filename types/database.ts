@@ -251,4 +251,24 @@ export type SupplierBalance = {
   purchase_count: number
 }
 
+// ─── Tesorería (Vistas SQL) ─────────────────────────────────────────────────
 
+export type ClientBalance = {
+  client_id: string
+  company_id: string
+  client_name: string
+  cuit: string | null
+  total_debit: number
+  total_credit: number
+  balance_due: number
+}
+
+export type TreasurySummary = {
+  company_id: string
+  total_cash_in: number
+  total_cash_out: number
+  net_cash_flow: number
+  total_client_debt: number
+  total_supplier_debt: number
+  net_balance: number
+}
