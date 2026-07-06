@@ -17,6 +17,7 @@ import {
   Trash2,
   CreditCard,
 } from 'lucide-react'
+import RecordTypeSelector from '@/app/components/RecordTypeSelector'
 
 type Client = {
   id: string
@@ -87,6 +88,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
   const [debtDescription, setDebtDescription] = useState('Saldo inicial')
   const [debtDate, setDebtDate] = useState(new Date().toISOString().split('T')[0])
   const [savingDebt, setSavingDebt] = useState(false)
+  const [recordType, setRecordType] = useState<'blanco' | 'x'>('blanco')
 
   async function loadMovements(clientId: string) {
     if (!companyId) return
@@ -327,6 +329,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
         payment_method: selectedPaymentMethod || null,
         debit: 0,
         credit: Number(budget.balance || 0),
+        record_type: recordType,
       }))
 
       const { error } = await supabase
@@ -419,6 +422,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
         payment_method: selectedPaymentMethod || null,
         debit: 0,
         credit: item.allocated,
+        record_type: recordType,
       }))
 
       const { error } = await supabase
@@ -468,6 +472,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       payment_method: selectedPaymentMethod || null,
       debit: 0,
       credit: amount,
+      record_type: recordType,
     })
 
     setSavingPayment(false)
@@ -516,6 +521,7 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
       movement_date: debtDate,
       debit: amount,
       credit: 0,
+      record_type: recordType,
     })
 
     setSavingDebt(false)
@@ -973,6 +979,10 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
                         ))}
                       </select>
                     </label>
+
+                    <div className="xl:col-span-2">
+                      <RecordTypeSelector value={recordType} onChange={setRecordType} />
+                    </div>
                   </div>
 
                   <div className="mt-5 flex justify-end gap-3">
@@ -1051,6 +1061,10 @@ export default function CuentaCorrienteClient({ initialClients, companyId, initi
                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                       />
                     </label>
+                  </div>
+
+                  <div className="max-w-xs">
+                    <RecordTypeSelector value={recordType} onChange={setRecordType} />
                   </div>
 
                   <div className="flex justify-end gap-3 pt-2">

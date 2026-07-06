@@ -13,9 +13,12 @@ import {
   Building2,
   ClipboardList,
   Gavel,
+  ShieldCheck,
+  Plus,
 } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase/client'
+import { useMirror } from '@/app/components/MirrorProvider'
 
 type MpStatus = {
   connected: boolean
@@ -36,6 +39,10 @@ export default function ConfiguracionClient({ companyId }: Props) {
   const [loadingMp, setLoadingMp] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
   const [showDisconnectModal, setShowDisconnectModal] = useState(false)
+
+  // Cuentas Espejo State
+  const { isPro, isMirrorUser, hasMirrorAccount, mirrorEmail, isMirrorActive, refreshMirrorStatus } = useMirror()
+  const [processingMirror, setProcessingMirror] = useState(false)
 
   useEffect(() => {
     loadMpStatus()
@@ -138,8 +145,52 @@ export default function ConfiguracionClient({ companyId }: Props) {
         toast.error('Error conectando Mercado Pago')
       }
     }
-    
-  
+
+    async function handleCreateMirror() {
+      try {
+        setProcessingMirror(true)
+        const response = await fetch('/api/mirror/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        const data = await response.json()
+        if (response.ok) {
+          toast.success(`Cuenta espejo creada correctamente: ${data.mirrorEmail}`)
+          await refreshMirrorStatus()
+        } else {
+          toast.error(data.detail || data.error || 'Error al crear cuenta espejo')
+        }
+      } catch (error) {
+        console.error(error)
+        toast.error('Ocurrió un error al crear la cuenta espejo')
+      } finally {
+        setProcessingMirror(false)
+      }
+    }
+
+    async function handleToggleMirror(active: boolean) {
+      try {
+        setProcessingMirror(true)
+        const response = await fetch('/api/mirror/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_active: active })
+        })
+        const data = await response.json()
+        if (response.ok) {
+          toast.success(active ? 'Cuenta espejo activada.' : 'Cuenta espejo desactivada.')
+          await refreshMirrorStatus()
+        } else {
+          toast.error(data.detail || data.error || 'Error al actualizar cuenta espejo')
+        }
+      } catch (error) {
+        console.error(error)
+        toast.error('Ocurrió un error al actualizar la cuenta espejo')
+      } finally {
+        setProcessingMirror(false)
+      }
+    }
+
 
   return (
     <div className="space-y-6">
@@ -381,6 +432,78 @@ export default function ConfiguracionClient({ companyId }: Props) {
             </>
           )}
         </div>
+
+        {/* Cuenta Espejo */}
+        {isPro && !isMirrorUser && (
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-750">
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Cuenta Espejo</h2>
+                  <p className="text-sm text-slate-500">Contabilidad en blanco paralela.</p>
+                </div>
+              </div>
+
+              {!hasMirrorAccount ? (
+                <>
+                  <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold text-slate-600 leading-relaxed">
+                      Crea una cuenta espejo con extensión <strong>@zomahub.com</strong>.
+                      Cualquier transacción marcada como Oficial se replicará automáticamente y podrás iniciar sesión directamente en ella para auditorías limpias.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleCreateMirror}
+                    disabled={processingMirror}
+                    className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-650 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
+                  >
+                    {processingMirror ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    Activar Cuenta Espejo
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className={`mt-6 rounded-2xl border p-4 ${
+                    isMirrorActive
+                      ? 'border-emerald-205 bg-emerald-50 text-emerald-800'
+                      : 'border-amber-205 bg-amber-50 text-amber-800'
+                  }`}>
+                    <div className="flex items-center gap-2 font-bold">
+                      {isMirrorActive ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                      <span>{isMirrorActive ? 'Cuenta Espejo Activa' : 'Cuenta Espejo Pausada'}</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-xs font-semibold">
+                      <p>Email: <strong className="underline">{mirrorEmail}</strong></p>
+                      <p>Sincronización: <strong>Activa (DB trigger)</strong></p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleToggleMirror(!isMirrorActive)}
+                    disabled={processingMirror}
+                    className={`mt-4 w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold text-white transition disabled:opacity-50 cursor-pointer ${
+                      isMirrorActive
+                        ? 'bg-amber-600 hover:bg-amber-700'
+                        : 'bg-emerald-650 hover:bg-emerald-700'
+                    }`}
+                  >
+                    {processingMirror ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : isMirrorActive ? (
+                      <XCircle size={16} />
+                    ) : (
+                      <CheckCircle2 size={16} />
+                    )}
+                    {isMirrorActive ? 'Desactivar Cuenta Espejo' : 'Activar Cuenta Espejo'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   )

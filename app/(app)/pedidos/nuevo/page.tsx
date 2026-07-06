@@ -26,6 +26,7 @@ import {
   Boxes,
   DollarSign as DollarSignIcon,
 } from 'lucide-react'
+import RecordTypeSelector from '@/app/components/RecordTypeSelector'
 
 type Client = {
   id: string
@@ -78,6 +79,7 @@ export default function NuevoPedidoPage() {
   const [manualPrice, setManualPrice] = useState('0')
 
   const [items, setItems] = useState<CartItem[]>([])
+  const [recordType, setRecordType] = useState<'blanco' | 'x'>('blanco')
 
   useEffect(() => {
     loadData()
@@ -346,6 +348,7 @@ export default function NuevoPedidoPage() {
           total_amount: totalAmount,
           status: 'issued', // Cambiado de 'converted' por restricción de BD
           seller_id: profile?.role === 'vendedor' ? userData.user?.id : null,
+          record_type: recordType,
         })
         .select('id')
         .single()
@@ -363,6 +366,7 @@ export default function NuevoPedidoPage() {
         category: item.category,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        record_type: recordType,
       }))
 
       const { error: budgetItemsError } = await supabase
@@ -385,6 +389,7 @@ export default function NuevoPedidoPage() {
           budget_id: budgetData.id, // Vínculo obligatorio
           seller_id: profile?.role === 'vendedor' ? userData.user?.id : null,
           notes: notes.trim() || 'Pedido cargado manualmente',
+          record_type: recordType,
         })
         .select('id')
         .single()
@@ -415,6 +420,7 @@ export default function NuevoPedidoPage() {
         category: item.category,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        record_type: recordType,
       }))
 
       const { error: itemsError } = await supabase
@@ -526,6 +532,8 @@ export default function NuevoPedidoPage() {
 
       <section className="grid gap-6 xl:grid-cols-[1fr_420px]">
         <div className="space-y-6">
+          <RecordTypeSelector value={recordType} onChange={setRecordType} />
+
           <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">

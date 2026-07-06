@@ -272,3 +272,17 @@ export type TreasurySummary = {
   total_supplier_debt: number
   net_balance: number
 }
+
+// ─── Cuentas Espejo ─────────────────────────────────────────────────────────
+
+export type RecordType = 'blanco' | 'x'
+
+export type MirrorAccount = {
+  id: string
+  company_id: string
+  primary_user_id: string
+  mirror_user_id: string
+  mirror_email: string
+  is_active: boolean
+  created_at: string
+}

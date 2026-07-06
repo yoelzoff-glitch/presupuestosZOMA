@@ -46,7 +46,8 @@ export async function POST(request: Request) {
         total_amount: addIva ? parseFloat((budget.total_amount * 1.21).toFixed(2)) : budget.total_amount,
         status: 'draft',
         afip_comprobante_tipo: cbteTipo,
-        invoice_date: new Date().toISOString().split('T')[0]
+        invoice_date: new Date().toISOString().split('T')[0],
+        record_type: budget.record_type
       })
       .select()
       .single()
@@ -64,8 +65,10 @@ export async function POST(request: Request) {
       product_code: item.product_code,
       quantity: item.quantity,
       unit_price: addIva ? parseFloat((item.unit_price * 1.21).toFixed(2)) : item.unit_price,
-      total: addIva ? parseFloat((item.total * 1.21).toFixed(2)) : item.total
+      total: addIva ? parseFloat((item.total * 1.21).toFixed(2)) : item.total,
+      record_type: budget.record_type
     }))
+
 
     const { error: itemsError } = await supabase
       .from('invoice_items')

@@ -21,6 +21,7 @@ import {
   Calculator,
   Zap,
 } from 'lucide-react'
+import RecordTypeSelector from '@/app/components/RecordTypeSelector'
 
 type Client = {
   id: string
@@ -55,6 +56,7 @@ export default function NuevoPresupuestoPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [items, setItems] = useState<BudgetItem[]>([])
+  const [recordType, setRecordType] = useState<'blanco' | 'x'>('blanco')
 
   const [clientId, setClientId] = useState('')
   const [search, setSearch] = useState('')
@@ -369,7 +371,8 @@ export default function NuevoPresupuestoPage() {
           total_amount: total,
           status: 'issued',
           seller_id: context.role === 'vendedor' ? context.userId : null,
-          notes: budgetNotes.trim() || null
+          notes: budgetNotes.trim() || null,
+          record_type: recordType
         })
         .select('id')
         .single()
@@ -386,7 +389,8 @@ export default function NuevoPresupuestoPage() {
         category: item.category,
         quantity: item.quantity,
         unit_price: item.price,
-        discount_str: item.discount_str || null
+        discount_str: item.discount_str || null,
+        record_type: recordType
       }))
 
       const { error: itemsError } = await supabase
@@ -450,6 +454,8 @@ export default function NuevoPresupuestoPage() {
 
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
+          <RecordTypeSelector value={recordType} onChange={setRecordType} />
+
           <section className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">

@@ -38,6 +38,7 @@ import {
   Filter,
   BookOpen,
 } from 'lucide-react'
+import RecordTypeSelector from '@/app/components/RecordTypeSelector'
 import type { LucideIcon } from 'lucide-react'
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ type Purchase = {
   amount_paid: number
   notes: string | null
   created_at: string
+  record_type?: 'blanco' | 'x'
 }
 
 type Supplier = {
@@ -118,6 +120,7 @@ type SupplierPayment = {
   description: string | null
   user_id: string | null
   created_at: string
+  record_type?: 'blanco' | 'x'
 }
 
 type SupplierBalance = {
@@ -184,6 +187,7 @@ export default function TesoreriaClient({
   const [proveedores, setProveedores] = useState<Supplier[]>(proveedoresIniciales)
   const [pagosProveedores, setPagosProveedores] = useState<SupplierPayment[]>(pagosProveedoresIniciales)
   const [clientBalances, setClientBalances] = useState<ClientBalance[]>(clientBalancesIniciales)
+  const [recordType, setRecordType] = useState<'blanco' | 'x'>('blanco')
 
   // ── Auth ──
   const [userId, setUserId] = useState<string | null>(null)
@@ -464,6 +468,7 @@ export default function TesoreriaClient({
           payment_status: paymentStatus,
           amount_paid: pagadoActual,
           notes: observaciones || null,
+          record_type: recordType,
         })
 
       if (purchaseErr) throw purchaseErr
@@ -631,6 +636,7 @@ export default function TesoreriaClient({
           payment_method: pagoMetodo,
           description: pagoDescripcion || 'Pago de deuda',
           user_id: userId,
+          record_type: recordType,
         })
 
       if (spErr) throw spErr
@@ -651,6 +657,7 @@ export default function TesoreriaClient({
         let remanente = montoNum
         const pendientes = compras
           .filter(c => c.supplier_id === selectedSupplierForPayment.supplier_id && c.payment_status === 'pending')
+          .filter(c => c.record_type === recordType)
           .sort((a, b) => new Date(a.purchase_date).getTime() - new Date(b.purchase_date).getTime())
 
         for (const c of pendientes) {
@@ -720,6 +727,7 @@ export default function TesoreriaClient({
           description: cobroDescripcion || 'Pago recibido',
           debit: 0,
           credit: montoNum,
+          record_type: recordType,
         })
 
       if (error) throw error
@@ -1290,6 +1298,10 @@ export default function TesoreriaClient({
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
                   />
                 </div>
+
+                <div className="md:col-span-2">
+                  <RecordTypeSelector value={recordType} onChange={setRecordType} />
+                </div>
               </div>
 
               {/* Update sale price option */}
@@ -1814,7 +1826,7 @@ export default function TesoreriaClient({
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500"
                 >
                   <option value="">Automático (FIFO — más antiguas primero)</option>
-                  {comprasPendientesProveedor.map(c => (
+                  {comprasPendientesProveedor.filter(c => c.record_type === recordType).map(c => (
                     <option key={c.id} value={c.id}>
                       {new Date(c.purchase_date).toLocaleDateString('es-AR')} — {c.product_name} — Pendiente: {formatCurrency((c.total_cost || 0) - (c.amount_paid || 0))}
                     </option>
@@ -1869,8 +1881,12 @@ export default function TesoreriaClient({
                   type="text"
                   value={pagoDescripcion}
                   onChange={e => setPagoDescripcion(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <RecordTypeSelector value={recordType} onChange={setRecordType} />
               </div>
             </div>
 
@@ -1949,7 +1965,12 @@ export default function TesoreriaClient({
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
                 />
               </div>
+
+              <div className="space-y-2">
+                <RecordTypeSelector value={recordType} onChange={setRecordType} />
+              </div>
             </div>
+
 
             <button
               onClick={registrarCobroCliente}
