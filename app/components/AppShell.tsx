@@ -22,6 +22,7 @@ import {
   Clock,
   Receipt,
   CalendarRange,
+  DollarSign,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import LogoutButton from '@/app/components/LogoutButton'
@@ -42,6 +43,7 @@ const navItems = [
   { href: '/pedidos', label: 'Pedidos', icon: ClipboardList },
   { href: '/facturas', label: 'Facturas', icon: Receipt },
   { href: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
+  { href: '/tesoreria', label: 'Tesorería', icon: DollarSign },
   { href: '/contador', label: 'Portal Contable', icon: ShieldCheck },
 ]
 
@@ -55,6 +57,7 @@ function getPageTitle(pathname: string, businessType?: string) {
   if (pathname.startsWith('/presupuestos')) return 'Presupuestos'
   if (pathname.startsWith('/facturas')) return 'Facturación'
   if (pathname.startsWith('/cuenta-corriente')) return 'Cuenta corriente'
+  if (pathname.startsWith('/tesoreria')) return 'Tesorería'
   if (pathname.startsWith('/notificaciones')) return 'Notificaciones'
   if (pathname.startsWith('/configuracion')) return 'Configuración'
   if (pathname.startsWith('/contador')) return 'Portal del Contador'
@@ -72,6 +75,7 @@ function getPageDescription(pathname: string, businessType?: string) {
   if (pathname.startsWith('/facturas')) return 'Gestión de comprobantes y CAE'
   if (pathname.startsWith('/pedidos')) return businessType === 'services' ? 'Gestión de trabajos y servicios aceptados' : 'Gestión de órdenes de venta confirmadas'
   if (pathname.startsWith('/cuenta-corriente')) return 'Control de saldos y movimientos'
+  if (pathname.startsWith('/tesoreria')) return 'Caja diaria, ingresos, egresos y cuentas a pagar/cobrar'
   if (pathname.startsWith('/notificaciones')) return 'Avisos importantes del sistema'
   if (pathname.startsWith('/configuracion')) return 'Parámetros generales del sistema'
   if (pathname.startsWith('/contador')) return 'Espacio fiscal y reportes para tu estudio contable'

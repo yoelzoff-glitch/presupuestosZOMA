@@ -250,6 +250,9 @@ export default function PedidoDetallePage(): any {
   const [sendingToAccount, setSendingToAccount] = useState(false)
   const [alreadyInAccount, setAlreadyInAccount] = useState(false)
   const [enableStockModule, setEnableStockModule] = useState(false)
+  const [settlementMethod, setSettlementMethod] = useState<'cuenta_corriente' | 'pago_inmediato'>('cuenta_corriente')
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('Efectivo')
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([])
 
   useEffect(() => {
     if (orderId) {
@@ -269,7 +272,7 @@ export default function PedidoDetallePage(): any {
 
     const { data: profile } = await supabase
       .from('users_profiles')
-      .select('company_id, role, company:companies(enable_stock_module)')
+      .select('company_id, role, company:companies(enable_stock_module, payment_methods)')
       .eq('id', userData.user.id)
       .single()
 
@@ -283,6 +286,10 @@ export default function PedidoDetallePage(): any {
     setRole(profile.role || 'vendedor')
     setCompanyId(currentCompanyId)
     setEnableStockModule((profile.company as any)?.enable_stock_module || false)
+
+    const companyPaymentMethods = (profile?.company as any)?.payment_methods as any[]
+    const methodsList = companyPaymentMethods?.map((m: any) => m.name) || []
+    setPaymentMethods(methodsList.length > 0 ? methodsList : ['Efectivo', 'Transferencia', 'Tarjeta', 'Cheque'])
 
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
@@ -621,7 +628,7 @@ export default function PedidoDetallePage(): any {
         if (budgetItemsError) throw budgetItemsError
       }
 
-      // 2. Actualizar estado del Pedido (SIN crear movimiento todavía)
+      // 2. Actualizar estado del Pedido
       const total = buildBudgetItems().reduce((acc, item) => {
         return acc + Number(item.quantity || 0) * Number(item.unit_price || 0)
       }, 0)
@@ -639,12 +646,64 @@ export default function PedidoDetallePage(): any {
 
       if (orderError) throw orderError
 
-      // 3. Actualizar estado del presupuesto a 'approved'
+      // 3. Actualizar estado del presupuesto a 'approved' y registrar pagos si aplica
       if (budgetId) {
+        const isPaid = settlementMethod === 'pago_inmediato'
         await supabase
           .from('budgets')
-          .update({ status: 'approved', updated_at: new Date().toISOString() })
+          .update({ 
+            status: 'approved',
+            payment_status: isPaid ? 'paid' : 'unpaid',
+            paid_amount: isPaid ? total : 0,
+            paid_at: isPaid ? new Date().toISOString() : null,
+            updated_at: new Date().toISOString() 
+          })
           .eq('id', budgetId)
+      }
+
+      // 3.5. Registrar movimientos de cuenta corriente en base al método de pago elegido
+      const orderLabelStr = order.order_code || `PED-${order.order_number}`
+      if (settlementMethod === 'cuenta_corriente') {
+        const { error: movementError } = await supabase
+          .from('account_movements')
+          .insert({
+            company_id: companyId,
+            client_id: order.client_id,
+            budget_id: budgetId,
+            movement_type: 'Venta',
+            debit: Number(total),
+            credit: 0,
+            description: `Pedido ${orderLabelStr}`,
+          })
+        if (movementError) throw movementError
+      } else {
+        const { error: saleError } = await supabase
+          .from('account_movements')
+          .insert({
+            company_id: companyId,
+            client_id: order.client_id,
+            budget_id: budgetId,
+            movement_type: 'Venta',
+            debit: Number(total),
+            credit: 0,
+            description: `Pedido ${orderLabelStr}`,
+          })
+        if (saleError) throw saleError
+
+        const { error: paymentError } = await supabase
+          .from('account_movements')
+          .insert({
+            company_id: companyId,
+            client_id: order.client_id,
+            budget_id: budgetId,
+            movement_type: 'Pago',
+            payment_type: 'Pago total',
+            debit: 0,
+            credit: Number(total),
+            payment_method: selectedPaymentMethod,
+            description: `Pago inmediato Pedido ${orderLabelStr}`,
+          })
+        if (paymentError) throw paymentError
       }
 
       // 4. DESCUENTO DE STOCK AUTOMÁTICO (Solo si el módulo está activo)
@@ -1202,25 +1261,95 @@ export default function PedidoDetallePage(): any {
         </aside>
       </div>
 
-      {/* MODALES (Simplificados para brevedad en esta respuesta) */}
+      {/* MODAL DE CONFIRMACIÓN CON SELECCIÓN DE PAGO */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
-            <h2 className="text-2xl font-black text-slate-950">Confirmar Pedido</h2>
-            <p className="mt-2 font-bold text-slate-500 leading-relaxed">
-              ¿Estás seguro de que querés aceptar este pedido? Se generará un presupuesto aprobado automáticamente.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[2rem] border border-slate-100 bg-white p-8 shadow-2xl transition-all animate-in zoom-in-95">
+            <h2 className="text-2xl font-black text-slate-900">Aceptar Pedido</h2>
+            <p className="mt-2 text-sm font-bold text-slate-500 leading-relaxed">
+              Elegí cómo querés liquidar este pedido. Se generará un presupuesto aprobado de forma automática.
             </p>
-            
+
+            <div className="mt-6 space-y-3">
+              {/* Opción 1: Cuenta Corriente */}
+              <button
+                type="button"
+                onClick={() => setSettlementMethod('cuenta_corriente')}
+                className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition ${
+                  settlementMethod === 'cuenta_corriente'
+                    ? 'border-blue-600 bg-blue-50/40 text-blue-950'
+                    : 'border-slate-100 bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-50/50'
+                }`}
+              >
+                <div className={`flex h-11 w-11 items-center justify-center rounded-xl transition ${
+                  settlementMethod === 'cuenta_corriente' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  <Wallet size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-sm">A Cuenta Corriente</p>
+                  <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                    Se sumará como saldo deudor del cliente.
+                  </p>
+                </div>
+              </button>
+
+              {/* Opción 2: Pago Inmediato */}
+              <button
+                type="button"
+                onClick={() => setSettlementMethod('pago_inmediato')}
+                className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition ${
+                  settlementMethod === 'pago_inmediato'
+                    ? 'border-blue-600 bg-blue-50/40 text-blue-950'
+                    : 'border-slate-100 bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-50/50'
+                }`}
+              >
+                <div className={`flex h-11 w-11 items-center justify-center rounded-xl transition ${
+                  settlementMethod === 'pago_inmediato' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  <DollarSign size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-sm">Pago Inmediato (Contado)</p>
+                  <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                    Se registra el cobro ahora mismo en la caja.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Selector de Método de Pago si es Pago Inmediato */}
+            {settlementMethod === 'pago_inmediato' && (
+              <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-2">
+                  Método de Pago
+                </label>
+                <select
+                  value={selectedPaymentMethod}
+                  onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                >
+                  {paymentMethods.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="mt-8 flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-black text-slate-600 transition hover:bg-slate-50"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={() => confirmPortalOrder()}
-                className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
+                className="flex-1 rounded-2xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
               >
                 Confirmar
               </button>
