@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function ComprasPage() {
-  redirect('/tesoreria')
+  redirect('/tesoreria?tab=calculadora_compras')
 }

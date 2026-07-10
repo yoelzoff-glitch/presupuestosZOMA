@@ -26,6 +26,10 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import FilterButton from '@/app/components/FilterButton'
+import { registerSupplierPurchaseAction } from './actions'
+import RecordTypeSelector from '@/app/components/RecordTypeSelector'
+import { useMirror } from '@/app/components/MirrorProvider'
+import { Settings2, AlertTriangle, HelpCircle } from 'lucide-react'
 
 type Supplier = {
   id: string
@@ -66,7 +70,7 @@ type Props = {
 
 export default function TesoreriaClient({ companyId, initialPaymentMethods }: Props) {
   // Tabs and general state
-  const [activeTab, setActiveTab] = useState<'flujo_caja' | 'proveedores' | 'cuenta_proveedor'>('flujo_caja')
+  const [activeTab, setActiveTab] = useState<'flujo_caja' | 'proveedores' | 'cuenta_proveedor' | 'calculadora_compras'>('flujo_caja')
   const [loading, setLoading] = useState(true)
 
   // KPIs
@@ -111,8 +115,249 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
   // Delete states
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Calculator States
+  const { isMirrorUser } = useMirror()
+  const [products, setProducts] = useState<any[]>([])
+  
+  // Selected product & supplier
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null)
+  const [calcSupplierId, setCalcSupplierId] = useState('')
+  const [calcQuantity, setCalcQuantity] = useState('1')
+  const [calcUnitCost, setCalcUnitCost] = useState('')
+  const [calcTaxRate, setCalcTaxRate] = useState('21') // default 21%
+  const [calcOperationDate, setCalcOperationDate] = useState(new Date().toISOString().split('T')[0])
+  const [calcInvoice, setCalcInvoice] = useState('')
+  const [calcRemito, setCalcRemito] = useState('')
+  const [calcNotes, setCalcNotes] = useState('')
+  
+  // Payment terms
+  const [calcPaymentType, setCalcPaymentType] = useState<'cuenta_corriente' | 'pago_total' | 'pago_parcial'>('pago_total')
+  const [calcAmountPaid, setCalcAmountPaid] = useState('')
+  const [calcPaymentMethod, setCalcPaymentMethod] = useState(initialPaymentMethods[0] || 'Efectivo')
+  const [calcRecordType, setCalcRecordType] = useState<'blanco' | 'x'>('blanco')
+  
+  // Product Search state
+  const [productSearch, setProductSearch] = useState('')
+  const [showProductDropdown, setShowProductDropdown] = useState(false)
+  
+  // Selling price handling
+  const [priceRecommendationType, setPriceRecommendationType] = useState<'keep' | 'suggested' | 'manual'>('keep')
+  const [customSalePrice, setCustomSalePrice] = useState('')
+
+  // Modals state
+  const [showSimulateModal, setShowSimulateModal] = useState(false)
+  const [showConfirmPurchaseModal, setShowConfirmPurchaseModal] = useState(false)
+  const [savingPurchase, setSavingPurchase] = useState(false)
+
+  // Calculadora: valores derivados
+  const calculation = useMemo(() => {
+    const qty = Number(calcQuantity) || 0
+    const unitCost = Number(calcUnitCost) || 0
+    const taxRate = Number(calcTaxRate) || 0
+
+    const subtotal = qty * unitCost
+    const taxAmount = subtotal * (taxRate / 100)
+    const totalWithTax = subtotal + taxAmount
+
+    // Stock anterior y nuevo
+    const currentStock = selectedProduct ? (selectedProduct.stock_quantity || 0) : 0
+    const trackStock = selectedProduct ? !!selectedProduct.track_stock : false
+    const newStock = trackStock ? currentStock + qty : currentStock
+
+    // Costo anterior
+    const currentCost = selectedProduct ? (selectedProduct.cost_price || 0) : 0
+    const costVariation = currentCost > 0 
+      ? ((unitCost - currentCost) / currentCost) * 100 
+      : 0
+
+    // Markup y Precio Sugerido
+    const currentSalePrice = selectedProduct ? (selectedProduct.sale_price || 0) : 0
+    
+    let suggestedSalePrice = 0
+    let markup = 0
+    
+    if (selectedProduct) {
+      if (currentCost > 0) {
+        markup = currentSalePrice / currentCost
+        suggestedSalePrice = unitCost * markup
+      } else {
+        markup = 1.40
+        suggestedSalePrice = unitCost * markup
+      }
+    }
+
+    // Precio de venta definitivo elegido por el usuario
+    let finalSalePrice = currentSalePrice
+    if (priceRecommendationType === 'suggested') {
+      finalSalePrice = Number(suggestedSalePrice.toFixed(2))
+    } else if (priceRecommendationType === 'manual') {
+      finalSalePrice = Number(customSalePrice) || 0
+    }
+
+    // Variación de precio de venta
+    const salePriceVariation = currentSalePrice > 0
+      ? ((finalSalePrice - currentSalePrice) / currentSalePrice) * 100
+      : 0
+
+    // Impacto de Caja y Deuda
+    let cashOutflow = 0
+    let providerDebt = 0
+
+    if (calcPaymentType === 'pago_total') {
+      cashOutflow = totalWithTax
+      providerDebt = 0
+    } else if (calcPaymentType === 'cuenta_corriente') {
+      cashOutflow = 0
+      providerDebt = totalWithTax
+    } else if (calcPaymentType === 'pago_parcial') {
+      const paid = Number(calcAmountPaid) || 0
+      cashOutflow = paid
+      providerDebt = Math.max(0, totalWithTax - paid)
+    }
+
+    return {
+      subtotal,
+      taxAmount,
+      totalWithTax,
+      currentStock,
+      newStock,
+      trackStock,
+      currentCost,
+      costVariation,
+      currentSalePrice,
+      markup,
+      suggestedSalePrice,
+      finalSalePrice,
+      salePriceVariation,
+      cashOutflow,
+      providerDebt,
+    }
+  }, [selectedProduct, calcQuantity, calcUnitCost, calcTaxRate, priceRecommendationType, customSalePrice, calcPaymentType, calcAmountPaid])
+
+  const filteredProducts = useMemo(() => {
+    const query = productSearch.toLowerCase().trim()
+    if (!query) return products.slice(0, 10)
+    return products.filter((p) => {
+      const nameMatch = p.name?.toLowerCase().includes(query)
+      const codeMatch = p.internal_code?.toLowerCase().includes(query)
+      return nameMatch || codeMatch
+    })
+  }, [products, productSearch])
+
+  function handleSelectProduct(product: any) {
+    setSelectedProduct(product)
+    setProductSearch(product.name)
+    setShowProductDropdown(false)
+
+    if (product.cost_price > 0) {
+      setCalcUnitCost(product.cost_price.toString())
+    } else {
+      setCalcUnitCost('')
+    }
+    
+    setPriceRecommendationType('keep')
+    setCustomSalePrice('')
+  }
+
+  async function handleSavePurchase() {
+    if (!selectedProduct) {
+      toast.error('Debe seleccionar un producto.')
+      return
+    }
+    if (!calcSupplierId) {
+      toast.error('Debe seleccionar un proveedor.')
+      return
+    }
+    const qty = Number(calcQuantity)
+    if (isNaN(qty) || qty <= 0) {
+      toast.error('La cantidad debe ser mayor a 0.')
+      return
+    }
+    const cost = Number(calcUnitCost)
+    if (isNaN(cost) || cost < 0) {
+      toast.error('El costo unitario no puede ser negativo.')
+      return
+    }
+    const tax = Number(calcTaxRate)
+    if (isNaN(tax) || tax < 0) {
+      toast.error('La tasa de impuesto no puede ser negativa.')
+      return
+    }
+
+    const paid = calcPaymentType === 'pago_total' 
+      ? calculation.totalWithTax 
+      : calcPaymentType === 'cuenta_corriente' 
+        ? 0 
+        : Number(calcAmountPaid) || 0
+
+    if (paid > calculation.totalWithTax) {
+      toast.error('El monto pagado no puede superar el total de la compra.')
+      return
+    }
+
+    if (paid > 0 && !calcPaymentMethod) {
+      toast.error('Debe seleccionar un método de pago.')
+      return
+    }
+
+    setSavingPurchase(true)
+    try {
+      const input = {
+        productId: selectedProduct.id,
+        supplierId: calcSupplierId,
+        quantity: qty,
+        unitCost: cost,
+        taxRate: tax,
+        operationDate: calcOperationDate,
+        providerInvoice: calcInvoice.trim() || null,
+        providerRemito: calcRemito.trim() || null,
+        notes: calcNotes.trim() || null,
+        paymentStatus: paid === calculation.totalWithTax ? 'paid' : 'pending',
+        amountPaid: paid,
+        paymentMethod: paid > 0 ? calcPaymentMethod : null,
+        updateSalePrice: priceRecommendationType !== 'keep',
+        newSalePrice: priceRecommendationType !== 'keep' ? calculation.finalSalePrice : null,
+        recordType: calcRecordType,
+      }
+
+      const res = await registerSupplierPurchaseAction(input)
+
+      if (!res.ok) {
+        throw new Error(res.error)
+      }
+
+      toast.success('Compra registrada con éxito y precios/stock actualizados.')
+      setShowConfirmPurchaseModal(false)
+
+      setSelectedProduct(null)
+      setProductSearch('')
+      setCalcSupplierId('')
+      setCalcQuantity('1')
+      setCalcUnitCost('')
+      setCalcInvoice('')
+      setCalcRemito('')
+      setCalcNotes('')
+      setCalcPaymentType('pago_total')
+      setCalcAmountPaid('')
+      
+      await loadTreasuryData()
+    } catch (err: any) {
+      console.error('Error al guardar la compra:', err)
+      toast.error(`Error: ${err.message || 'No se pudo guardar la compra'}`)
+    } finally {
+      setSavingPurchase(false)
+    }
+  }
+
   useEffect(() => {
     loadTreasuryData()
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const tab = params.get('tab')
+      if (tab === 'calculadora_compras') {
+        setActiveTab('calculadora_compras')
+      }
+    }
   }, [])
 
   // Carga general de datos de Tesorería
@@ -194,6 +439,17 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
         totalReceivable += Number(m.debit || 0) - Number(m.credit || 0)
       })
       setAccountsReceivable(totalReceivable > 0 ? totalReceivable : 0)
+
+      // 4. Obtener productos activos para la calculadora
+      const { data: productsRes, error: productsErr } = await supabase
+        .from('products')
+        .select('id, name, internal_code, cost_price, sale_price, stock_quantity, track_stock')
+        .eq('company_id', companyId)
+        .eq('active', true)
+        .order('name', { ascending: true })
+
+      if (productsErr) throw productsErr
+      setProducts(productsRes || [])
     } catch (err) {
       console.error('Error cargando tesorería:', err)
       toast.error('No se pudieron cargar los datos de tesorería.')
@@ -627,6 +883,17 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
           }`}
         >
           Proveedores y Cuentas por Pagar
+        </button>
+
+        <button
+          onClick={() => setActiveTab('calculadora_compras')}
+          className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
+            activeTab === 'calculadora_compras'
+              ? 'bg-slate-900 text-white shadow-lg'
+              : 'text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          Calculadora de Compras
         </button>
       </div>
 
@@ -1335,6 +1602,680 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: CALCULADORA DE COMPRAS */}
+      {activeTab === 'calculadora_compras' && (
+        <div className="grid gap-6 lg:grid-cols-3 animate-in fade-in duration-300">
+          
+          {/* PANEL DE FORMULARIO DE COMPRA (2 Columnas en lg) */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <Settings2 size={20} className="text-blue-600" />
+                  Calculadora & Registro de Compra
+                </h2>
+                {selectedProduct && (
+                  <span className="rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700 animate-pulse">
+                    Modo Simulación Activo
+                  </span>
+                )}
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                
+                {/* Seleccionar Producto */}
+                <div className="relative space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                    Seleccionar Producto *
+                  </label>
+                  <div className="relative">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar producto por nombre o código..."
+                      value={productSearch}
+                      onChange={(e) => {
+                        setProductSearch(e.target.value)
+                        setShowProductDropdown(true)
+                      }}
+                      onFocus={() => setShowProductDropdown(true)}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-3.5 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white"
+                    />
+                  </div>
+
+                  {showProductDropdown && (
+                    <div className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
+                      {filteredProducts.length === 0 ? (
+                        <div className="p-4 text-xs text-slate-500 font-bold text-center">
+                          No se encontraron productos activos.
+                        </div>
+                      ) : (
+                        filteredProducts.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handleSelectProduct(p)}
+                            className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-slate-50 transition border-b border-slate-100 last:border-0 cursor-pointer"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-slate-900 truncate">{p.name}</p>
+                              <p className="text-[10px] text-slate-400 font-semibold truncate">
+                                {p.internal_code ? `Código: ${p.internal_code}` : 'Sin código'}
+                              </p>
+                            </div>
+                            <div className="text-right pl-4">
+                              <p className="text-xs font-black text-blue-700">
+                                Costo: {formatCurrency(p.cost_price || 0)}
+                              </p>
+                              <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
+                                Stock: {p.stock_quantity ?? 0}
+                              </span>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Seleccionar Proveedor */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                    Seleccionar Proveedor *
+                  </label>
+                  <select
+                    value={calcSupplierId}
+                    onChange={(e) => setCalcSupplierId(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                  >
+                    <option value="">-- Seleccionar Proveedor --</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.cuit ? `(CUIT: ${s.cuit})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Costo Unitario Neto */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                    Costo Unitario Neto * <span className="text-[10px] text-slate-400 normal-case">(Sin IVA)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={calcUnitCost}
+                    onChange={(e) => setCalcUnitCost(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                {/* Cantidad a Comprar */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                    Cantidad *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="1"
+                    value={calcQuantity}
+                    onChange={(e) => setCalcQuantity(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                {/* Alícuota de IVA */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                    Tasa de Impuesto / IVA
+                  </label>
+                  <select
+                    value={calcTaxRate}
+                    onChange={(e) => setCalcTaxRate(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                  >
+                    <option value="0">0% (Exento)</option>
+                    <option value="10.5">10.5% (IVA Reducido)</option>
+                    <option value="21">21% (IVA General)</option>
+                    <option value="27">27% (IVA Especial)</option>
+                  </select>
+                </div>
+
+                {/* Fecha Operación */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                    Fecha de Operación
+                  </label>
+                  <input
+                    type="date"
+                    value={calcOperationDate}
+                    onChange={(e) => setCalcOperationDate(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                {/* Nro Factura Proveedor */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                    Factura Proveedor
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: A-0001-00001234"
+                    value={calcInvoice}
+                    onChange={(e) => setCalcInvoice(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                {/* Nro Remito Proveedor */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                    Remito Proveedor
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: 0001-00004567"
+                    value={calcRemito}
+                    onChange={(e) => setCalcRemito(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Notas de Operación */}
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-700 uppercase tracking-wider block mb-1">
+                  Notas / Observaciones
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Detalles adicionales sobre la entrega, descuentos especiales..."
+                  value={calcNotes}
+                  onChange={(e) => setCalcNotes(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white resize-none"
+                />
+              </div>
+
+              {/* CONDICIONES DE PAGO */}
+              <div className="border-t border-slate-100 pt-6 space-y-4">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                  Condición de Pago & Financiación
+                </h3>
+                
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                      Condición
+                    </label>
+                    <select
+                      value={calcPaymentType}
+                      onChange={(e) => {
+                        const val = e.target.value as any
+                        setCalcPaymentType(val)
+                        if (val === 'pago_total') {
+                          setCalcAmountPaid(calculation.totalWithTax.toFixed(2))
+                        } else {
+                          setCalcAmountPaid('')
+                        }
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                    >
+                      <option value="pago_total">Pago Total (100% Contado)</option>
+                      <option value="cuenta_corriente">Cuenta Corriente (100% Crédito)</option>
+                      <option value="pago_parcial">Pago Parcial (Contado + Crédito)</option>
+                    </select>
+                  </div>
+
+                  {calcPaymentType === 'pago_parcial' && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                        Monto Pagado ($) *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={calculation.totalWithTax}
+                        placeholder="0.00"
+                        value={calcAmountPaid}
+                        onChange={(e) => setCalcAmountPaid(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  )}
+
+                  {calcPaymentType !== 'cuenta_corriente' && (
+                    <div className="space-y-2 animate-in fade-in duration-200">
+                      <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                        Método de Pago
+                      </label>
+                      <select
+                        value={calcPaymentMethod}
+                        onChange={(e) => setCalcPaymentMethod(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                      >
+                        {initialPaymentMethods.map((method) => (
+                          <option key={method} value={method}>
+                            {method}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <RecordTypeSelector value={calcRecordType} onChange={setCalcRecordType} />
+                </div>
+              </div>
+            </div>
+
+            {/* PANEL DE MÁRGENES Y PRECIO DE VENTA */}
+            {selectedProduct && (
+              <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
+                <h3 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-3">
+                  Estrategia y Precio de Venta
+                </h3>
+
+                <div className="grid gap-5 md:grid-cols-3">
+                  
+                  {/* Mantener precio actual */}
+                  <button
+                    type="button"
+                    onClick={() => setPriceRecommendationType('keep')}
+                    className={`rounded-2xl border p-4 text-left transition cursor-pointer flex flex-col justify-between ${
+                      priceRecommendationType === 'keep'
+                        ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-slate-400">Mantener Precio</h4>
+                      <p className="mt-1 text-lg font-black text-slate-900">
+                        {formatCurrency(calculation.currentSalePrice)}
+                      </p>
+                    </div>
+                    <p className="mt-4 text-[10px] text-slate-400 font-bold">
+                      No modifica el precio actual del producto.
+                    </p>
+                  </button>
+
+                  {/* Aceptar Precio Sugerido */}
+                  <button
+                    type="button"
+                    onClick={() => setPriceRecommendationType('suggested')}
+                    className={`rounded-2xl border p-4 text-left transition cursor-pointer flex flex-col justify-between ${
+                      priceRecommendationType === 'suggested'
+                        ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-blue-700">Precio Sugerido</h4>
+                      <p className="mt-1 text-lg font-black text-blue-900">
+                        {formatCurrency(calculation.suggestedSalePrice)}
+                      </p>
+                    </div>
+                    <p className="mt-4 text-[10px] text-slate-500 font-bold leading-normal">
+                      Mantiene el markup actual de{' '}
+                      <span className="font-extrabold text-blue-800">
+                        {calculation.markup > 0 ? `${((calculation.markup - 1) * 100).toFixed(1)}%` : '40.0%'}
+                      </span>
+                    </p>
+                  </button>
+
+                  {/* Modificación manual */}
+                  <button
+                    type="button"
+                    onClick={() => setPriceRecommendationType('manual')}
+                    className={`rounded-2xl border p-4 text-left transition cursor-pointer flex flex-col justify-between ${
+                      priceRecommendationType === 'manual'
+                        ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-slate-400">Personalizado</h4>
+                      <div className="mt-1">
+                        <input
+                          type="number"
+                          placeholder="Monto"
+                          value={customSalePrice}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            setCustomSalePrice(e.target.value)
+                            setPriceRecommendationType('manual')
+                          }}
+                          className="w-full bg-transparent border-b border-slate-300 font-black text-slate-900 text-lg outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-4 text-[10px] text-slate-400 font-bold">
+                      Establecer un precio de venta fijo personalizado.
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* PANEL DE VISTA PREVIA Y ACCIONES (1 Columna en lg) */}
+          <div className="space-y-6">
+            
+            {/* CARD DE TOTALES */}
+            <div className="rounded-[2rem] border border-slate-200 bg-slate-900 p-6 text-white shadow-lg space-y-6">
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-400">
+                Resumen de Operación
+              </h3>
+
+              <div className="space-y-4">
+                <div className="flex justify-between text-sm font-bold text-slate-300">
+                  <span>Subtotal Neto</span>
+                  <span>{formatCurrency(calculation.subtotal)}</span>
+                </div>
+                
+                <div className="flex justify-between text-sm font-bold text-slate-300">
+                  <span>Impuestos (IVA {calcTaxRate}%)</span>
+                  <span>{formatCurrency(calculation.taxAmount)}</span>
+                </div>
+
+                <div className="border-t border-slate-800 pt-4 flex justify-between items-baseline">
+                  <span className="text-base font-black text-slate-200">Total Facturado</span>
+                  <span className="text-2xl font-black text-white">
+                    {formatCurrency(calculation.totalWithTax)}
+                  </span>
+                </div>
+              </div>
+
+              {/* DETALLES DE EGRESO Y DEUDA */}
+              <div className="rounded-2xl bg-slate-800/40 p-4 space-y-3.5 text-xs font-bold border border-slate-800">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Egreso inmediato de Caja:</span>
+                  <span className="text-rose-400">{formatCurrency(calculation.cashOutflow)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Deuda generada (Proveedor):</span>
+                  <span className="text-amber-400">{formatCurrency(calculation.providerDebt)}</span>
+                </div>
+              </div>
+
+              {/* ACCIONES */}
+              <div className="flex flex-col gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSimulateModal(true)}
+                  disabled={!selectedProduct}
+                  className="w-full rounded-2xl border border-slate-700 bg-transparent py-4 text-sm font-black text-white hover:bg-slate-800 transition disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                >
+                  Simular Compra
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedProduct) {
+                      toast.error('Debe seleccionar un producto.')
+                      return
+                    }
+                    if (!calcSupplierId) {
+                      toast.error('Debe seleccionar un proveedor.')
+                      return
+                    }
+                    setShowConfirmPurchaseModal(true)
+                  }}
+                  disabled={!selectedProduct || !calcSupplierId}
+                  className="w-full rounded-2xl bg-blue-600 py-4 text-sm font-black text-white hover:bg-blue-500 transition shadow-lg shadow-blue-900/30 disabled:opacity-30 disabled:hover:bg-blue-600 cursor-pointer"
+                >
+                  Guardar Compra Real
+                </button>
+              </div>
+            </div>
+
+            {/* SIMULACIÓN DE IMPACTOS */}
+            {selectedProduct && (
+              <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+                  Impactos Proyectados
+                </h3>
+
+                <div className="space-y-4">
+                  {/* Stock */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-slate-400">Stock Proyectado</p>
+                      <p className="text-sm font-black text-slate-800 mt-0.5">
+                        {calculation.currentStock} → <span className="text-blue-600 font-extrabold">{calculation.newStock}</span> uds
+                      </p>
+                    </div>
+                    {!calculation.trackStock && (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">
+                        Stock no activo
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Costo del Producto */}
+                  <div>
+                    <p className="text-xs font-bold text-slate-400">Variación de Costo</p>
+                    <div className="flex items-baseline gap-2 mt-0.5">
+                      <p className="text-sm font-black text-slate-800">
+                        {formatCurrency(calculation.currentCost)} → {formatCurrency(Number(calcUnitCost) || 0)}
+                      </p>
+                      {calculation.costVariation !== 0 && (
+                        <span className={`text-[10px] font-black ${calculation.costVariation > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          ({calculation.costVariation > 0 ? '+' : ''}{calculation.costVariation.toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Precio de Venta */}
+                  <div>
+                    <p className="text-xs font-bold text-slate-400">Precio de Venta</p>
+                    <div className="flex items-baseline gap-2 mt-0.5">
+                      <p className="text-sm font-black text-slate-800">
+                        {formatCurrency(calculation.currentSalePrice)} → {formatCurrency(calculation.finalSalePrice)}
+                      </p>
+                      {calculation.salePriceVariation !== 0 && (
+                        <span className={`text-[10px] font-black ${calculation.salePriceVariation > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          ({calculation.salePriceVariation > 0 ? '+' : ''}{calculation.salePriceVariation.toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE SIMULACIÓN */}
+      {showSimulateModal && selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2.5rem] border border-slate-100 bg-white p-8 shadow-2xl transition-all animate-in zoom-in-95">
+            <h2 className="text-2xl font-black text-slate-900">Simulación de Compra</h2>
+            <p className="mt-1 text-xs font-bold text-slate-400">
+              Breakdown consolidado de costos y márgenes proyectados.
+            </p>
+
+            <div className="mt-6 space-y-4 rounded-3xl bg-slate-50 p-5 text-sm">
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="font-bold text-slate-500">Producto:</span>
+                <span className="font-black text-slate-800">{selectedProduct.name}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="font-bold text-slate-500">Cantidad:</span>
+                <span className="font-black text-slate-800">{calcQuantity} unidades</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="font-bold text-slate-500">Costo Unitario Neto:</span>
+                <span className="font-black text-slate-800">{formatCurrency(Number(calcUnitCost) || 0)}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="font-bold text-slate-500">IVA Aplicado:</span>
+                <span className="font-black text-slate-800">{calcTaxRate}% ({formatCurrency(calculation.taxAmount)})</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="font-bold text-slate-500">Costo Neto Total:</span>
+                <span className="font-black text-slate-800">{formatCurrency(calculation.subtotal)}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="font-bold text-slate-500">Total con Impuestos:</span>
+                <span className="font-black text-blue-700">{formatCurrency(calculation.totalWithTax)}</span>
+              </div>
+              
+              <div className="pt-2">
+                <h4 className="text-xs font-black uppercase text-slate-400 mb-2">Estrategia de Venta</h4>
+                <div className="flex justify-between border-b border-slate-200 pb-2">
+                  <span className="font-bold text-slate-500">Nuevo Costo:</span>
+                  <span className="font-black text-slate-800">{formatCurrency(Number(calcUnitCost) || 0)}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-200 pb-2">
+                  <span className="font-bold text-slate-500">Nuevo Precio Venta:</span>
+                  <span className="font-black text-emerald-700">{formatCurrency(calculation.finalSalePrice)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-500">Ganancia Estimada:</span>
+                  <span className="font-black text-slate-800">
+                    {formatCurrency(calculation.finalSalePrice - (Number(calcUnitCost) || 0))} (
+                    {Number(calcUnitCost) > 0 
+                      ? `${(((calculation.finalSalePrice / (Number(calcUnitCost) || 1)) - 1) * 100).toFixed(1)}%` 
+                      : '0%'
+                    } margen)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowSimulateModal(false)}
+                className="w-full sm:w-auto rounded-2xl bg-slate-900 py-3.5 px-6 text-sm font-black text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cerrar Simulación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE COMPRA REAL */}
+      {showConfirmPurchaseModal && selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2.5rem] border border-slate-100 bg-white p-8 shadow-2xl transition-all animate-in zoom-in-95">
+            <h2 className="text-2xl font-black text-slate-900">Confirmar Registro Real</h2>
+            <p className="mt-1 text-xs font-bold text-slate-400">
+              Revisá los detalles de la compra. Esta operación impactará en el stock y las cuentas de la empresa.
+            </p>
+
+            {/* ADVERTENCIAS */}
+            <div className="mt-6 space-y-3">
+              {calculation.costVariation >= 30 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex gap-3 text-xs text-amber-800 font-bold leading-normal">
+                  <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={16} />
+                  <div>
+                    <span className="font-extrabold block">Alerta de Variación de Costo</span>
+                    El costo del producto subió un {calculation.costVariation.toFixed(1)}% respecto al anterior.
+                  </div>
+                </div>
+              )}
+
+              {calculation.finalSalePrice < (Number(calcUnitCost) || 0) && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 flex gap-3 text-xs text-rose-800 font-bold leading-normal">
+                  <AlertTriangle className="text-rose-600 shrink-0 mt-0.5" size={16} />
+                  <div>
+                    <span className="font-extrabold block">Pérdida en Venta</span>
+                    El nuevo precio de venta ({formatCurrency(calculation.finalSalePrice)}) es menor al nuevo costo unitario ({formatCurrency(Number(calcUnitCost) || 0)}).
+                  </div>
+                </div>
+              )}
+
+              {!calculation.trackStock && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4 flex gap-3 text-xs text-slate-700 font-bold leading-normal">
+                  <HelpCircle className="text-slate-500 shrink-0 mt-0.5" size={16} />
+                  <div>
+                    <span className="font-extrabold block">Stock Inactivo</span>
+                    El producto no tiene configurado el control de stock. No se registrará movimiento de inventario.
+                  </div>
+                </div>
+              )}
+
+              {!calcInvoice && !calcRemito && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4 flex gap-3 text-xs text-slate-700 font-bold leading-normal">
+                  <HelpCircle className="text-slate-500 shrink-0 mt-0.5" size={16} />
+                  <div>
+                    <span className="font-extrabold block">Sin Comprobante</span>
+                    No se especificó Factura ni Remito de proveedor para esta compra.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 space-y-3 rounded-3xl bg-slate-50 p-5 text-sm font-bold text-slate-600">
+              <div className="flex justify-between">
+                <span>Producto:</span>
+                <span className="font-black text-slate-800">{selectedProduct.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Compra:</span>
+                <span className="font-black text-slate-800">{formatCurrency(calculation.totalWithTax)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Condición de Pago:</span>
+                <span className="font-black text-slate-800">
+                  {calcPaymentType === 'pago_total' ? 'Pago Total Contado' : calcPaymentType === 'cuenta_corriente' ? 'A Cuenta Corriente' : 'Pago Parcial'}
+                </span>
+              </div>
+              {calcPaymentType !== 'cuenta_corriente' && (
+                <div className="flex justify-between">
+                  <span>Monto Pagado Hoy:</span>
+                  <span className="font-black text-rose-600">{formatCurrency(calculation.cashOutflow)} ({calcPaymentMethod})</span>
+                </div>
+              )}
+              {calculation.providerDebt > 0 && (
+                <div className="flex justify-between">
+                  <span>Deuda a Cuenta Corriente:</span>
+                  <span className="font-black text-amber-600">{formatCurrency(calculation.providerDebt)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-slate-200 pt-3">
+                <span>Precio Venta Actualizado:</span>
+                <span className="font-black text-slate-800">
+                  {priceRecommendationType === 'keep' ? 'Sin Cambios' : formatCurrency(calculation.finalSalePrice)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-8 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirmPurchaseModal(false)}
+                className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-black text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePurchase}
+                disabled={savingPurchase}
+                className="flex-1 rounded-2xl bg-blue-600 py-3.5 text-sm font-black text-white hover:bg-blue-500 transition disabled:opacity-50 cursor-pointer"
+              >
+                {savingPurchase ? (
+                  <Loader2 size={18} className="animate-spin mx-auto" />
+                ) : (
+                  'Confirmar y Guardar'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

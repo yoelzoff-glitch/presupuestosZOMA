@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calculadora de Compras a Proveedores - ZOMA ERP</title>
+    <style>
+      :root {
+        --ink: #172033;
+        --muted: #64748b;
+        --line: #dbe3ef;
+        --soft: #f6f8fb;
+        --brand: #155eef;
+        --ok: #047857;
+        --warn: #b45309;
+        --danger: #be123c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #e9eef6;
+        color: var(--ink);
+        font-family: Arial, Helvetica, sans-serif;
+        line-height: 1.55;
+      }
+
+      .page {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 18px auto;
+        background: white;
+        padding: 18mm;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+      }
+
+      header {
+        border-bottom: 3px solid var(--brand);
+        padding-bottom: 18px;
+        margin-bottom: 26px;
+      }
+
+      .eyebrow {
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 8px 0 8px;
+        font-size: 31px;
+        line-height: 1.12;
+      }
+
+      h2 {
+        margin: 30px 0 10px;
+        color: #0f172a;
+        font-size: 20px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 6px;
+      }
+
+      h3 {
+        margin: 18px 0 8px;
+        font-size: 15px;
+      }
+
+      p {
+        margin: 8px 0;
+      }
+
+      ul,
+      ol {
+        margin: 8px 0 10px 22px;
+        padding: 0;
+      }
+
+      li {
+        margin: 5px 0;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin: 20px 0 8px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 13px;
+        background: var(--soft);
+      }
+
+      .card strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 13px;
+      }
+
+      .card span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .note {
+        border-left: 4px solid var(--brand);
+        background: #eef4ff;
+        padding: 12px 14px;
+        margin: 16px 0;
+      }
+
+      .warning {
+        border-left-color: var(--warn);
+        background: #fff7ed;
+      }
+
+      .flow {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 12px;
+        font-size: 13px;
+      }
+
+      .flow th,
+      .flow td {
+        border: 1px solid var(--line);
+        padding: 9px;
+        vertical-align: top;
+      }
+
+      .flow th {
+        background: #f1f5f9;
+        text-align: left;
+      }
+
+      .pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .pill-ok {
+        background: #dcfce7;
+        color: var(--ok);
+      }
+
+      .pill-warn {
+        background: #fef3c7;
+        color: var(--warn);
+      }
+
+      .pill-danger {
+        background: #ffe4e6;
+        color: var(--danger);
+      }
+
+      .footer {
+        margin-top: 34px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        .page {
+          width: auto;
+          min-height: auto;
+          margin: 0;
+          padding: 14mm;
+          box-shadow: none;
+        }
+
+        h2 {
+          break-after: avoid;
+        }
+
+        .card,
+        .note,
+        table {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <div class="eyebrow">ZOMA ERP - Tesoreria</div>
+        <h1>Calculadora de Compras a Proveedores</h1>
+        <p>
+          Documento funcional para explicar la nueva herramienta de simulacion y registro de
+          compras dentro del sistema.
+        </p>
+      </header>
+
+      <section>
+        <h2>1. Que Es Esta Nueva Funcion</h2>
+        <p>
+          La Calculadora de Compras a Proveedores es una herramienta incorporada a la seccion
+          <strong>Tesoreria</strong>. Permite calcular cuanto costara una compra antes de registrarla
+          y, si el usuario decide confirmarla, guardar la operacion completa en el sistema.
+        </p>
+        <p>
+          La diferencia importante es que no se limita a anotar un gasto. Cuando se guarda una
+          compra real, el sistema tambien puede actualizar el costo del producto, sugerir un nuevo
+          precio de venta, mover el stock, registrar deuda con el proveedor y reflejar pagos en caja.
+        </p>
+
+        <div class="summary">
+          <div class="card">
+            <strong>Simula</strong>
+            <span>Calcula costos, impuestos, stock proyectado y precio sugerido sin guardar datos.</span>
+          </div>
+          <div class="card">
+            <strong>Registra</strong>
+            <span>Guarda compras reales con proveedor, factura, remito, fecha, notas y pagos.</span>
+          </div>
+          <div class="card">
+            <strong>Impacta</strong>
+            <span>Actualiza producto, stock, cuenta corriente del proveedor y tesoreria.</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>2. Para Que Sirve</h2>
+        <ul>
+          <li>Evaluar una compra antes de tomar la decision.</li>
+          <li>Conocer el total final de la operacion, incluyendo impuestos.</li>
+          <li>Ver si el costo del producto subio o bajo respecto al costo anterior.</li>
+          <li>Calcular un precio de venta sugerido para mantener el margen anterior.</li>
+          <li>Registrar compras pagadas, pendientes o parcialmente pagadas.</li>
+          <li>Actualizar el stock automaticamente cuando el producto controla inventario.</li>
+          <li>Centralizar la compra dentro de Tesoreria y la cuenta corriente del proveedor.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>3. Como Se Usa</h2>
+        <ol>
+          <li>Entrar a <strong>Tesoreria</strong> y abrir la pestana <strong>Calculadora de Compras</strong>.</li>
+          <li>Buscar y seleccionar un producto del catalogo.</li>
+          <li>Seleccionar el proveedor correspondiente.</li>
+          <li>Cargar cantidad, precio unitario, impuestos, fecha, remito, factura y notas.</li>
+          <li>Elegir la condicion de pago: cuenta corriente, pago total o pago parcial.</li>
+          <li>Revisar los calculos en pantalla.</li>
+          <li>Usar <strong>Simular Compra</strong> si solo se quiere analizar el escenario.</li>
+          <li>Usar <strong>Guardar Compra</strong> si se quiere registrar la operacion real.</li>
+        </ol>
+
+        <div class="note">
+          <strong>Importante:</strong> simular no modifica nada en la base de datos. Guardar compra si
+          genera movimientos reales dentro del sistema.
+        </div>
+      </section>
+
+      <section>
+        <h2>4. Que Calcula En Pantalla</h2>
+        <ul>
+          <li><strong>Costo actual:</strong> precio de compra que tenia el producto antes de la operacion.</li>
+          <li><strong>Costo nuevo:</strong> precio unitario ingresado por el usuario.</li>
+          <li><strong>Variacion de costo:</strong> porcentaje de aumento o disminucion.</li>
+          <li><strong>Subtotal:</strong> cantidad multiplicada por precio unitario.</li>
+          <li><strong>Impuestos:</strong> monto calculado segun la tasa cargada.</li>
+          <li><strong>Total final:</strong> subtotal mas impuestos.</li>
+          <li><strong>Stock proyectado:</strong> stock actual mas cantidad comprada, si corresponde.</li>
+          <li><strong>Precio de venta sugerido:</strong> nuevo precio calculado para conservar el margen previo.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>5. Que Pasa Al Guardar Una Compra</h2>
+        <p>
+          Al confirmar, el sistema ejecuta una unica operacion transaccional. Esto significa que
+          todos los cambios se guardan juntos o, si algo falla, no se guarda nada a medias.
+        </p>
+
+        <table class="flow">
+          <thead>
+            <tr>
+              <th>Area del sistema</th>
+              <th>Impacto</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Compras</td>
+              <td>Se registra la compra con producto, proveedor, cantidad, costo, factura, remito, fecha, impuestos y notas.</td>
+            </tr>
+            <tr>
+              <td>Producto</td>
+              <td>Se actualiza el costo del producto. Opcionalmente se actualiza tambien el precio de venta.</td>
+            </tr>
+            <tr>
+              <td>Inventario</td>
+              <td>Si el producto controla stock, se suma la cantidad comprada y queda un movimiento de entrada.</td>
+            </tr>
+            <tr>
+              <td>Proveedor</td>
+              <td>Se registra la compra en la cuenta corriente del proveedor.</td>
+            </tr>
+            <tr>
+              <td>Tesoreria</td>
+              <td>Si hubo pago, se registra el egreso de caja y queda visible en el libro diario.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>6. Tipos De Operacion</h2>
+
+        <h3><span class="pill pill-warn">Cuenta corriente</span> Compra pendiente de pago</h3>
+        <p>
+          Se registra la compra y aumenta la deuda con el proveedor. No aparece egreso de caja
+          porque todavia no se pago.
+        </p>
+
+        <h3><span class="pill pill-ok">Contado</span> Compra pagada completa</h3>
+        <p>
+          Se registra la compra y tambien el pago. El proveedor no queda con deuda pendiente por
+          esa operacion. Tesoreria muestra el egreso por el total pagado.
+        </p>
+
+        <h3><span class="pill pill-danger">Mixta</span> Compra con pago parcial</h3>
+        <p>
+          Se registra el total de la compra, el pago realizado y queda como deuda solo la diferencia
+          pendiente. Tesoreria muestra egreso solo por el monto pagado.
+        </p>
+      </section>
+
+      <section>
+        <h2>7. Precio De Venta Sugerido</h2>
+        <p>
+          Cuando cambia el costo de compra, el sistema calcula un nuevo precio de venta sugerido.
+          La idea es ayudar a mantener la rentabilidad anterior del producto.
+        </p>
+        <p>
+          Por ejemplo: si un producto costaba 100 y se vendia a 140, tenia un multiplicador de 1,40.
+          Si el nuevo costo pasa a 120, el sistema sugiere venderlo a 168 para conservar la misma
+          relacion.
+        </p>
+        <p>
+          El usuario puede aceptar la sugerencia, mantener el precio actual o cargar manualmente
+          otro precio.
+        </p>
+      </section>
+
+      <section>
+        <h2>8. Controles Y Advertencias</h2>
+        <ul>
+          <li>No permite guardar sin producto ni proveedor.</li>
+          <li>No permite cantidades menores o iguales a cero.</li>
+          <li>No permite pagos parciales mayores al total de la compra.</li>
+          <li>Advierte cuando la suba de costo es alta.</li>
+          <li>Advierte si el precio de venta queda por debajo del costo.</li>
+          <li>Advierte si el producto no controla stock y por eso no se actualizara inventario.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>9. Beneficio Para La Empresa</h2>
+        <p>
+          Esta funcion evita cargar la misma informacion en varios lugares. Antes, una compra podia
+          requerir actualizar el producto, registrar un movimiento del proveedor, anotar un pago y
+          ajustar stock por separado. Ahora todo queda conectado desde una sola pantalla.
+        </p>
+        <p>
+          El resultado es una operacion mas rapida, menos errores manuales y mejor visibilidad de
+          costos, deudas, stock y caja.
+        </p>
+      </section>
+
+      <section>
+        <h2>10. Pruebas Recomendadas</h2>
+        <table class="flow">
+          <thead>
+            <tr>
+              <th>Prueba</th>
+              <th>Resultado esperado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Simular compra</td>
+              <td>Debe mostrar calculos sin guardar registros ni cambiar stock/costos.</td>
+            </tr>
+            <tr>
+              <td>Compra pendiente</td>
+              <td>Debe aumentar deuda del proveedor, actualizar costo y no generar egreso de caja.</td>
+            </tr>
+            <tr>
+              <td>Compra pagada</td>
+              <td>Debe registrar compra y pago, dejando saldo neto cero para esa operacion y egreso en Tesoreria.</td>
+            </tr>
+            <tr>
+              <td>Compra parcial</td>
+              <td>Debe registrar egreso solo por lo pagado y deuda por el saldo restante.</td>
+            </tr>
+            <tr>
+              <td>Producto con stock</td>
+              <td>Debe sumar unidades y crear movimiento de entrada.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <div class="footer">
+        Documento generado para explicar la implementacion de la Calculadora de Compras a
+        Proveedores en ZOMA ERP. Fecha: 10/07/2026.
+      </div>
+    </main>
+  </body>
+</html>
