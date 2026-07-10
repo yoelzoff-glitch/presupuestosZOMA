@@ -72,6 +72,7 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
   // Tabs and general state
   const [activeTab, setActiveTab] = useState<'flujo_caja' | 'proveedores' | 'cuenta_proveedor' | 'calculadora_compras'>('flujo_caja')
   const [loading, setLoading] = useState(true)
+  const [exportingExcel, setExportingExcel] = useState(false)
 
   // KPIs
   const [cashBalance, setCashBalance] = useState(0)
@@ -725,6 +726,41 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
     return date.toLocaleDateString('es-AR', { timeZone: 'UTC' })
   }
 
+  async function handleExportTreasuryExcel() {
+    setExportingExcel(true)
+    try {
+      const year = new Date().getFullYear()
+      const response = await fetch(`/api/tesoreria/export-excel?year=${year}`)
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error || 'No se pudo generar el Excel.')
+      }
+
+      const blob = await response.blob()
+      const contentDisposition = response.headers.get('Content-Disposition') || ''
+      const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
+      const filename = filenameMatch?.[1] || `tesoreria-${year}.xlsx`
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+
+      toast.success('Excel de tesorería generado correctamente.')
+    } catch (err) {
+      console.error('Error exportando tesorería:', err)
+      const message = err instanceof Error ? err.message : 'No se pudo exportar tesorería.'
+      toast.error(message)
+    } finally {
+      setExportingExcel(false)
+    }
+  }
+
   // Filtrado de Libro Diario (Caja)
   const filteredLedgerEntries = useMemo(() => {
     let result = [...ledgerEntries]
@@ -862,38 +898,54 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
       </div>
 
       {/* 2. PESTAÑAS DE NAVEGACIÓN */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
-        <button
-          onClick={() => setActiveTab('flujo_caja')}
-          className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
-            activeTab === 'flujo_caja'
-              ? 'bg-slate-900 text-white shadow-lg'
-              : 'text-slate-500 hover:bg-slate-100'
-          }`}
-        >
-          Caja Diario / Flujo
-        </button>
+      <div className="flex flex-col gap-3 border-b border-slate-200 pb-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setActiveTab('flujo_caja')}
+            className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
+              activeTab === 'flujo_caja'
+                ? 'bg-slate-900 text-white shadow-lg'
+                : 'text-slate-500 hover:bg-slate-100'
+            }`}
+          >
+            Caja Diario / Flujo
+          </button>
+
+          <button
+            onClick={() => setActiveTab('proveedores')}
+            className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
+              activeTab === 'proveedores' || activeTab === 'cuenta_proveedor'
+                ? 'bg-slate-900 text-white shadow-lg'
+                : 'text-slate-500 hover:bg-slate-100'
+            }`}
+          >
+            Proveedores y Cuentas por Pagar
+          </button>
+
+          <button
+            onClick={() => setActiveTab('calculadora_compras')}
+            className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
+              activeTab === 'calculadora_compras'
+                ? 'bg-slate-900 text-white shadow-lg'
+                : 'text-slate-500 hover:bg-slate-100'
+            }`}
+          >
+            Calculadora de Compras
+          </button>
+        </div>
 
         <button
-          onClick={() => setActiveTab('proveedores')}
-          className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
-            activeTab === 'proveedores' || activeTab === 'cuenta_proveedor'
-              ? 'bg-slate-900 text-white shadow-lg'
-              : 'text-slate-500 hover:bg-slate-100'
-          }`}
+          type="button"
+          onClick={handleExportTreasuryExcel}
+          disabled={exportingExcel}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-xs font-black uppercase tracking-wider text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Proveedores y Cuentas por Pagar
-        </button>
-
-        <button
-          onClick={() => setActiveTab('calculadora_compras')}
-          className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
-            activeTab === 'calculadora_compras'
-              ? 'bg-slate-900 text-white shadow-lg'
-              : 'text-slate-500 hover:bg-slate-100'
-          }`}
-        >
-          Calculadora de Compras
+          {exportingExcel ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <FileSpreadsheet size={16} />
+          )}
+          Exportar Excel
         </button>
       </div>
 
