@@ -82,59 +82,91 @@ export async function middleware(request: NextRequest) {
 
   // 2. Si hay usuario, validar permisos según rol
   if (usuario) {
-    // 1. Obtener perfil y datos de la empresa (suscripción)
-    const { data: perfil } = await supabase
-      .from('users_profiles')
-      .select(`
-        role,
-        company_id,
-        companies (
-          subscription_expiry
-        )
-      `)
-      .eq('id', usuario.id)
-      .single()
+    let rol = usuario.app_metadata?.role
+    let vencimientoEmpresa = request.cookies.get('sb-company-expiry')?.value
 
-    const rol = perfil?.role
-    // @ts-ignore - companies es un objeto por la relación select
-    const vencimientoEmpresa = perfil?.companies?.subscription_expiry
+    // Cache miss: Si falta el rol o la expiración de la empresa, consultamos la DB (ocurre 1 sola vez por sesión)
+    if (!rol || !vencimientoEmpresa) {
+      console.log('🔍 [Middleware] Cache miss. Consultando datos de perfil y empresa en Supabase...');
+      const { data: perfil } = await supabase
+        .from('users_profiles')
+        .select(`
+          role,
+          company_id,
+          companies (
+            subscription_expiry
+          )
+        `)
+        .eq('id', usuario.id)
+        .single()
+
+      if (perfil) {
+        rol = perfil.role
+        // @ts-ignore
+        const rawExpiry = perfil.companies?.subscription_expiry
+        vencimientoEmpresa = rawExpiry ? String(rawExpiry) : 'none'
+
+        // Guardamos en un cookie seguro por 2 horas para evitar lecturas constantes de DB
+        respuesta.cookies.set('sb-company-expiry', vencimientoEmpresa, {
+          maxAge: 60 * 60 * 2, // Cache de 2 horas
+          path: '/',
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax',
+        })
+      }
+    }
+
+    const vencimiento = vencimientoEmpresa
+
+    // Función auxiliar para retornar redirecciones copiando cookies para conservar el caché
+    const redireccionar = (destino: string) => {
+      const url = request.nextUrl.clone()
+      url.pathname = destino
+      const redirectResp = NextResponse.redirect(url)
+      
+      // Conservar las cookies generadas en la redirección
+      respuesta.cookies.getAll().forEach(cookie => {
+        redirectResp.cookies.set(cookie.name, cookie.value, {
+          maxAge: cookie.maxAge,
+          path: cookie.path,
+          httpOnly: cookie.httpOnly,
+          secure: cookie.secure,
+          sameSite: cookie.sameSite,
+        })
+      })
+      return redirectResp
+    }
 
     // 2. Validar Suscripción Vencida de la Empresa (Excepto Yoel)
     const esYoel = usuario.email?.toLowerCase() === 'yoel.zoff@gmail.com'
-    if (!esYoel && vencimientoEmpresa) {
+    if (!esYoel && vencimiento && vencimiento !== 'none') {
       const hoy = new Date()
-      const vencimiento = new Date(vencimientoEmpresa)
+      const limite = new Date(vencimiento)
       
-      if (hoy > vencimiento && rutaActual !== '/vencido' && !esPaginaPublica && !esPaginaAuth) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/vencido'
-        return NextResponse.redirect(url)
+      if (hoy > limite && rutaActual !== '/vencido' && !esPaginaPublica && !esPaginaAuth) {
+        return redireccionar('/vencido')
       }
     }
 
     // Redirigir si intenta entrar a /auth o / (landing) estando logueado
     if (esPaginaAuth || rutaActual === '/') {
-      const url = request.nextUrl.clone()
-      url.pathname = 
+      const dashboardDestino = 
         rol === 'customer' ? '/portal' : 
         rol === 'vendedor' ? '/vendedor' : 
         rol === 'contador' ? '/contador' : 
         '/dashboard'
-      return NextResponse.redirect(url)
+      return redireccionar(dashboardDestino)
     }
 
     // El Cliente (customer) solo puede entrar a /portal o páginas públicas
     if (rol === 'customer' && !esPaginaPortal && !esPaginaPublica) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/portal'
-      return NextResponse.redirect(url)
+      return redireccionar('/portal')
     }
 
     // El Vendedor solo puede entrar a /vendedor (no rutas de admin)
     if (rol === 'vendedor' && esRutaAdmin) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/vendedor'
-      return NextResponse.redirect(url)
+      return redireccionar('/vendedor')
     }
 
     // El Contador solo puede entrar a /contador, /facturas, y /cuenta-corriente
@@ -145,17 +177,13 @@ export async function middleware(request: NextRequest) {
       const esRutaPermitida = esPaginaContador || esPaginaFacturas || esPaginaCuentaCorriente || esPaginaAuth || esPaginaPublica
 
       if (!esRutaPermitida) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/contador'
-        return NextResponse.redirect(url)
+        return redireccionar('/contador')
       }
     }
 
     // Admin/Vendedor no deben entrar al portal de clientes
     if (rol !== 'customer' && esPaginaPortal) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
+      return redireccionar('/dashboard')
     }
   }
 

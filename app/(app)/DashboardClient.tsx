@@ -111,12 +111,14 @@ export default function DashboardClient({ stats }: { stats: DashboardStats }) {
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-350 font-sans">Bienvenido al centro de mando. Aquí tienes el panorama completo de tu empresa.</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row items-center">
-            <div className="flex items-center gap-1.5 bg-white/[0.05] p-1.5 rounded-xl border border-white/[0.05] backdrop-blur-md mr-2">
-              <FilterButton variant="blue" active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
-              <FilterButton variant="blue" active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
-              <FilterButton variant="blue" active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
-              <FilterButton variant="blue" active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
-            </div>
+            {heroType !== 'balance' && (
+              <div className="flex items-center gap-1.5 bg-white/[0.05] p-1.5 rounded-xl border border-white/[0.05] backdrop-blur-md mr-2">
+                <FilterButton variant="blue" active={daysFilter === '7'} onClick={() => setDaysFilter('7')}>7D</FilterButton>
+                <FilterButton variant="blue" active={daysFilter === '30'} onClick={() => setDaysFilter('30')}>30D</FilterButton>
+                <FilterButton variant="blue" active={daysFilter === '90'} onClick={() => setDaysFilter('90')}>90D</FilterButton>
+                <FilterButton variant="blue" active={daysFilter === 'all'} onClick={() => setDaysFilter('all')}>Todo</FilterButton>
+              </div>
+            )}
             <button
               onClick={toggleHero}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4.5 text-xs font-bold text-white transition hover:bg-white/[0.1] active:scale-98"

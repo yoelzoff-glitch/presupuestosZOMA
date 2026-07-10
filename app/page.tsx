@@ -195,9 +195,14 @@ export default function LandingPage() {
       {/* --- NAVIGATION --- */}
       <nav className="fixed top-0 z-[100] w-full bg-slate-950/75 backdrop-blur-2xl border-b border-slate-900 transition-all duration-300">
         <div className="container mx-auto flex h-22 items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform duration-300">
-              <Sparkles size={20} className="animate-pulse" />
+          {/* --- LOGO --- */}
+          <Link href="#" className="flex items-center gap-3 group relative z-10">
+            <div className="h-10 w-10 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300 flex items-center justify-center bg-[#001333] border border-slate-800">
+              <img
+                src="/logo-zoma.jpg"
+                alt="ZOMA Logo"
+                className="h-full w-full object-cover scale-[1.45] -translate-y-[8%]"
+              />
             </div>
             <div className="flex flex-col">
               <span className="text-xl font-black tracking-tighter text-white leading-none">ZOMA</span>
@@ -213,15 +218,24 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Link de Ingresar para pantallas de Escritorio */}
             <Link
               href="/auth/login"
               className="hidden sm:inline-block text-[11px] font-black uppercase tracking-[0.2em] text-slate-300 hover:text-white transition duration-200"
             >
               Ingresar
             </Link>
+            {/* Botón de Iniciar Sesión exclusivo para dispositivos móviles */}
+            <Link
+              href="/auth/login"
+              className="sm:hidden rounded-xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 hover:shadow-[0_0_25px_rgba(99,102,241,0.4)] transition-all duration-300"
+            >
+              Iniciar Sesión
+            </Link>
+            {/* Botón de Probar Gratis exclusivo para pantallas de Escritorio */}
             <Link
               href="/auth/registro-nuevo"
-              className="rounded-xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 hover:shadow-[0_0_25px_rgba(99,102,241,0.4)] transition-all duration-300"
+              className="hidden sm:inline-block rounded-xl bg-indigo-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 hover:shadow-[0_0_25px_rgba(99,102,241,0.4)] transition-all duration-300"
             >
               Probar Gratis
             </Link>
@@ -435,7 +449,7 @@ export default function LandingPage() {
                       </div>
                       <h3 className="text-3xl font-black mb-4 tracking-tight">Control de Vendedores</h3>
                       <p className="text-slate-400 font-medium text-base leading-relaxed">
-                        Asigná presupuestos a cada miembro de tu equipo. El sistema calcula automáticamente la comisión ganada de cada uno al concretarse las ventas.
+                        Administrá hasta 10 vendedores, cada uno con su usuario y compará sus rendimientos y % de conversion.
                       </p>
                     </div>
                     <div className="mt-8 text-slate-400 text-xs font-bold flex items-center gap-2">
@@ -508,7 +522,7 @@ export default function LandingPage() {
                 active={activeTab === 'vendedores'}
                 onClick={() => setActiveTab('vendedores')}
                 icon={Users}
-                label="Comisiones"
+                label="Vendedores"
               />
             </div>
 
@@ -701,13 +715,13 @@ export default function LandingPage() {
                 >
                   <div>
                     <span className="bg-indigo-500/10 text-indigo-300 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 mb-4 inline-block">
-                      Control de Vendedores
+                      Fuerza de Ventas Inteligente
                     </span>
                     <h3 className="text-3xl font-black text-white mb-5 leading-tight">
-                      Cálculo automático de comisiones ganadas
+                      Autonomía para tus vendedores, control total para vos
                     </h3>
                     <p className="text-slate-400 font-medium leading-relaxed mb-6">
-                      Dale a tus vendedores un acceso exclusivo para crear presupuestos. ZOMA calcula automáticamente la comisión de cada uno al concretarse las ventas, sin que tengas que hacer cuentas a fin de mes.
+                      Cada vendedor ingresa con su propio usuario para gestionar su cartera exclusiva de clientes y emitir presupuestos al instante. Como administrador, visualizás las métricas de rendimiento en tiempo real, comparás su desempeño para identificar a los mejores del mes, y liquidás comisiones automáticamente.
                     </p>
 
                     <div className="space-y-4">
@@ -1102,8 +1116,12 @@ export default function LandingPage() {
 
             <div className="space-y-6">
               <Link href="/" className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold">
-                  <Sparkles size={16} />
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg overflow-hidden bg-[#001333] border border-slate-800">
+                  <img
+                    src="/logo-zoma.jpg"
+                    alt="ZOMA Logo"
+                    className="h-full w-full object-cover scale-[1.45] -translate-y-[8%]"
+                  />
                 </div>
                 <span className="text-lg font-black tracking-tighter text-white">ZOMA</span>
               </Link>

@@ -1,1984 +1,1340 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { toast } from 'sonner'
-import { formatCurrency } from '@/lib/formatCurrency'
 import {
-  Landmark,
-  LayoutDashboard,
-  ShoppingCart,
-  Truck,
-  Users,
-  DollarSign,
   TrendingUp,
   TrendingDown,
-  ArrowUpRight,
-  ArrowDownLeft,
+  Wallet,
+  Users,
   Search,
-  RefreshCw,
-  FileSpreadsheet,
   Plus,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
-  Settings2,
-  Package,
-  Hash,
-  Tag,
+  ArrowDownCircle,
+  ArrowUpCircle,
   CalendarDays,
-  Boxes,
-  AlertCircle,
-  Info,
-  CheckCircle,
-  HelpCircle,
-  X,
+  ReceiptText,
+  FileText,
+  Trash2,
   CreditCard,
-  Calendar,
-  Filter,
-  BookOpen,
+  ChevronRight,
+  ArrowLeft,
+  Phone,
+  Mail,
+  MapPin,
+  FileSpreadsheet,
 } from 'lucide-react'
-import RecordTypeSelector from '@/app/components/RecordTypeSelector'
-import type { LucideIcon } from 'lucide-react'
+import { toast } from 'sonner'
+import FilterButton from '@/app/components/FilterButton'
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
-
-type TreasurySummary = {
-  company_id: string
-  total_cash_in: number
-  total_cash_out: number
-  net_cash_flow: number
-  total_client_debt: number
-  total_supplier_debt: number
-  net_balance: number
+type Supplier = {
+  id: string
+  name: string
+  cuit: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+  balance?: number
 }
 
 type LedgerEntry = {
   id: string
-  company_id: string
   entry_date: string
   entry_type: 'ingreso' | 'egreso'
   concept: string
   amount: number
   payment_method: string | null
   created_at: string
-  source_table: string
-  source_id: string
 }
 
-type Producto = {
+type SupplierMovement = {
   id: string
-  internal_code: string | null
-  name: string
-  supplier: string | null
-  category: string | null
-  cost_price: number | null
-  sale_price: number | null
-  last_price_update: string | null
-}
-
-type Purchase = {
-  id: string
-  product_id: string
-  product_name: string
-  product_code: string | null
-  supplier: string | null
-  supplier_id: string | null
-  quantity: number
-  unit_cost: number
-  total_cost: number
-  previous_cost: number
-  cost_variation: number
-  purchase_date: string
-  provider_invoice: string | null
-  payment_method: string | null
-  payment_status: 'paid' | 'pending'
-  amount_paid: number
-  notes: string | null
-  created_at: string
-  record_type?: 'blanco' | 'x'
-}
-
-type Supplier = {
-  id: string
-  company_id: string
-  name: string
-  cuit: string | null
-  phone: string | null
-  email: string | null
-  created_at: string
-}
-
-type SupplierPayment = {
-  id: string
-  company_id: string
   supplier_id: string
-  purchase_id: string | null
-  amount: number
-  payment_date: string
+  movement_date: string
+  movement_type: 'Compra' | 'Pago'
   payment_method: string | null
   description: string | null
-  user_id: string | null
+  debit: number
+  credit: number
   created_at: string
-  record_type?: 'blanco' | 'x'
 }
-
-type SupplierBalance = {
-  supplier: string
-  supplier_id: string
-  total_purchased: number
-  total_paid: number
-  balance_due: number
-  purchase_count: number
-}
-
-type ClientBalance = {
-  client_id: string
-  company_id: string
-  client_name: string
-  cuit: string | null
-  total_debit: number
-  total_credit: number
-  balance_due: number
-}
-
-type TabId = 'dashboard' | 'compras' | 'proveedores' | 'clientes'
 
 type Props = {
-  idEmpresa: string
-  treasurySummary: TreasurySummary | null
-  ledgerEntries: LedgerEntry[]
-  productosIniciales: Producto[]
-  comprasIniciales: Purchase[]
-  proveedoresIniciales: Supplier[]
-  pagosProveedoresIniciales: SupplierPayment[]
-  clientBalancesIniciales: ClientBalance[]
-  paymentMethods: string[]
+  companyId: string
+  initialPaymentMethods: string[]
 }
 
-// ─── TABS CONFIG ──────────────────────────────────────────────────────────────
+export default function TesoreriaClient({ companyId, initialPaymentMethods }: Props) {
+  // Tabs and general state
+  const [activeTab, setActiveTab] = useState<'flujo_caja' | 'proveedores' | 'cuenta_proveedor'>('flujo_caja')
+  const [loading, setLoading] = useState(true)
 
-const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'compras', label: 'Compras', icon: ShoppingCart },
-  { id: 'proveedores', label: 'Proveedores', icon: Truck },
-  { id: 'clientes', label: 'Clientes', icon: Users },
-]
+  // KPIs
+  const [cashBalance, setCashBalance] = useState(0)
+  const [accountsReceivable, setAccountsReceivable] = useState(0)
+  const [accountsPayable, setAccountsPayable] = useState(0)
 
-// ─── COMPONENT ────────────────────────────────────────────────────────────────
+  // Suppliers state
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [supplierSearch, setSupplierSearch] = useState('')
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [supplierMovements, setSupplierMovements] = useState<SupplierMovement[]>([])
+  const [movementsLoading, setMovementsLoading] = useState(false)
 
-export default function TesoreriaClient({
-  idEmpresa,
-  treasurySummary: initialSummary,
-  ledgerEntries: initialLedger,
-  productosIniciales,
-  comprasIniciales,
-  proveedoresIniciales,
-  pagosProveedoresIniciales,
-  clientBalancesIniciales,
-  paymentMethods,
-}: Props) {
-  // ── Global state ──
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard')
-  const [summary, setSummary] = useState<TreasurySummary | null>(initialSummary)
-  const [ledger, setLedger] = useState<LedgerEntry[]>(initialLedger)
-  const [productos, setProductos] = useState<Producto[]>(productosIniciales)
-  const [compras, setCompras] = useState<Purchase[]>(comprasIniciales)
-  const [proveedores, setProveedores] = useState<Supplier[]>(proveedoresIniciales)
-  const [pagosProveedores, setPagosProveedores] = useState<SupplierPayment[]>(pagosProveedoresIniciales)
-  const [clientBalances, setClientBalances] = useState<ClientBalance[]>(clientBalancesIniciales)
-  const [recordType, setRecordType] = useState<'blanco' | 'x'>('blanco')
+  // Ledger state
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
+  const [ledgerSearch, setLedgerSearch] = useState('')
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState<'all' | 'ingreso' | 'egreso'>('all')
+  const [daysFilter, setDaysFilter] = useState('all')
 
-  // ── Auth ──
-  const [userId, setUserId] = useState<string | null>(null)
+  // Modals state
+  const [showSupplierModal, setShowSupplierModal] = useState(false)
+  const [savingSupplier, setSavingSupplier] = useState(false)
+  const [newSupplierName, setNewSupplierName] = useState('')
+  const [newSupplierCuit, setNewSupplierCuit] = useState('')
+  const [newSupplierPhone, setNewSupplierPhone] = useState('')
+  const [newSupplierEmail, setNewSupplierEmail] = useState('')
+  const [newSupplierAddress, setNewSupplierAddress] = useState('')
+
+  // Supplier Movement Modals
+  const [showMovementModal, setShowMovementModal] = useState(false)
+  const [movementModalType, setMovementModalType] = useState<'Compra' | 'Pago'>('Compra')
+  const [savingMovement, setSavingMovement] = useState(false)
+  const [movementAmount, setMovementAmount] = useState('')
+  const [movementDescription, setMovementDescription] = useState('')
+  const [movementDate, setMovementDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(initialPaymentMethods[0] || 'Efectivo')
+  const [purchasePaymentType, setPurchasePaymentType] = useState<'cuenta_corriente' | 'pago_total' | 'pago_parcial'>('cuenta_corriente')
+  const [purchasePaidAmount, setPurchasePaidAmount] = useState('')
+  const [purchasePaymentMethod, setPurchasePaymentMethod] = useState(initialPaymentMethods[0] || 'Efectivo')
+
+  // Delete states
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
   useEffect(() => {
-    async function getSession() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) setUserId(user.id)
-    }
-    getSession()
+    loadTreasuryData()
   }, [])
 
-  // ── Dashboard state ──
-  const [dashboardCargando, setDashboardCargando] = useState(false)
-  const [ledgerFiltroBusqueda, setLedgerFiltroBusqueda] = useState('')
-  const [ledgerFiltroTipo, setLedgerFiltroTipo] = useState<'todos' | 'ingreso' | 'egreso'>('todos')
-  const [ledgerFiltroRango, setLedgerFiltroRango] = useState<'30' | '90' | '365' | 'todos'>('30')
-  const [ledgerPagina, setLedgerPagina] = useState(1)
-
-  // ── Compras state ──
-  const [busquedaProducto, setBusquedaProducto] = useState('')
-  const [productoSeleccionado, setProductoSeleccionado] = useState<Producto | null>(null)
-  const [mostrarDropdown, setMostrarDropdown] = useState(false)
-  const [cantidad, setCantidad] = useState('1')
-  const [costoUnitario, setCostoUnitario] = useState('0')
-  const [proveedor, setProveedor] = useState('')
-  const [supplierId, setSupplierId] = useState('')
-  const [fechaCompra, setFechaCompra] = useState(new Date().toISOString().split('T')[0])
-  const [facturaProveedor, setFacturaProveedor] = useState('')
-  const [medioPago, setMedioPago] = useState('Transferencia')
-  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending'>('paid')
-  const [amountPaid, setAmountPaid] = useState('')
-  const [observaciones, setObservaciones] = useState('')
-  const [actualizarPrecioVenta, setActualizarPrecioVenta] = useState(false)
-  const [precioVentaNuevo, setPrecioVentaNuevo] = useState('0')
-  const [guardando, setGuardando] = useState(false)
-  const [cargandoHistorial, setCargandoHistorial] = useState(false)
-  const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false)
-  const [filtroBusquedaCompras, setFiltroBusquedaCompras] = useState('')
-  const [paginaCompras, setPaginaCompras] = useState(1)
-  const [mostrandoFormProveedor, setMostrandoFormProveedor] = useState(false)
-  const [guardandoProveedor, setGuardandoProveedor] = useState(false)
-  const [nuevoProveedorNombre, setNuevoProveedorNombre] = useState('')
-  const [nuevoProveedorCuit, setNuevoProveedorCuit] = useState('')
-  const [nuevoProveedorPhone, setNuevoProveedorPhone] = useState('')
-  const [nuevoProveedorEmail, setNuevoProveedorEmail] = useState('')
-
-  // ── Proveedores state ──
-  const [filtroProveedor, setFiltroProveedor] = useState('')
-  const [selectedSupplierForPayment, setSelectedSupplierForPayment] = useState<SupplierBalance | null>(null)
-  const [pagoMonto, setPagoMonto] = useState('')
-  const [pagoMetodo, setPagoMetodo] = useState('Transferencia')
-  const [pagoFecha, setPagoFecha] = useState(new Date().toISOString().split('T')[0])
-  const [pagoDescripcion, setPagoDescripcion] = useState('Pago de deuda')
-  const [pagoPurchaseId, setPagoPurchaseId] = useState('')
-  const [guardandoPago, setGuardandoPago] = useState(false)
-
-  // ── Clientes state ──
-  const [filtroCliente, setFiltroCliente] = useState('')
-  const [selectedClientForPayment, setSelectedClientForPayment] = useState<ClientBalance | null>(null)
-  const [cobroMonto, setCobroMonto] = useState('')
-  const [cobroMetodo, setCobroMetodo] = useState(paymentMethods[0] || 'Transferencia')
-  const [cobroDescripcion, setCobroDescripcion] = useState('Pago recibido')
-  const [guardandoCobro, setGuardandoCobro] = useState(false)
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SHARED REFRESH FUNCTIONS
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  async function refreshSummary() {
-    const { data } = await supabase
-      .from('v_treasury_summary')
-      .select('*')
-      .eq('company_id', idEmpresa)
-      .single()
-    if (data) setSummary(data)
-  }
-
-  async function refreshLedger() {
-    const { data } = await supabase
-      .from('v_ledger_entries')
-      .select('*')
-      .eq('company_id', idEmpresa)
-      .order('entry_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(1000)
-    if (data) setLedger(data)
-  }
-
-  async function refreshCompras() {
-    const { data } = await supabase
-      .from('purchases')
-      .select('*')
-      .eq('company_id', idEmpresa)
-      .order('purchase_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .range(0, 999)
-    if (data) setCompras(data)
-  }
-
-  async function refreshProveedoresYPagos() {
-    const { data: provs } = await supabase
-      .from('suppliers')
-      .select('*')
-      .eq('company_id', idEmpresa)
-      .order('name', { ascending: true })
-    if (provs) setProveedores(provs)
-
-    const { data: pgs } = await supabase
-      .from('supplier_payments')
-      .select('*')
-      .eq('company_id', idEmpresa)
-      .order('payment_date', { ascending: false })
-    if (pgs) setPagosProveedores(pgs)
-  }
-
-  async function refreshClientBalances() {
-    const { data } = await supabase
-      .from('v_client_balances')
-      .select('*')
-      .eq('company_id', idEmpresa)
-    if (data) setClientBalances(data)
-  }
-
-  async function refreshAll() {
-    setDashboardCargando(true)
+  // Carga general de datos de Tesorería
+  async function loadTreasuryData() {
+    setLoading(true)
     try {
-      await Promise.all([
-        refreshSummary(),
-        refreshLedger(),
-        refreshCompras(),
-        refreshProveedoresYPagos(),
-        refreshClientBalances(),
-      ])
-      toast.success('Datos actualizados.')
-    } catch {
-      toast.error('Error al actualizar.')
+      // 1. Obtener balance de Caja Diario
+      const { data: ledgerRes, error: ledgerErr } = await supabase
+        .from('v_ledger_entries')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('entry_date', { ascending: false })
+
+      if (ledgerErr) throw ledgerErr
+
+      const ledger = (ledgerRes || []) as LedgerEntry[]
+      setLedgerEntries(ledger)
+
+      const totalInflows = ledger
+        .filter((e) => e.entry_type === 'ingreso')
+        .reduce((sum, e) => sum + Number(e.amount), 0)
+      const totalOutflows = ledger
+        .filter((e) => e.entry_type === 'egreso')
+        .reduce((sum, e) => sum + Number(e.amount), 0)
+
+      setCashBalance(totalInflows - totalOutflows)
+
+      // 2. Obtener Proveedores y Calcular saldos individuales y totales
+      const { data: suppliersRes, error: suppliersErr } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('active', true)
+        .order('name', { ascending: true })
+
+      if (suppliersErr) throw suppliersErr
+
+      const { data: smRes, error: smErr } = await supabase
+        .from('supplier_movements')
+        .select('supplier_id, debit, credit')
+        .eq('company_id', companyId)
+
+      if (smErr) throw smErr
+
+      const movementsMap: Record<string, { debit: number; credit: number }> = {}
+      ;(smRes || []).forEach((m) => {
+        if (!movementsMap[m.supplier_id]) {
+          movementsMap[m.supplier_id] = { debit: 0, credit: 0 }
+        }
+        movementsMap[m.supplier_id].debit += Number(m.debit || 0)
+        movementsMap[m.supplier_id].credit += Number(m.credit || 0)
+      })
+
+      let totalPayable = 0
+      const enrichedSuppliers = (suppliersRes || []).map((s) => {
+        const movs = movementsMap[s.id] || { debit: 0, credit: 0 }
+        const balance = movs.credit - movs.debit // credit (compra) aumenta deuda, debit (pago) reduce deuda
+        if (balance > 0) {
+          totalPayable += balance
+        }
+        return {
+          ...s,
+          balance,
+        }
+      })
+      setSuppliers(enrichedSuppliers)
+      setAccountsPayable(totalPayable)
+
+      // 3. Obtener Cuentas por Cobrar (Clientes)
+      const { data: clientMovRes, error: clientMovErr } = await supabase
+        .from('account_movements')
+        .select('debit, credit')
+        .eq('company_id', companyId)
+
+      if (clientMovErr) throw clientMovErr
+
+      let totalReceivable = 0
+      ;(clientMovRes || []).forEach((m) => {
+        totalReceivable += Number(m.debit || 0) - Number(m.credit || 0)
+      })
+      setAccountsReceivable(totalReceivable > 0 ? totalReceivable : 0)
+    } catch (err) {
+      console.error('Error cargando tesorería:', err)
+      toast.error('No se pudieron cargar los datos de tesorería.')
     } finally {
-      setDashboardCargando(false)
+      setLoading(false)
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // DASHBOARD LOGIC
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  const ledgerFiltrado = useMemo(() => {
-    return ledger.filter(e => {
-      if (ledgerFiltroTipo !== 'todos' && e.entry_type !== ledgerFiltroTipo) return false
-      if (ledgerFiltroRango !== 'todos') {
-        const limiteDias = Number(ledgerFiltroRango)
-        const fechaLimite = new Date()
-        fechaLimite.setDate(fechaLimite.getDate() - limiteDias)
-        if (new Date(e.entry_date) < fechaLimite) return false
-      }
-      const q = ledgerFiltroBusqueda.toLowerCase().trim()
-      if (q) {
-        const conceptoMatch = e.concept.toLowerCase().includes(q)
-        const metodoMatch = (e.payment_method || '').toLowerCase().includes(q)
-        if (!conceptoMatch && !metodoMatch) return false
-      }
-      return true
-    })
-  }, [ledger, ledgerFiltroTipo, ledgerFiltroRango, ledgerFiltroBusqueda])
-
-  const ledgerMetrics = useMemo(() => {
-    let ingresos = 0
-    let egresos = 0
-    ledgerFiltrado.forEach(e => {
-      if (e.entry_type === 'ingreso') ingresos += e.amount
-      else egresos += e.amount
-    })
-    return { totalIngresos: ingresos, totalEgresos: egresos, neto: ingresos - egresos }
-  }, [ledgerFiltrado])
-
-  const LEDGER_PER_PAGE = 20
-  const ledgerTotalPages = Math.ceil(ledgerFiltrado.length / LEDGER_PER_PAGE)
-  const ledgerPaginado = useMemo(() => {
-    const inicio = (ledgerPagina - 1) * LEDGER_PER_PAGE
-    return ledgerFiltrado.slice(inicio, inicio + LEDGER_PER_PAGE)
-  }, [ledgerFiltrado, ledgerPagina])
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // COMPRAS LOGIC
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  const productosFiltradosSelector = useMemo(() => {
-    const q = busquedaProducto.toLowerCase().trim()
-    if (!q) return productos.slice(0, 10)
-    return productos.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      (p.internal_code && p.internal_code.toLowerCase().includes(q))
-    ).slice(0, 10)
-  }, [productos, busquedaProducto])
-
-  const precioVentaRecomendado = useMemo(() => {
-    if (!productoSeleccionado) return 0
-    const costoAnterior = productoSeleccionado.cost_price || 0
-    const ventaAnterior = productoSeleccionado.sale_price || 0
-    const costoNuevo = Number(costoUnitario) || 0
-    if (costoAnterior > 0) {
-      const markup = ventaAnterior / costoAnterior
-      return Number((costoNuevo * markup).toFixed(2))
-    }
-    return Number((costoNuevo * 1.40).toFixed(2))
-  }, [productoSeleccionado, costoUnitario])
-
-  useEffect(() => {
-    if (productoSeleccionado) {
-      setPrecioVentaNuevo(String(precioVentaRecomendado))
-    }
-  }, [precioVentaRecomendado, productoSeleccionado])
-
-  function handleSeleccionarProducto(prod: Producto) {
-    setProductoSeleccionado(prod)
-    setBusquedaProducto(prod.name)
-    setCostoUnitario(String(prod.cost_price || 0))
-    setProveedor(prod.supplier || '')
-    setMostrarDropdown(false)
-    setActualizarPrecioVenta(false)
-  }
-
-  const totalSimulado = useMemo(() => {
-    return (Number(cantidad) || 0) * (Number(costoUnitario) || 0)
-  }, [cantidad, costoUnitario])
-
-  const variacionCostoSimulada = useMemo(() => {
-    if (!productoSeleccionado) return 0
-    const costoAnterior = productoSeleccionado.cost_price || 0
-    const costoNuevo = Number(costoUnitario) || 0
-    if (costoAnterior <= 0) return 0
-    return Number((((costoNuevo - costoAnterior) / costoAnterior) * 100).toFixed(2))
-  }, [productoSeleccionado, costoUnitario])
-
-  function limpiarSimulador() {
-    setProductoSeleccionado(null)
-    setBusquedaProducto('')
-    setCantidad('1')
-    setCostoUnitario('0')
-    setProveedor('')
-    setSupplierId('')
-    setFechaCompra(new Date().toISOString().split('T')[0])
-    setFacturaProveedor('')
-    setMedioPago('Transferencia')
-    setPaymentStatus('paid')
-    setAmountPaid('')
-    setObservaciones('')
-    setActualizarPrecioVenta(false)
-  }
-
-  async function guardarCompra() {
-    if (!productoSeleccionado) return
-    setGuardando(true)
-    setMostrarConfirmacion(false)
-
+  // Carga movimientos de un proveedor específico
+  async function loadSupplierMovements(supplierId: string) {
+    setMovementsLoading(true)
     try {
-      const nuevoCostoNum = Number(costoUnitario) || 0
-      const nuevoVentaNum = Number(precioVentaNuevo) || 0
-      const cantidadNum = Number(cantidad) || 0
-      const totalCompra = cantidadNum * nuevoCostoNum
-      const pagadoActual = paymentStatus === 'paid' ? totalCompra : (Number(amountPaid) || 0)
+      const { data, error } = await supabase
+        .from('supplier_movements')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('supplier_id', supplierId)
+        .order('movement_date', { ascending: false })
 
-      const { error: purchaseErr } = await supabase
-        .from('purchases')
-        .insert({
-          company_id: idEmpresa,
-          product_id: productoSeleccionado.id,
-          user_id: userId,
-          product_name: productoSeleccionado.name,
-          product_code: productoSeleccionado.internal_code,
-          supplier: proveedor || null,
-          supplier_id: supplierId || null,
-          quantity: cantidadNum,
-          unit_cost: nuevoCostoNum,
-          previous_cost: productoSeleccionado.cost_price || 0,
-          purchase_date: fechaCompra,
-          provider_invoice: facturaProveedor || null,
-          payment_method: medioPago || null,
-          payment_status: paymentStatus,
-          amount_paid: pagadoActual,
-          notes: observaciones || null,
-          record_type: recordType,
-        })
-
-      if (purchaseErr) throw purchaseErr
-
-      const camposActualizar: any = {
-        cost_price: nuevoCostoNum,
-        last_price_update: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-      if (actualizarPrecioVenta) {
-        camposActualizar.sale_price = nuevoVentaNum
-      }
-
-      const { error: productErr } = await supabase
-        .from('products')
-        .update(camposActualizar)
-        .eq('id', productoSeleccionado.id)
-
-      if (productErr) throw productErr
-
-      toast.success('Compra guardada y costo del producto actualizado.')
-
-      setProductos(prev =>
-        prev.map(p => {
-          if (p.id === productoSeleccionado.id) {
-            return {
-              ...p,
-              cost_price: nuevoCostoNum,
-              sale_price: actualizarPrecioVenta ? nuevoVentaNum : p.sale_price,
-              last_price_update: camposActualizar.last_price_update,
-            }
-          }
-          return p
-        })
-      )
-
-      limpiarSimulador()
-      await Promise.all([refreshCompras(), refreshProveedoresYPagos(), refreshSummary(), refreshLedger()])
-    } catch (err: any) {
-      toast.error('Error al guardar compra: ' + err.message)
+      if (error) throw error
+      setSupplierMovements((data || []) as SupplierMovement[])
+    } catch (err) {
+      console.error('Error cargando movimientos del proveedor:', err)
+      toast.error('Error al cargar la cuenta corriente.')
     } finally {
-      setGuardando(false)
+      setMovementsLoading(false)
     }
   }
 
-  const comprasFiltradas = useMemo(() => {
-    const q = filtroBusquedaCompras.toLowerCase().trim()
-    if (!q) return compras
-    return compras.filter(c =>
-      c.product_name.toLowerCase().includes(q) ||
-      (c.product_code && c.product_code.toLowerCase().includes(q)) ||
-      (c.supplier && c.supplier.toLowerCase().includes(q)) ||
-      (c.provider_invoice && c.provider_invoice.toLowerCase().includes(q))
-    )
-  }, [compras, filtroBusquedaCompras])
+  // Registrar un nuevo Proveedor
+  async function handleCreateSupplier(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newSupplierName.trim()) return
 
-  const COMPRAS_PER_PAGE = 15
-  const comprasPaginadas = useMemo(() => {
-    const inicio = (paginaCompras - 1) * COMPRAS_PER_PAGE
-    return comprasFiltradas.slice(inicio, inicio + COMPRAS_PER_PAGE)
-  }, [comprasFiltradas, paginaCompras])
-  const comprasTotalPages = Math.ceil(comprasFiltradas.length / COMPRAS_PER_PAGE)
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // PROVEEDORES LOGIC
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  async function handleCrearProveedor() {
-    if (!nuevoProveedorNombre.trim()) return
-    setGuardandoProveedor(true)
+    setSavingSupplier(true)
     try {
       const { data, error } = await supabase
         .from('suppliers')
         .insert({
-          company_id: idEmpresa,
-          name: nuevoProveedorNombre.trim(),
-          cuit: nuevoProveedorCuit.trim() || null,
-          phone: nuevoProveedorPhone.trim() || null,
-          email: nuevoProveedorEmail.trim() || null,
+          company_id: companyId,
+          name: newSupplierName.trim(),
+          cuit: newSupplierCuit.trim() || null,
+          phone: newSupplierPhone.trim() || null,
+          email: newSupplierEmail.trim() || null,
+          address: newSupplierAddress.trim() || null,
+          active: true,
         })
         .select()
         .single()
 
       if (error) throw error
 
-      toast.success('Proveedor registrado correctamente.')
-      setProveedores(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
-      setSupplierId(data.id)
-      setProveedor(data.name)
-      setNuevoProveedorNombre('')
-      setNuevoProveedorCuit('')
-      setNuevoProveedorPhone('')
-      setNuevoProveedorEmail('')
-      setMostrandoFormProveedor(false)
-    } catch (err: any) {
-      toast.error('Error al registrar proveedor: ' + err.message)
+      toast.success('Proveedor creado correctamente.')
+      setShowSupplierModal(false)
+      // Limpiar campos
+      setNewSupplierName('')
+      setNewSupplierCuit('')
+      setNewSupplierPhone('')
+      setNewSupplierEmail('')
+      setNewSupplierAddress('')
+
+      loadTreasuryData()
+    } catch (err) {
+      console.error('Error creando proveedor:', err)
+      toast.error('No se pudo crear el proveedor.')
     } finally {
-      setGuardandoProveedor(false)
+      setSavingSupplier(false)
     }
   }
 
-  const balancesProveedores = useMemo<SupplierBalance[]>(() => {
-    const balances: Record<string, SupplierBalance> = {}
-    proveedores.forEach(p => {
-      balances[p.id] = {
-        supplier: p.name,
-        supplier_id: p.id,
-        total_purchased: 0,
-        total_paid: 0,
-        balance_due: 0,
-        purchase_count: 0,
-      }
-    })
-    compras.forEach(c => {
-      if (c.supplier_id && balances[c.supplier_id]) {
-        const total = c.total_cost || 0
-        const paid = c.amount_paid || 0
-        balances[c.supplier_id].total_purchased += total
-        balances[c.supplier_id].total_paid += paid
-        balances[c.supplier_id].balance_due += (total - paid)
-        balances[c.supplier_id].purchase_count += 1
-      }
-    })
-    pagosProveedores.forEach(sp => {
-      if (sp.supplier_id && balances[sp.supplier_id]) {
-        balances[sp.supplier_id].total_paid += sp.amount
-        balances[sp.supplier_id].balance_due -= sp.amount
-      }
-    })
-    return Object.values(balances)
-  }, [proveedores, compras, pagosProveedores])
+  // Registrar movimiento de proveedor (Compra o Pago)
+  async function handleCreateSupplierMovement(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedSupplier || !movementAmount) return
 
-  const balancesFiltrados = useMemo(() => {
-    const q = filtroProveedor.toLowerCase().trim()
-    if (!q) return balancesProveedores
-    return balancesProveedores.filter(b => b.supplier.toLowerCase().includes(q))
-  }, [balancesProveedores, filtroProveedor])
+    setSavingMovement(true)
+    const amount = Number(movementAmount)
 
-  const comprasPendientesProveedor = useMemo(() => {
-    if (!selectedSupplierForPayment) return []
-    return compras.filter(c =>
-      c.supplier_id === selectedSupplierForPayment.supplier_id &&
-      c.payment_status === 'pending'
-    )
-  }, [compras, selectedSupplierForPayment])
-
-  async function registrarPagoProveedor() {
-    if (!selectedSupplierForPayment || !pagoMonto) return
-    const montoNum = Number(pagoMonto)
-    if (isNaN(montoNum) || montoNum <= 0) {
-      toast.error('Ingresá un monto válido.')
-      return
-    }
-
-    setGuardandoPago(true)
     try {
-      const { error: spErr } = await supabase
-        .from('supplier_payments')
-        .insert({
-          company_id: idEmpresa,
-          supplier_id: selectedSupplierForPayment.supplier_id,
-          purchase_id: pagoPurchaseId || null,
-          amount: montoNum,
-          payment_date: pagoFecha,
-          payment_method: pagoMetodo,
-          description: pagoDescripcion || 'Pago de deuda',
-          user_id: userId,
-          record_type: recordType,
-        })
+      const isCompra = movementModalType === 'Compra'
+      const description =
+        movementDescription.trim() ||
+        (isCompra ? 'Compra registrada en cuenta corriente' : 'Pago a cuenta')
 
-      if (spErr) throw spErr
+      if (isCompra) {
+        if (purchasePaymentType === 'cuenta_corriente') {
+          const { error } = await supabase.from('supplier_movements').insert({
+            company_id: companyId,
+            supplier_id: selectedSupplier.id,
+            movement_date: movementDate,
+            movement_type: 'Compra',
+            description,
+            debit: 0,
+            credit: amount,
+            payment_method: null,
+          })
+          if (error) throw error
+        } else if (purchasePaymentType === 'pago_total') {
+          const { error: compraError } = await supabase.from('supplier_movements').insert({
+            company_id: companyId,
+            supplier_id: selectedSupplier.id,
+            movement_date: movementDate,
+            movement_type: 'Compra',
+            description: `Compra: ${description}`,
+            debit: 0,
+            credit: amount,
+            payment_method: null,
+          })
+          if (compraError) throw compraError
 
-      // Imputar pago
-      if (pagoPurchaseId) {
-        const compra = compras.find(c => c.id === pagoPurchaseId)
-        if (compra) {
-          const nuevoMontoPagado = (compra.amount_paid || 0) + montoNum
-          const nuevoEstado = nuevoMontoPagado >= (compra.total_cost || 0) ? 'paid' : 'pending'
-          await supabase
-            .from('purchases')
-            .update({ amount_paid: nuevoMontoPagado, payment_status: nuevoEstado })
-            .eq('id', pagoPurchaseId)
+          const { error: pagoError } = await supabase.from('supplier_movements').insert({
+            company_id: companyId,
+            supplier_id: selectedSupplier.id,
+            movement_date: movementDate,
+            movement_type: 'Pago',
+            description: `Pago total: ${description}`,
+            debit: amount,
+            credit: 0,
+            payment_method: purchasePaymentMethod,
+          })
+          if (pagoError) throw pagoError
+        } else if (purchasePaymentType === 'pago_parcial') {
+          const paidVal = Number(purchasePaidAmount)
+          if (isNaN(paidVal) || paidVal <= 0 || paidVal > amount) {
+            toast.error(`El monto pagado debe ser mayor a 0 y menor o igual a ${formatCurrency(amount)}.`)
+            setSavingMovement(false)
+            return
+          }
+
+          const { error: compraError } = await supabase.from('supplier_movements').insert({
+            company_id: companyId,
+            supplier_id: selectedSupplier.id,
+            movement_date: movementDate,
+            movement_type: 'Compra',
+            description: `Compra: ${description}`,
+            debit: 0,
+            credit: amount,
+            payment_method: null,
+          })
+          if (compraError) throw compraError
+
+          const { error: pagoError } = await supabase.from('supplier_movements').insert({
+            company_id: companyId,
+            supplier_id: selectedSupplier.id,
+            movement_date: movementDate,
+            movement_type: 'Pago',
+            description: `Pago parcial: ${description}`,
+            debit: paidVal,
+            credit: 0,
+            payment_method: purchasePaymentMethod,
+          })
+          if (pagoError) throw pagoError
         }
       } else {
-        // FIFO
-        let remanente = montoNum
-        const pendientes = compras
-          .filter(c => c.supplier_id === selectedSupplierForPayment.supplier_id && c.payment_status === 'pending')
-          .filter(c => c.record_type === recordType)
-          .sort((a, b) => new Date(a.purchase_date).getTime() - new Date(b.purchase_date).getTime())
-
-        for (const c of pendientes) {
-          if (remanente <= 0) break
-          const pendienteCompra = (c.total_cost || 0) - (c.amount_paid || 0)
-          const abonar = Math.min(remanente, pendienteCompra)
-          const nuevoMontoPagado = (c.amount_paid || 0) + abonar
-          const nuevoEstado = nuevoMontoPagado >= (c.total_cost || 0) ? 'paid' : 'pending'
-
-          await supabase
-            .from('purchases')
-            .update({ amount_paid: nuevoMontoPagado, payment_status: nuevoEstado })
-            .eq('id', c.id)
-
-          remanente -= abonar
+        const currentDebt = selectedSupplier.balance || 0
+        if (amount > currentDebt) {
+          toast.error(
+            `El monto del pago (${formatCurrency(amount)}) no puede superar la deuda actual con el proveedor (${formatCurrency(currentDebt)}).`
+          )
+          setSavingMovement(false)
+          return
         }
+
+        const { error } = await supabase.from('supplier_movements').insert({
+          company_id: companyId,
+          supplier_id: selectedSupplier.id,
+          movement_date: movementDate,
+          movement_type: 'Pago',
+          description,
+          debit: amount,
+          credit: 0,
+          payment_method: selectedPaymentMethod,
+        })
+        if (error) throw error
       }
 
-      toast.success('Pago registrado correctamente.')
-      setSelectedSupplierForPayment(null)
-      setPagoMonto('')
-      setPagoPurchaseId('')
-      setPagoDescripcion('Pago de deuda')
+      toast.success('Movimiento registrado correctamente.')
+      setShowMovementModal(false)
+      setMovementAmount('')
+      setMovementDescription('')
+      setPurchasePaidAmount('')
+      setPurchasePaymentType('cuenta_corriente')
 
-      await Promise.all([refreshCompras(), refreshProveedoresYPagos(), refreshSummary(), refreshLedger()])
-    } catch (err: any) {
-      toast.error('Error al registrar el pago: ' + err.message)
+      // Recargar datos
+      await loadSupplierMovements(selectedSupplier.id)
+      await loadTreasuryData()
+
+      // Calcular variación neta en el saldo
+      let netBalanceChange = 0
+      if (isCompra) {
+        if (purchasePaymentType === 'cuenta_corriente') {
+          netBalanceChange = amount
+        } else if (purchasePaymentType === 'pago_total') {
+          netBalanceChange = 0
+        } else if (purchasePaymentType === 'pago_parcial') {
+          netBalanceChange = amount - Number(purchasePaidAmount)
+        }
+      } else {
+        netBalanceChange = -amount
+      }
+
+      // Actualizar el saldo local del proveedor seleccionado
+      const updatedSupplier = suppliers.find((s) => s.id === selectedSupplier.id)
+      if (updatedSupplier) {
+        const oldBalance = updatedSupplier.balance || 0
+        const newBalance = oldBalance + netBalanceChange
+        setSelectedSupplier({ ...updatedSupplier, balance: newBalance })
+      }
+    } catch (err) {
+      console.error('Error registrando movimiento:', err)
+      toast.error('No se pudo registrar el movimiento.')
     } finally {
-      setGuardandoPago(false)
+      setSavingMovement(false)
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // CLIENTES LOGIC
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  const clientesFiltrados = useMemo(() => {
-    const q = filtroCliente.toLowerCase().trim()
-    if (!q) return clientBalances.filter(c => c.balance_due > 0)
-    return clientBalances
-      .filter(c => c.balance_due > 0)
-      .filter(c =>
-        c.client_name.toLowerCase().includes(q) ||
-        (c.cuit && c.cuit.toLowerCase().includes(q))
-      )
-  }, [clientBalances, filtroCliente])
-
-  async function registrarCobroCliente() {
-    if (!selectedClientForPayment || !cobroMonto) return
-    const montoNum = Number(cobroMonto)
-    if (isNaN(montoNum) || montoNum <= 0) {
-      toast.error('Ingresá un monto válido.')
-      return
-    }
-
-    setGuardandoCobro(true)
+  // Eliminar movimiento de proveedor
+  async function handleDeleteMovement(id: string) {
+    if (!selectedSupplier) return
+    setDeletingId(id)
     try {
       const { error } = await supabase
-        .from('account_movements')
-        .insert({
-          company_id: idEmpresa,
-          client_id: selectedClientForPayment.client_id,
-          movement_date: new Date().toISOString().split('T')[0],
-          movement_type: 'Pago',
-          payment_type: 'Pago parcial',
-          payment_method: cobroMetodo,
-          description: cobroDescripcion || 'Pago recibido',
-          debit: 0,
-          credit: montoNum,
-          record_type: recordType,
-        })
+        .from('supplier_movements')
+        .delete()
+        .eq('company_id', companyId)
+        .eq('id', id)
 
       if (error) throw error
 
-      toast.success('Cobro registrado correctamente.')
-      setSelectedClientForPayment(null)
-      setCobroMonto('')
-      setCobroDescripcion('Pago recibido')
+      toast.success('Movimiento eliminado correctamente.')
+      await loadSupplierMovements(selectedSupplier.id)
+      await loadTreasuryData()
 
-      await Promise.all([refreshClientBalances(), refreshSummary(), refreshLedger()])
-    } catch (err: any) {
-      toast.error('Error al registrar cobro: ' + err.message)
+      // Actualizar saldo seleccionado
+      const { data: newSm } = await supabase
+        .from('supplier_movements')
+        .select('debit, credit')
+        .eq('supplier_id', selectedSupplier.id)
+
+      const d = (newSm || []).reduce((acc, m) => acc + Number(m.debit || 0), 0)
+      const c = (newSm || []).reduce((acc, m) => acc + Number(m.credit || 0), 0)
+      setSelectedSupplier({ ...selectedSupplier, balance: c - d })
+    } catch (err) {
+      console.error('Error eliminando movimiento:', err)
+      toast.error('No se pudo eliminar el movimiento.')
     } finally {
-      setGuardandoCobro(false)
+      setDeletingId(null)
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // EXCEL EXPORT
-  // ══════════════════════════════════════════════════════════════════════════════
+  // Seleccionar proveedor para ver cuenta corriente
+  function handleSelectSupplier(supplier: Supplier) {
+    setSelectedSupplier(supplier)
+    loadSupplierMovements(supplier.id)
+    setActiveTab('cuenta_proveedor')
+  }
 
-  function exportarLedgerAExcel() {
-    if (ledgerFiltrado.length === 0) {
-      toast.error('No hay registros para exportar.')
-      return
+  // Formateadores
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+    }).format(val)
+  }
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return ''
+    const parts = dateStr.split('-')
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`
+    }
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-AR', { timeZone: 'UTC' })
+  }
+
+  // Filtrado de Libro Diario (Caja)
+  const filteredLedgerEntries = useMemo(() => {
+    let result = [...ledgerEntries]
+
+    // Búsqueda por texto
+    if (ledgerSearch.trim()) {
+      const q = ledgerSearch.toLowerCase()
+      result = result.filter(
+        (e) =>
+          e.concept.toLowerCase().includes(q) ||
+          (e.payment_method && e.payment_method.toLowerCase().includes(q))
+      )
     }
 
-    let filasHtml = ''
-    ledgerFiltrado.forEach((e, index) => {
-      const claseZebra = index % 2 === 0 ? '' : 'class="bg-zebra"'
-      const claseTipo = e.entry_type === 'ingreso' ? 'class="var-up"' : 'class="var-down"'
-      filasHtml += `
-        <tr ${claseZebra}>
-          <td class="text-center">${new Date(e.entry_date).toLocaleDateString('es-AR')}</td>
-          <td>${e.concept}</td>
-          <td ${claseTipo} class="text-center">${e.entry_type.toUpperCase()}</td>
-          <td>${e.payment_method || '-'}</td>
-          <td class="text-right">$${e.amount.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-        </tr>
-      `
+    // Filtro por tipo (Ingreso / Egreso)
+    if (ledgerTypeFilter !== 'all') {
+      result = result.filter((e) => e.entry_type === ledgerTypeFilter)
+    }
+
+    // Filtro por días
+    if (daysFilter !== 'all') {
+      const days = Number(daysFilter)
+      const limitDate = new Date()
+      limitDate.setDate(limitDate.getDate() - days)
+      result = result.filter((e) => new Date(e.entry_date) >= limitDate)
+    }
+
+    return result
+  }, [ledgerEntries, ledgerSearch, ledgerTypeFilter, daysFilter])
+
+  // Filtrado de Proveedores
+  const filteredSuppliers = useMemo(() => {
+    if (!supplierSearch.trim()) return suppliers
+    const q = supplierSearch.toLowerCase()
+    return suppliers.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.cuit && s.cuit.includes(q)) ||
+        (s.email && s.email.toLowerCase().includes(q))
+    )
+  }, [suppliers, supplierSearch])
+
+  // Historial acumulativo del proveedor seleccionado
+  const supplierRunningBalanceMovements = useMemo(() => {
+    let currentBal = 0
+    // Ordenamos ascendentemente para calcular el acumulado y luego los invertimos para mostrar los más recientes arriba
+    const sortedAsc = [...supplierMovements].sort(
+      (a, b) => new Date(a.movement_date).getTime() - new Date(b.movement_date).getTime()
+    )
+    const enriched = sortedAsc.map((m) => {
+      // credit (compra) aumenta saldo deudor, debit (pago) reduce
+      currentBal += Number(m.credit) - Number(m.debit)
+      return {
+        ...m,
+        runningBalance: currentBal,
+      }
     })
+    return enriched.reverse()
+  }, [supplierMovements])
 
-    const htmlContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="UTF-8">
-        <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Flujo de Caja</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-        <style>
-          table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; }
-          th { background-color: #0f766e; color: #ffffff; font-weight: bold; text-transform: uppercase; border: 1px solid #cbd5e1; padding: 10px; font-size: 9pt; }
-          td { border: 1px solid #cbd5e1; padding: 8px; }
-          .text-right { text-align: right; }
-          .text-center { text-align: center; }
-          .bg-title { background-color: #0f172a; color: #ffffff; font-size: 16pt; font-weight: bold; text-align: center; height: 45px; }
-          .bg-subtitle { background-color: #1e293b; color: #cbd5e1; font-size: 11pt; text-align: center; }
-          .bg-zebra { background-color: #f8fafc; }
-          .bg-total { background-color: #ccfbf1; font-weight: bold; color: #0f766e; }
-          .var-up { color: #16a34a; font-weight: bold; }
-          .var-down { color: #dc2626; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <tr><td colspan="5" class="bg-title">FLUJO DE CAJA — TESORERÍA</td></tr>
-          <tr><td colspan="5" class="bg-subtitle">Generado el: ${new Date().toLocaleDateString('es-AR')} | Registros: ${ledgerFiltrado.length}</td></tr>
-          <tr><td colspan="5" style="height: 15px; border: none;"></td></tr>
-          <tr>
-            <th>Fecha</th><th>Concepto</th><th>Tipo</th><th>Medio de Pago</th><th class="text-right">Monto</th>
-          </tr>
-          ${filasHtml}
-          <tr class="bg-total">
-            <td colspan="3" style="border-top: 2px solid #0f766e;">TOTALES</td>
-            <td style="border-top: 2px solid #0f766e;">Ingresos: $${ledgerMetrics.totalIngresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-            <td class="text-right" style="border-top: 2px solid #0f766e;">Egresos: $${ledgerMetrics.totalEgresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `
-
-    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `tesoreria-flujo-caja-${new Date().toISOString().split('T')[0]}.xls`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    toast.success('Excel exportado correctamente.')
+  if (loading) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        <p className="text-sm font-black text-slate-500 uppercase tracking-widest">
+          Cargando Tesorería...
+        </p>
+      </div>
+    )
   }
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ══════════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden space-y-6 pb-12">
-
-      {/* ═══ HERO HEADER ═══ */}
-      <section className="relative w-full max-w-full overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-6 text-white shadow-xl">
-        <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-teal-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-16 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-teal-200">
-              <Landmark size={13} />
-              Centro de Control Financiero
-            </div>
-            <h1 className="truncate text-3xl font-black tracking-tight font-sans">
-              Tesorería
-            </h1>
-            <p className="mt-1 line-clamp-1 text-sm text-slate-350 font-sans">
-              Balance general, compras, deudas con proveedores y cuentas por cobrar.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            <button
-              onClick={exportarLedgerAExcel}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-teal-900/30 transition hover:bg-teal-500 cursor-pointer"
-            >
-              <FileSpreadsheet size={16} /> Exportar Excel
-            </button>
-            <button
-              onClick={refreshAll}
-              disabled={dashboardCargando}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15 cursor-pointer"
-            >
-              <RefreshCw size={15} className={dashboardCargando ? 'animate-spin' : ''} /> Actualizar
-            </button>
-          </div>
-        </div>
-
-        {/* ═══ TAB BAR ═══ */}
-        <div className="relative z-10 mt-6 flex gap-1 overflow-x-auto rounded-2xl bg-white/5 p-1 backdrop-blur-sm">
-          {TABS.map(tab => {
-            const Icon = tab.icon
-            const isActive = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer
-                  ${isActive
-                    ? 'bg-white text-slate-900 shadow-lg'
-                    : 'text-white/60 hover:text-white hover:bg-white/10'
-                  }`}
-              >
-                <Icon size={15} />
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* TAB A: DASHBOARD */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'dashboard' && (
-        <div className="space-y-6">
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Balance Neto */}
-            <div className={`rounded-2xl border p-5 shadow-sm transition-all ${
-              (summary?.net_balance || 0) >= 0 
-                ? 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50' 
-                : 'border-red-200 bg-gradient-to-br from-red-50 to-rose-50'
-            }`}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Balance General Neto</span>
-                <div className={`rounded-xl p-2 ${(summary?.net_balance || 0) >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
-                  <DollarSign size={18} className={(summary?.net_balance || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'} />
-                </div>
-              </div>
-              <p className={`mt-3 text-2xl font-black ${(summary?.net_balance || 0) >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                {formatCurrency(summary?.net_balance || 0)}
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* 1. SECCIÓN DE TARJETAS KPIs */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {/* Caja Actual */}
+        <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl transition hover:shadow-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                Caja Real Neto
               </p>
-              <p className="mt-1 text-[10px] text-slate-500">Flujo de caja + deuda activa − deuda pasiva</p>
-            </div>
-
-            {/* Deuda Pasiva (Proveedores) */}
-            <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Deuda a Proveedores</span>
-                <div className="rounded-xl bg-amber-100 p-2">
-                  <Truck size={18} className="text-amber-600" />
-                </div>
-              </div>
-              <p className="mt-3 text-2xl font-black text-amber-700">
-                {formatCurrency(summary?.total_supplier_debt || 0)}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-500">Total acumulado deuda pasiva</p>
-            </div>
-
-            {/* Deuda Activa (Clientes) */}
-            <div className="rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-sky-50 p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Deuda de Clientes</span>
-                <div className="rounded-xl bg-cyan-100 p-2">
-                  <Users size={18} className="text-cyan-600" />
-                </div>
-              </div>
-              <p className="mt-3 text-2xl font-black text-cyan-700">
-                {formatCurrency(summary?.total_client_debt || 0)}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-500">Total acumulado cuentas por cobrar</p>
-            </div>
-
-            {/* Flujo de Caja */}
-            <div className={`rounded-2xl border p-5 shadow-sm transition-all ${
-              (summary?.net_cash_flow || 0) >= 0 
-                ? 'border-green-200 bg-gradient-to-br from-green-50 to-lime-50' 
-                : 'border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50'
-            }`}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Flujo de Caja Real</span>
-                <div className={`rounded-xl p-2 ${(summary?.net_cash_flow || 0) >= 0 ? 'bg-green-100' : 'bg-rose-100'}`}>
-                  {(summary?.net_cash_flow || 0) >= 0 
-                    ? <TrendingUp size={18} className="text-green-600" />
-                    : <TrendingDown size={18} className="text-rose-600" />
-                  }
-                </div>
-              </div>
-              <p className={`mt-3 text-2xl font-black ${(summary?.net_cash_flow || 0) >= 0 ? 'text-green-700' : 'text-rose-700'}`}>
-                {formatCurrency(summary?.net_cash_flow || 0)}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-500">Cobros recibidos − pagos realizados</p>
-            </div>
-          </div>
-
-          {/* Ledger table */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <BookOpen size={20} className="text-teal-600" />
-                Flujo de Caja — Libro Diario
-              </h2>
-              <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
-                <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5">
-                  <ArrowUpRight size={13} className="inline mr-1" />{formatCurrency(ledgerMetrics.totalIngresos)}
-                </span>
-                <span className="text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-1.5">
-                  <ArrowDownLeft size={13} className="inline mr-1" />{formatCurrency(ledgerMetrics.totalEgresos)}
-                </span>
-                <span className={`rounded-xl px-3 py-1.5 border ${
-                  ledgerMetrics.neto >= 0 
-                    ? 'text-teal-700 bg-teal-50 border-teal-200' 
-                    : 'text-red-700 bg-red-50 border-red-200'
-                }`}>
-                  Neto: {formatCurrency(ledgerMetrics.neto)}
-                </span>
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="flex flex-wrap gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por concepto..."
-                  value={ledgerFiltroBusqueda}
-                  onChange={e => { setLedgerFiltroBusqueda(e.target.value); setLedgerPagina(1) }}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
-                />
-              </div>
-              <select
-                value={ledgerFiltroTipo}
-                onChange={e => { setLedgerFiltroTipo(e.target.value as any); setLedgerPagina(1) }}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold outline-none focus:border-teal-500"
-              >
-                <option value="todos">Todos</option>
-                <option value="ingreso">Ingresos</option>
-                <option value="egreso">Egresos</option>
-              </select>
-              <select
-                value={ledgerFiltroRango}
-                onChange={e => { setLedgerFiltroRango(e.target.value as any); setLedgerPagina(1) }}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold outline-none focus:border-teal-500"
-              >
-                <option value="30">Últimos 30 días</option>
-                <option value="90">Últimos 90 días</option>
-                <option value="365">Último año</option>
-                <option value="todos">Todo el historial</option>
-              </select>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-xs font-black uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-3 text-left">Fecha</th>
-                    <th className="py-3 px-3 text-left">Concepto</th>
-                    <th className="py-3 px-3 text-center">Tipo</th>
-                    <th className="py-3 px-3 text-left">Medio de Pago</th>
-                    <th className="py-3 px-3 text-right">Monto</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ledgerPaginado.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-10 text-center text-slate-400 text-sm font-semibold">
-                        No se encontraron movimientos.
-                      </td>
-                    </tr>
-                  ) : ledgerPaginado.map((e, i) => (
-                    <tr key={e.id} className={`border-b border-slate-100 transition hover:bg-slate-50 ${i % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
-                      <td className="py-3 px-3 text-slate-600 font-semibold">
-                        {new Date(e.entry_date).toLocaleDateString('es-AR')}
-                      </td>
-                      <td className="py-3 px-3 text-slate-800 font-semibold max-w-[300px] truncate">
-                        {e.concept}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-black uppercase ${
-                          e.entry_type === 'ingreso'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
-                          {e.entry_type === 'ingreso' ? <ArrowUpRight size={11} /> : <ArrowDownLeft size={11} />}
-                          {e.entry_type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-slate-500 font-semibold">{e.payment_method || '-'}</td>
-                      <td className={`py-3 px-3 text-right font-black ${e.entry_type === 'ingreso' ? 'text-emerald-700' : 'text-red-700'}`}>
-                        {formatCurrency(e.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {ledgerTotalPages > 1 && (
-              <div className="flex items-center justify-between pt-2">
-                <p className="text-xs text-slate-500 font-semibold">
-                  Página {ledgerPagina} de {ledgerTotalPages} — {ledgerFiltrado.length} registros
-                </p>
-                <div className="flex gap-1">
-                  <button
-                    disabled={ledgerPagina <= 1}
-                    onClick={() => setLedgerPagina(p => p - 1)}
-                    className="rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    disabled={ledgerPagina >= ledgerTotalPages}
-                    onClick={() => setLedgerPagina(p => p + 1)}
-                    className="rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* TAB B: COMPRAS */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'compras' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* CALCULATOR */}
-            <section className="lg:col-span-2 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                  <Settings2 size={20} className="text-teal-600" />
-                  Calculadora &amp; Registro de Compra
-                </h2>
-                {productoSeleccionado && (
-                  <span className="rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700 animate-pulse">
-                    Modo Simulación Activo
-                  </span>
-                )}
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-2">
-                {/* Product search */}
-                <div className="relative space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Seleccionar Producto</label>
-                  <div className="relative">
-                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Buscar producto por nombre o código..."
-                      value={busquedaProducto}
-                      onChange={e => { setBusquedaProducto(e.target.value); setMostrarDropdown(true) }}
-                      onFocus={() => setMostrarDropdown(true)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-10 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
-                    />
-                  </div>
-
-                  {mostrarDropdown && (
-                    <div className="absolute left-0 right-0 z-25 mt-1 max-h-60 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
-                      {productosFiltradosSelector.length === 0 ? (
-                        <div className="p-4 text-xs text-slate-500 font-bold text-center">No se encontraron productos.</div>
-                      ) : (
-                        productosFiltradosSelector.map(prod => (
-                          <button
-                            key={prod.id}
-                            type="button"
-                            onClick={() => handleSeleccionarProducto(prod)}
-                            className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-slate-50 cursor-pointer"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-bold text-slate-800">{prod.name}</p>
-                              <p className="text-[10px] text-slate-500">
-                                {prod.internal_code || 'Sin código'} · {prod.category || 'Sin categoría'}
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-xs font-black text-slate-700">{formatCurrency(prod.cost_price || 0)}</p>
-                              <p className="text-[10px] text-slate-400">Costo actual</p>
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Supplier selector */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Proveedor</label>
-                  <div className="flex gap-2">
-                    <select
-                      value={supplierId}
-                      onChange={e => {
-                        const id = e.target.value
-                        setSupplierId(id)
-                        const prov = proveedores.find(p => p.id === id)
-                        setProveedor(prov?.name || '')
-                      }}
-                      className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500"
-                    >
-                      <option value="">Seleccionar proveedor...</option>
-                      {proveedores.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setMostrandoFormProveedor(true)}
-                      className="shrink-0 rounded-2xl border border-teal-200 bg-teal-50 px-3 text-teal-700 transition hover:bg-teal-100 cursor-pointer"
-                      title="Nuevo Proveedor"
-                    >
-                      <Plus size={18} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Quantity */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Cantidad</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={cantidad}
-                    onChange={e => setCantidad(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
-                  />
-                </div>
-
-                {/* Unit cost */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Costo Unitario</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={costoUnitario}
-                      onChange={e => setCostoUnitario(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
-                    />
-                  </div>
-                </div>
-
-                {/* Date */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Fecha</label>
-                  <input
-                    type="date"
-                    value={fechaCompra}
-                    onChange={e => setFechaCompra(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500"
-                  />
-                </div>
-
-                {/* Invoice */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">N° Factura / Remito</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: FC-A-00001234"
-                    value={facturaProveedor}
-                    onChange={e => setFacturaProveedor(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
-                  />
-                </div>
-
-                {/* Payment method */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Medio de Pago</label>
-                  <select
-                    value={medioPago}
-                    onChange={e => setMedioPago(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500"
-                  >
-                    <option>Transferencia</option>
-                    <option>Efectivo</option>
-                    <option>Cheque</option>
-                    <option>Tarjeta</option>
-                  </select>
-                </div>
-
-                {/* Payment status */}
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Estado de Pago</label>
-                  <select
-                    value={paymentStatus}
-                    onChange={e => setPaymentStatus(e.target.value as 'paid' | 'pending')}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500"
-                  >
-                    <option value="paid">✅ Pagado</option>
-                    <option value="pending">⏳ Pendiente / Cuenta Corriente</option>
-                  </select>
-                </div>
-
-                {/* Amount paid (only for pending) */}
-                {paymentStatus === 'pending' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Monto Pagado Parcial</label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={amountPaid}
-                        onChange={e => setAmountPaid(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
-                      />
-                    </div>
-                    <p className="text-[10px] text-amber-600 font-semibold">
-                      Dejalo en 0 si no se pagó nada. La diferencia queda como deuda con el proveedor.
-                    </p>
-                  </div>
-                )}
-
-                {/* Notes */}
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Observaciones</label>
-                  <input
-                    type="text"
-                    placeholder="Notas adicionales..."
-                    value={observaciones}
-                    onChange={e => setObservaciones(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <RecordTypeSelector value={recordType} onChange={setRecordType} />
-                </div>
-              </div>
-
-              {/* Update sale price option */}
-              {productoSeleccionado && (
-                <div className="rounded-2xl border border-teal-200 bg-teal-50/50 p-4 space-y-3">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={actualizarPrecioVenta}
-                      onChange={e => setActualizarPrecioVenta(e.target.checked)}
-                      className="h-4 w-4 rounded"
-                    />
-                    <span className="text-sm font-bold text-teal-800">Actualizar precio de venta del producto</span>
-                  </label>
-                  {actualizarPrecioVenta && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-slate-500">Nuevo precio de venta:</span>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={precioVentaNuevo}
-                          onChange={e => setPrecioVentaNuevo(e.target.value)}
-                          className="rounded-xl border border-teal-200 bg-white px-7 py-2 text-sm font-bold outline-none focus:border-teal-500 w-40"
-                        />
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-semibold">
-                        Recomendado: {formatCurrency(precioVentaRecomendado)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Actions */}
-              {productoSeleccionado && (
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setMostrarConfirmacion(true)}
-                    disabled={guardando}
-                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-teal-900/20 transition hover:bg-teal-500 disabled:opacity-50 cursor-pointer"
-                  >
-                    {guardando ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                    {guardando ? 'Guardando...' : 'Confirmar y Registrar Compra'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={limpiarSimulador}
-                    className="rounded-2xl border border-slate-200 px-5 py-3.5 text-sm font-bold text-slate-600 transition hover:bg-slate-100 cursor-pointer"
-                  >
-                    Limpiar
-                  </button>
-                </div>
-              )}
-            </section>
-
-            {/* SIMULATION PANEL */}
-            <section className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-xl space-y-5">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                <Info size={15} className="text-teal-400" />
-                Panel de Simulación
+              <h3 className="mt-2 text-3xl font-black text-slate-900">
+                {formatCurrency(cashBalance)}
               </h3>
-
-              <div className="space-y-4">
-                <div className="rounded-2xl bg-white/5 p-4 space-y-2">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Producto</p>
-                  <p className="text-lg font-black truncate">{productoSeleccionado?.name || 'Ninguno seleccionado'}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-white/5 p-3">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Costo Actual</p>
-                    <p className="text-lg font-black text-slate-300">{formatCurrency(productoSeleccionado?.cost_price || 0)}</p>
-                  </div>
-                  <div className="rounded-xl bg-white/5 p-3">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Costo Nuevo</p>
-                    <p className="text-lg font-black text-teal-400">{formatCurrency(Number(costoUnitario) || 0)}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-white/5 p-3">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Total Compra</p>
-                    <p className="text-lg font-black text-white">{formatCurrency(totalSimulado)}</p>
-                  </div>
-                  <div className="rounded-xl bg-white/5 p-3">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Variación</p>
-                    <p className={`text-lg font-black ${variacionCostoSimulada > 0 ? 'text-red-400' : variacionCostoSimulada < 0 ? 'text-green-400' : 'text-slate-400'}`}>
-                      {variacionCostoSimulada > 0 ? '+' : ''}{variacionCostoSimulada}%
-                    </p>
-                  </div>
-                </div>
-
-                {paymentStatus === 'pending' && (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                    <p className="text-[10px] uppercase tracking-widest text-amber-300 font-black">Deuda Generada</p>
-                    <p className="text-lg font-black text-amber-400">
-                      {formatCurrency(totalSimulado - (Number(amountPaid) || 0))}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </section>
+            </div>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 shadow-inner">
+              <Wallet size={24} />
+            </div>
           </div>
-
-          {/* PURCHASE HISTORY TABLE */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-xl font-black text-slate-900">
-                Historial de Compras ({compras.length})
-              </h2>
-              <div className="relative min-w-[200px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar en historial..."
-                  value={filtroBusquedaCompras}
-                  onChange={e => { setFiltroBusquedaCompras(e.target.value); setPaginaCompras(1) }}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-xs font-black uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-2 text-left">Fecha</th>
-                    <th className="py-3 px-2 text-left">Producto</th>
-                    <th className="py-3 px-2 text-left">Proveedor</th>
-                    <th className="py-3 px-2 text-right">Cant.</th>
-                    <th className="py-3 px-2 text-right">C. Unit.</th>
-                    <th className="py-3 px-2 text-right">Total</th>
-                    <th className="py-3 px-2 text-center">Variación</th>
-                    <th className="py-3 px-2 text-center">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comprasPaginadas.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-10 text-center text-slate-400 text-sm font-semibold">
-                        No hay compras registradas.
-                      </td>
-                    </tr>
-                  ) : comprasPaginadas.map((c, i) => (
-                    <tr key={c.id} className={`border-b border-slate-100 transition hover:bg-slate-50 ${i % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
-                      <td className="py-3 px-2 text-slate-600 font-semibold whitespace-nowrap">
-                        {new Date(c.purchase_date).toLocaleDateString('es-AR')}
-                      </td>
-                      <td className="py-3 px-2 font-semibold text-slate-800 max-w-[180px] truncate">{c.product_name}</td>
-                      <td className="py-3 px-2 text-slate-500 font-semibold max-w-[120px] truncate">{c.supplier || '-'}</td>
-                      <td className="py-3 px-2 text-right font-bold text-slate-700">{c.quantity}</td>
-                      <td className="py-3 px-2 text-right font-semibold text-slate-600">{formatCurrency(c.unit_cost)}</td>
-                      <td className="py-3 px-2 text-right font-black text-slate-800">{formatCurrency(c.total_cost)}</td>
-                      <td className="py-3 px-2 text-center">
-                        {c.previous_cost > 0 ? (
-                          <span className={`text-xs font-black ${c.cost_variation > 0 ? 'text-red-600' : c.cost_variation < 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                            {c.cost_variation > 0 ? '+' : ''}{c.cost_variation}%
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">Nuevo</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-2 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-black uppercase ${
-                          c.payment_status === 'paid'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {c.payment_status === 'paid' ? <CheckCircle size={10} /> : <HelpCircle size={10} />}
-                          {c.payment_status === 'paid' ? 'Pagado' : 'Pendiente'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {comprasTotalPages > 1 && (
-              <div className="flex items-center justify-between pt-2">
-                <p className="text-xs text-slate-500 font-semibold">
-                  Página {paginaCompras} de {comprasTotalPages} — {comprasFiltradas.length} registros
-                </p>
-                <div className="flex gap-1">
-                  <button disabled={paginaCompras <= 1} onClick={() => setPaginaCompras(p => p - 1)} className="rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-100 disabled:opacity-30 cursor-pointer">
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button disabled={paginaCompras >= comprasTotalPages} onClick={() => setPaginaCompras(p => p + 1)} className="rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-100 disabled:opacity-30 cursor-pointer">
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
+          <p className="mt-4 text-xs font-bold text-slate-400">
+            Diferencia neta entre cobros y pagos.
+          </p>
         </div>
-      )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* TAB C: PROVEEDORES */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'proveedores' && (
-        <div className="space-y-6">
-          {/* Summary strip */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Proveedores Activos</p>
-              <p className="mt-1 text-2xl font-black text-slate-800">{proveedores.length}</p>
-            </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Deuda Total</p>
-              <p className="mt-1 text-2xl font-black text-amber-700">
-                {formatCurrency(balancesProveedores.reduce((acc, b) => acc + Math.max(b.balance_due, 0), 0))}
+        {/* Deuda Clientes */}
+        <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl transition hover:shadow-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                A Cobrar (Clientes)
               </p>
+              <h3 className="mt-2 text-3xl font-black text-blue-600">
+                {formatCurrency(accountsReceivable)}
+              </h3>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Con Saldo Pendiente</p>
-              <p className="mt-1 text-2xl font-black text-red-600">
-                {balancesProveedores.filter(b => b.balance_due > 0).length}
-              </p>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-inner">
+              <TrendingUp size={24} />
             </div>
           </div>
+          <p className="mt-4 text-xs font-bold text-slate-400">
+            Saldo acumulado pendiente de clientes.
+          </p>
+        </div>
 
-          {/* Suppliers table */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <Truck size={20} className="text-amber-600" />
-                Deudas con Proveedores
-              </h2>
-              <div className="flex gap-2">
-                <div className="relative min-w-[200px]">
-                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar proveedor..."
-                    value={filtroProveedor}
-                    onChange={e => setFiltroProveedor(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-teal-500"
-                  />
-                </div>
+        {/* Deuda Proveedores */}
+        <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl transition hover:shadow-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                A Pagar (Proveedores)
+              </p>
+              <h3 className="mt-2 text-3xl font-black text-rose-600">
+                {formatCurrency(accountsPayable)}
+              </h3>
+            </div>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 shadow-inner">
+              <TrendingDown size={24} />
+            </div>
+          </div>
+          <p className="mt-4 text-xs font-bold text-slate-400">
+            Saldo acumulado pendiente con proveedores.
+          </p>
+        </div>
+      </div>
+
+      {/* 2. PESTAÑAS DE NAVEGACIÓN */}
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+        <button
+          onClick={() => setActiveTab('flujo_caja')}
+          className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
+            activeTab === 'flujo_caja'
+              ? 'bg-slate-900 text-white shadow-lg'
+              : 'text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          Caja Diario / Flujo
+        </button>
+
+        <button
+          onClick={() => setActiveTab('proveedores')}
+          className={`rounded-2xl px-6 py-3.5 text-sm font-black transition-all ${
+            activeTab === 'proveedores' || activeTab === 'cuenta_proveedor'
+              ? 'bg-slate-900 text-white shadow-lg'
+              : 'text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          Proveedores y Cuentas por Pagar
+        </button>
+      </div>
+
+      {/* 3. CONTENIDO DE LAS PESTAÑAS */}
+
+      {/* TAB 1: FLUJO DE CAJA (LIBRO DIARIO) */}
+      {activeTab === 'flujo_caja' && (
+        <div className="space-y-6">
+          {/* Barra de filtros */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative flex-1 max-w-md">
+              <Search
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                size={18}
+              />
+              <input
+                type="text"
+                placeholder="Buscar por concepto o método..."
+                value={ledgerSearch}
+                onChange={(e) => setSupplierSearch(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 pl-12 pr-4 text-sm font-bold text-slate-900 placeholder-slate-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {/* Filtro por tipo de movimiento */}
+              <div className="flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
                 <button
-                  onClick={() => setMostrandoFormProveedor(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-teal-900/20 transition hover:bg-teal-500 cursor-pointer"
+                  onClick={() => setLedgerTypeFilter('all')}
+                  className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider transition ${
+                    ledgerTypeFilter === 'all'
+                      ? 'bg-slate-100 text-slate-900'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
                 >
-                  <Plus size={15} /> Nuevo
+                  Todos
+                </button>
+                <button
+                  onClick={() => setLedgerTypeFilter('ingreso')}
+                  className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider transition ${
+                    ledgerTypeFilter === 'ingreso'
+                      ? 'bg-emerald-50 text-emerald-700 font-black'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Ingresos
+                </button>
+                <button
+                  onClick={() => setLedgerTypeFilter('egreso')}
+                  className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider transition ${
+                    ledgerTypeFilter === 'egreso'
+                      ? 'bg-rose-50 text-rose-700 font-black'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Egresos
                 </button>
               </div>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-xs font-black uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-3 text-left">Proveedor</th>
-                    <th className="py-3 px-3 text-right">Compras</th>
-                    <th className="py-3 px-3 text-right">Total Comprado</th>
-                    <th className="py-3 px-3 text-right">Total Pagado</th>
-                    <th className="py-3 px-3 text-right">Saldo Adeudado</th>
-                    <th className="py-3 px-3 text-center">Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {balancesFiltrados.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-400 text-sm font-semibold">
-                        No hay proveedores registrados.
-                      </td>
-                    </tr>
-                  ) : balancesFiltrados.map((b, i) => (
-                    <tr key={b.supplier_id} className={`border-b border-slate-100 transition hover:bg-slate-50 ${i % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
-                      <td className="py-3 px-3 font-bold text-slate-800">{b.supplier}</td>
-                      <td className="py-3 px-3 text-right text-slate-600 font-semibold">{b.purchase_count}</td>
-                      <td className="py-3 px-3 text-right text-slate-600 font-semibold">{formatCurrency(b.total_purchased)}</td>
-                      <td className="py-3 px-3 text-right text-slate-600 font-semibold">{formatCurrency(b.total_paid)}</td>
-                      <td className={`py-3 px-3 text-right font-black ${b.balance_due > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {formatCurrency(b.balance_due)}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {b.balance_due > 0 && (
-                          <button
-                            onClick={() => {
-                              setSelectedSupplierForPayment(b)
-                              setPagoMonto('')
-                              setPagoPurchaseId('')
-                              setPagoFecha(new Date().toISOString().split('T')[0])
-                            }}
-                            className="inline-flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-[10px] font-bold text-white transition hover:bg-teal-500 cursor-pointer"
-                          >
-                            <CreditCard size={12} /> Registrar Pago
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* TAB D: CLIENTES */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'clientes' && (
-        <div className="space-y-6">
-          {/* Summary strip */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Clientes con Deuda</p>
-              <p className="mt-1 text-2xl font-black text-slate-800">{clientBalances.filter(c => c.balance_due > 0).length}</p>
-            </div>
-            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Total por Cobrar</p>
-              <p className="mt-1 text-2xl font-black text-cyan-700">
-                {formatCurrency(clientBalances.reduce((acc, c) => acc + Math.max(c.balance_due, 0), 0))}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Total Cobrado</p>
-              <p className="mt-1 text-2xl font-black text-emerald-700">
-                {formatCurrency(clientBalances.reduce((acc, c) => acc + c.total_credit, 0))}
-              </p>
-            </div>
-          </div>
-
-          {/* Client debts table */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <Users size={20} className="text-cyan-600" />
-                Cuentas por Cobrar
-              </h2>
-              <div className="relative min-w-[200px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar cliente..."
-                  value={filtroCliente}
-                  onChange={e => setFiltroCliente(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-teal-500"
-                />
+              {/* Filtro por fecha */}
+              <div className="flex gap-2">
+                <FilterButton
+                  active={daysFilter === 'all'}
+                  onClick={() => setDaysFilter('all')}
+                >
+                  Histórico
+                </FilterButton>
+                <FilterButton
+                  active={daysFilter === '7'}
+                  onClick={() => setDaysFilter('7')}
+                >
+                  7 días
+                </FilterButton>
+                <FilterButton
+                  active={daysFilter === '30'}
+                  onClick={() => setDaysFilter('30')}
+                >
+                  30 días
+                </FilterButton>
               </div>
             </div>
+          </div>
 
+          {/* Tabla de Libro Diario */}
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200 text-xs font-black uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-3 text-left">Cliente</th>
-                    <th className="py-3 px-3 text-left">CUIT</th>
-                    <th className="py-3 px-3 text-right">Total Facturado</th>
-                    <th className="py-3 px-3 text-right">Total Cobrado</th>
-                    <th className="py-3 px-3 text-right">Saldo Pendiente</th>
-                    <th className="py-3 px-3 text-center">Acción</th>
+                  <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-black uppercase tracking-widest text-slate-400">
+                    <th className="px-8 py-5">Fecha</th>
+                    <th className="px-8 py-5">Concepto / Detalle</th>
+                    <th className="px-8 py-5 text-center">Tipo</th>
+                    <th className="px-8 py-5">Método de Pago</th>
+                    <th className="px-8 py-5 text-right">Monto</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {clientesFiltrados.length === 0 ? (
+                <tbody className="divide-y divide-slate-100">
+                  {filteredLedgerEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-400 text-sm font-semibold">
-                        No hay clientes con saldo pendiente.
+                      <td colSpan={5} className="px-8 py-16 text-center">
+                        <p className="text-sm font-black text-slate-400 uppercase tracking-wider">
+                          No se encontraron registros de caja.
+                        </p>
                       </td>
                     </tr>
-                  ) : clientesFiltrados.map((c, i) => (
-                    <tr key={c.client_id} className={`border-b border-slate-100 transition hover:bg-slate-50 ${i % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
-                      <td className="py-3 px-3 font-bold text-slate-800">{c.client_name}</td>
-                      <td className="py-3 px-3 text-slate-500 font-semibold">{c.cuit || '-'}</td>
-                      <td className="py-3 px-3 text-right text-slate-600 font-semibold">{formatCurrency(c.total_debit)}</td>
-                      <td className="py-3 px-3 text-right text-slate-600 font-semibold">{formatCurrency(c.total_credit)}</td>
-                      <td className="py-3 px-3 text-right font-black text-red-600">{formatCurrency(c.balance_due)}</td>
-                      <td className="py-3 px-3 text-center">
-                        <button
-                          onClick={() => {
-                            setSelectedClientForPayment(c)
-                            setCobroMonto('')
-                            setCobroMetodo(paymentMethods[0] || 'Transferencia')
-                            setCobroDescripcion('Pago recibido')
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-cyan-600 px-3 py-1.5 text-[10px] font-bold text-white transition hover:bg-cyan-500 cursor-pointer"
+                  ) : (
+                    filteredLedgerEntries.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className="group text-sm font-bold text-slate-800 transition hover:bg-slate-50/50"
+                      >
+                        <td className="whitespace-nowrap px-8 py-5 text-slate-500 font-mono">
+                          {formatDate(entry.entry_date)}
+                        </td>
+                        <td className="px-8 py-5 font-black text-slate-900">
+                          {entry.concept}
+                        </td>
+                        <td className="whitespace-nowrap px-8 py-5 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-wider ${
+                              entry.entry_type === 'ingreso'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-rose-50 text-rose-700'
+                            }`}
+                          >
+                            {entry.entry_type === 'ingreso' ? (
+                              <ArrowDownCircle size={14} />
+                            ) : (
+                              <ArrowUpCircle size={14} />
+                            )}
+                            {entry.entry_type}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-8 py-5 text-slate-500">
+                          {entry.payment_method || 'Sin especificar'}
+                        </td>
+                        <td
+                          className={`whitespace-nowrap px-8 py-5 text-right font-black text-base ${
+                            entry.entry_type === 'ingreso'
+                              ? 'text-emerald-600'
+                              : 'text-rose-600'
+                          }`}
                         >
-                          <CreditCard size={12} /> Registrar Cobro
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          {entry.entry_type === 'ingreso' ? '+' : '-'}
+                          {formatCurrency(entry.amount)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* MODALS */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-
-      {/* ─── Confirmation Modal (Compras) ──── */}
-      {mostrarConfirmacion && productoSeleccionado && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setMostrarConfirmacion(false)}>
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">Confirmar Compra</h3>
-              <button onClick={() => setMostrarConfirmacion(false)} className="rounded-full p-1 hover:bg-slate-100 cursor-pointer">
-                <X size={20} className="text-slate-500" />
-              </button>
-            </div>
-            <div className="space-y-2 rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm"><strong>Producto:</strong> {productoSeleccionado.name}</p>
-              <p className="text-sm"><strong>Proveedor:</strong> {proveedor || 'Sin especificar'}</p>
-              <p className="text-sm"><strong>Cantidad:</strong> {cantidad} × {formatCurrency(Number(costoUnitario))} = <strong>{formatCurrency(totalSimulado)}</strong></p>
-              <p className="text-sm"><strong>Estado:</strong>{' '}
-                <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-black uppercase ${
-                  paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {paymentStatus === 'paid' ? '✅ Pagado' : '⏳ Pendiente'}
-                </span>
-              </p>
-              {actualizarPrecioVenta && (
-                <p className="text-sm"><strong>Nuevo Precio de Venta:</strong> {formatCurrency(Number(precioVentaNuevo))}</p>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={guardarCompra}
-                disabled={guardando}
-                className="flex-1 rounded-2xl bg-teal-600 py-3 text-sm font-bold text-white transition hover:bg-teal-500 disabled:opacity-50 cursor-pointer"
-              >
-                {guardando ? 'Guardando...' : 'Confirmar'}
-              </button>
-              <button
-                onClick={() => setMostrarConfirmacion(false)}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-100 cursor-pointer"
-              >
-                Cancelar
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── New Supplier Modal ──── */}
-      {mostrandoFormProveedor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setMostrandoFormProveedor(false)}>
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">Nuevo Proveedor</h3>
-              <button onClick={() => setMostrandoFormProveedor(false)} className="rounded-full p-1 hover:bg-slate-100 cursor-pointer">
-                <X size={20} className="text-slate-500" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Nombre del proveedor *"
-                value={nuevoProveedorNombre}
-                onChange={e => setNuevoProveedorNombre(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
+      {/* TAB 2: PROVEEDORES */}
+      {activeTab === 'proveedores' && (
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative flex-1 max-w-md">
+              <Search
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                size={18}
               />
               <input
                 type="text"
-                placeholder="CUIT (opcional)"
-                value={nuevoProveedorCuit}
-                onChange={e => setNuevoProveedorCuit(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
-              />
-              <input
-                type="text"
-                placeholder="Teléfono (opcional)"
-                value={nuevoProveedorPhone}
-                onChange={e => setNuevoProveedorPhone(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
-              />
-              <input
-                type="email"
-                placeholder="Email (opcional)"
-                value={nuevoProveedorEmail}
-                onChange={e => setNuevoProveedorEmail(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
+                placeholder="Buscar proveedor..."
+                value={supplierSearch}
+                onChange={(e) => setSupplierSearch(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-white py-3.5 pl-12 pr-4 text-sm font-bold text-slate-900 placeholder-slate-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </div>
+
             <button
-              onClick={handleCrearProveedor}
-              disabled={guardandoProveedor || !nuevoProveedorNombre.trim()}
-              className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-bold text-white transition hover:bg-teal-500 disabled:opacity-50 cursor-pointer"
+              onClick={() => setShowSupplierModal(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500"
             >
-              {guardandoProveedor ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Registrar Proveedor'}
+              <Plus size={18} />
+              Nuevo Proveedor
             </button>
           </div>
+
+          {/* Lista de Proveedores */}
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-black uppercase tracking-widest text-slate-400">
+                    <th className="px-8 py-5">Nombre / Razón Social</th>
+                    <th className="px-8 py-5">CUIT</th>
+                    <th className="px-8 py-5">Contacto</th>
+                    <th className="px-8 py-5 text-right">Saldo Deuda</th>
+                    <th className="px-8 py-5 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredSuppliers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-8 py-16 text-center">
+                        <p className="text-sm font-black text-slate-400 uppercase tracking-wider">
+                          No se encontraron proveedores.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSuppliers.map((supplier) => {
+                      const bal = supplier.balance || 0
+                      return (
+                        <tr
+                          key={supplier.id}
+                          className="group text-sm font-bold text-slate-800 transition hover:bg-slate-50/50"
+                        >
+                          <td className="px-8 py-5">
+                            <p className="font-black text-slate-900 text-base">
+                              {supplier.name}
+                            </p>
+                            {supplier.address && (
+                              <p className="text-xs font-semibold text-slate-400 mt-0.5 flex items-center gap-1">
+                                <MapPin size={12} /> {supplier.address}
+                              </p>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-8 py-5 text-slate-500 font-mono">
+                            {supplier.cuit || 'Sin CUIT'}
+                          </td>
+                          <td className="px-8 py-5">
+                            <div className="space-y-0.5 text-xs text-slate-500 font-semibold">
+                              {supplier.phone && (
+                                <p className="flex items-center gap-1">
+                                  <Phone size={12} /> {supplier.phone}
+                                </p>
+                              )}
+                              {supplier.email && (
+                                <p className="flex items-center gap-1">
+                                  <Mail size={12} /> {supplier.email}
+                                </p>
+                              )}
+                              {!supplier.phone && !supplier.email && (
+                                <span className="text-slate-400 font-medium">Sin contacto</span>
+                              )}
+                            </div>
+                          </td>
+                          <td
+                            className={`whitespace-nowrap px-8 py-5 text-right font-black text-base ${
+                              bal > 0 ? 'text-rose-600' : 'text-slate-500'
+                            }`}
+                          >
+                            {formatCurrency(bal)}
+                          </td>
+                          <td className="whitespace-nowrap px-8 py-5 text-center">
+                            <button
+                              onClick={() => handleSelectSupplier(supplier)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition hover:border-slate-350 hover:bg-slate-50"
+                            >
+                              Ver Cuenta Corriente
+                              <ChevronRight size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ─── Supplier Payment Modal ──── */}
-      {selectedSupplierForPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setSelectedSupplierForPayment(null)}>
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">Registrar Pago a Proveedor</h3>
-              <button onClick={() => setSelectedSupplierForPayment(null)} className="rounded-full p-1 hover:bg-slate-100 cursor-pointer">
-                <X size={20} className="text-slate-500" />
+      {/* TAB 3: CUENTA CORRIENTE DE PROVEEDOR (DETALLE) */}
+      {activeTab === 'cuenta_proveedor' && selectedSupplier && (
+        <div className="space-y-6">
+          {/* Encabezado e info de proveedor */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setActiveTab('proveedores')}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <div>
+                <span className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  Cuenta Corriente
+                </span>
+                <h2 className="text-2xl font-black text-slate-900">
+                  {selectedSupplier.name}
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setMovementModalType('Compra')
+                  setShowMovementModal(true)
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-100"
+              >
+                <TrendingDown size={18} />
+                Registrar Compra / Deuda
+              </button>
+
+              <button
+                onClick={() => {
+                  setMovementModalType('Pago')
+                  setShowMovementModal(true)
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+              >
+                <CreditCard size={18} />
+                Registrar Pago
               </button>
             </div>
+          </div>
 
-            <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 space-y-1">
-              <p className="text-sm font-bold text-amber-800">{selectedSupplierForPayment.supplier}</p>
-              <p className="text-xs text-amber-700">
-                Deuda actual: <strong>{formatCurrency(selectedSupplierForPayment.balance_due)}</strong>
+          {/* Resumen de saldo del proveedor */}
+          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-slate-500">
+                CUIT: <span className="font-mono">{selectedSupplier.cuit || 'Sin CUIT'}</span>
+              </p>
+              <p className="text-xs font-bold text-slate-500">
+                Dirección: <span>{selectedSupplier.address || 'Sin dirección'}</span>
               </p>
             </div>
+            <div className="text-right">
+              <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                Saldo Deudor Actual
+              </p>
+              <p
+                className={`text-2xl font-black mt-1 ${
+                  (selectedSupplier.balance || 0) > 0 ? 'text-rose-600' : 'text-slate-600'
+                }`}
+              >
+                {formatCurrency(selectedSupplier.balance || 0)}
+              </p>
+            </div>
+          </div>
 
-            <div className="space-y-3">
-              {/* Imputar a compra específica o FIFO */}
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Imputar a Compra</label>
-                <select
-                  value={pagoPurchaseId}
-                  onChange={e => setPagoPurchaseId(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500"
-                >
-                  <option value="">Automático (FIFO — más antiguas primero)</option>
-                  {comprasPendientesProveedor.filter(c => c.record_type === recordType).map(c => (
-                    <option key={c.id} value={c.id}>
-                      {new Date(c.purchase_date).toLocaleDateString('es-AR')} — {c.product_name} — Pendiente: {formatCurrency((c.total_cost || 0) - (c.amount_paid || 0))}
-                    </option>
-                  ))}
-                </select>
+          {/* Tabla de Movimientos del Proveedor */}
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl">
+            {movementsLoading ? (
+              <div className="flex h-48 items-center justify-center gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <p className="text-sm font-black text-slate-400 uppercase tracking-widest">
+                  Cargando movimientos...
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-black uppercase tracking-widest text-slate-400">
+                      <th className="px-8 py-5">Fecha</th>
+                      <th className="px-8 py-5">Descripción</th>
+                      <th className="px-8 py-5 text-right">Compra (Haber)</th>
+                      <th className="px-8 py-5 text-right">Pago (Debe)</th>
+                      <th className="px-8 py-5 text-right">Saldo Acumulado</th>
+                      <th className="px-8 py-5 text-center">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {supplierRunningBalanceMovements.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-8 py-16 text-center">
+                          <p className="text-sm font-black text-slate-400 uppercase tracking-wider">
+                            No hay movimientos registrados en esta cuenta.
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      supplierRunningBalanceMovements.map((movement) => (
+                        <tr
+                          key={movement.id}
+                          className="group text-sm font-bold text-slate-800 transition hover:bg-slate-50/50"
+                        >
+                          <td className="whitespace-nowrap px-8 py-5 text-slate-500 font-mono">
+                            {formatDate(movement.movement_date)}
+                          </td>
+                          <td className="px-8 py-5">
+                            <p className="font-black text-slate-900">
+                              {movement.description}
+                            </p>
+                            {movement.payment_method && (
+                              <span className="inline-block mt-1 text-[10px] font-black uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                                {movement.payment_method}
+                              </span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-8 py-5 text-right text-rose-600 font-black">
+                            {movement.credit > 0 ? `+${formatCurrency(movement.credit)}` : '-'}
+                          </td>
+                          <td className="whitespace-nowrap px-8 py-5 text-right text-emerald-600 font-black">
+                            {movement.debit > 0 ? `-${formatCurrency(movement.debit)}` : '-'}
+                          </td>
+                          <td className="whitespace-nowrap px-8 py-5 text-right font-black">
+                            {formatCurrency(movement.runningBalance)}
+                          </td>
+                          <td className="whitespace-nowrap px-8 py-5 text-center">
+                            <button
+                              onClick={() => handleDeleteMovement(movement.id)}
+                              disabled={deletingId === movement.id}
+                              className="text-slate-400 hover:text-rose-600 transition disabled:opacity-50"
+                              title="Eliminar movimiento"
+                            >
+                              {deletingId === movement.id ? (
+                                <Loader2 size={16} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={16} />
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODALS */}
+      {/* ========================================================================= */}
+
+      {/* MODAL NUEVOR PROVEEDOR */}
+      {showSupplierModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[2.5rem] border border-slate-100 bg-white p-8 shadow-2xl transition-all animate-in zoom-in-95">
+            <h2 className="text-2xl font-black text-slate-900">Nuevo Proveedor</h2>
+            <p className="mt-1 text-xs font-bold text-slate-400">
+              Registrá una nueva entidad proveedora para su cuenta corriente.
+            </p>
+
+            <form onSubmit={handleCreateSupplier} className="mt-6 space-y-4">
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Razón Social / Nombre *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newSupplierName}
+                  onChange={(e) => setNewSupplierName(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                  placeholder="Ej: Distribuidora Sol S.A."
+                />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Monto del Pago</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  CUIT / Identificación
+                </label>
+                <input
+                  type="text"
+                  value={newSupplierCuit}
+                  onChange={(e) => setNewSupplierCuit(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                  placeholder="Ej: 30-71234567-8"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                    Teléfono
+                  </label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={pagoMonto}
-                    onChange={e => setPagoMonto(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
+                    type="text"
+                    value={newSupplierPhone}
+                    onChange={(e) => setNewSupplierPhone(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                    placeholder="Ej: 11 5555 5555"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={newSupplierEmail}
+                    onChange={(e) => setNewSupplierEmail(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                    placeholder="Ej: ventas@proveedor.com"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Medio de Pago</label>
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Dirección
+                </label>
+                <input
+                  type="text"
+                  value={newSupplierAddress}
+                  onChange={(e) => setNewSupplierAddress(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                  placeholder="Ej: Av. Rivadavia 1234, CABA"
+                />
+              </div>
+
+              <div className="mt-8 flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowSupplierModal(false)}
+                  className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSupplier}
+                  className="flex-1 rounded-2xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500 disabled:opacity-50"
+                >
+                  {savingSupplier ? (
+                    <Loader2 size={18} className="animate-spin mx-auto" />
+                  ) : (
+                    'Guardar'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL REGISTRAR MOVIMIENTO (COMPRA O PAGO) */}
+      {showMovementModal && selectedSupplier && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[2.5rem] border border-slate-100 bg-white p-8 shadow-2xl transition-all animate-in zoom-in-95">
+            <h2 className="text-2xl font-black text-slate-900">
+              {movementModalType === 'Compra' ? 'Registrar Compra / Gasto' : 'Registrar Pago'}
+            </h2>
+            <p className="mt-1 text-xs font-bold text-slate-400">
+              Registrar transacción en la cuenta corriente de{' '}
+              <span className="font-extrabold text-slate-600">{selectedSupplier.name}</span>.
+            </p>
+
+            <form onSubmit={handleCreateSupplierMovement} className="mt-6 space-y-4">
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Monto ($) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  step="0.01"
+                  min="0.01"
+                  max={movementModalType === 'Pago' ? (selectedSupplier.balance || 0) : undefined}
+                  value={movementAmount}
+                  onChange={(e) => {
+                    setMovementAmount(e.target.value)
+                    if (purchasePaymentType === 'pago_total') {
+                      setPurchasePaidAmount(e.target.value)
+                    }
+                  }}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Fecha *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={movementDate}
+                  onChange={(e) => setMovementDate(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                />
+              </div>
+
+              {movementModalType === 'Compra' && (
+                <>
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                      Condición de Pago
+                    </label>
+                    <select
+                      value={purchasePaymentType}
+                      onChange={(e) => {
+                        const val = e.target.value as any
+                        setPurchasePaymentType(val)
+                        if (val === 'pago_total') {
+                          setPurchasePaidAmount(movementAmount)
+                        } else {
+                          setPurchasePaidAmount('')
+                        }
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                    >
+                      <option value="cuenta_corriente">A Cuenta Corriente (100% Crédito)</option>
+                      <option value="pago_total">Pago Total (100% Contado)</option>
+                      <option value="pago_parcial">Pago Parcial</option>
+                    </select>
+                  </div>
+
+                  {purchasePaymentType === 'pago_parcial' && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                      <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                        Monto Pagado ($) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        step="0.01"
+                        min="0.01"
+                        max={movementAmount}
+                        value={purchasePaidAmount}
+                        onChange={(e) => setPurchasePaidAmount(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                        placeholder="0.00"
+                      />
+                      <p className="text-[11px] text-slate-400 font-semibold mt-1">
+                        El monto restante se registrará como saldo deudor.
+                      </p>
+                    </div>
+                  )}
+
+                  {(purchasePaymentType === 'pago_total' || purchasePaymentType === 'pago_parcial') && (
+                    <div className="animate-in fade-in duration-200">
+                      <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                        Método de Pago
+                      </label>
+                      <select
+                        value={purchasePaymentMethod}
+                        onChange={(e) => setPurchasePaymentMethod(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                      >
+                        {initialPaymentMethods.map((method) => (
+                          <option key={method} value={method}>
+                            {method}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {movementModalType === 'Pago' && (
+                <div>
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                    Método de Pago
+                  </label>
                   <select
-                    value={pagoMetodo}
-                    onChange={e => setPagoMetodo(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500"
+                    value={selectedPaymentMethod}
+                    onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                   >
-                    <option>Transferencia</option>
-                    <option>Efectivo</option>
-                    <option>Cheque</option>
-                    <option>Tarjeta</option>
+                    {initialPaymentMethods.map((method) => (
+                      <option key={method} value={method}>
+                        {method}
+                      </option>
+                    ))}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Fecha</label>
-                  <input
-                    type="date"
-                    value={pagoFecha}
-                    onChange={e => setPagoFecha(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500"
-                  />
-                </div>
-              </div>
+              )}
 
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Descripción</label>
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Detalle / Descripción
+                </label>
                 <input
                   type="text"
-                  value={pagoDescripcion}
-                  onChange={e => setPagoDescripcion(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-teal-500 focus:bg-white"
+                  value={movementDescription}
+                  onChange={(e) => setMovementDescription(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 px-4 text-sm font-bold text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:bg-white"
+                  placeholder={
+                    movementModalType === 'Compra'
+                      ? 'Ej: Compra de materia prima Factura A-12'
+                      : 'Ej: Transferencia bancaria'
+                  }
                 />
               </div>
 
-              <div className="space-y-2">
-                <RecordTypeSelector value={recordType} onChange={setRecordType} />
-              </div>
-            </div>
-
-            <button
-              onClick={registrarPagoProveedor}
-              disabled={guardandoPago || !pagoMonto || Number(pagoMonto) <= 0}
-              className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-bold text-white transition hover:bg-teal-500 disabled:opacity-50 cursor-pointer"
-            >
-              {guardandoPago ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Registrar Pago'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ─── Client Payment Modal ──── */}
-      {selectedClientForPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setSelectedClientForPayment(null)}>
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">Registrar Cobro</h3>
-              <button onClick={() => setSelectedClientForPayment(null)} className="rounded-full p-1 hover:bg-slate-100 cursor-pointer">
-                <X size={20} className="text-slate-500" />
-              </button>
-            </div>
-
-            <div className="rounded-2xl bg-cyan-50 border border-cyan-200 p-4 space-y-1">
-              <p className="text-sm font-bold text-cyan-800">{selectedClientForPayment.client_name}</p>
-              <p className="text-xs text-cyan-700">
-                Deuda actual: <strong>{formatCurrency(selectedClientForPayment.balance_due)}</strong>
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Monto del Cobro</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={cobroMonto}
-                    onChange={e => setCobroMonto(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Medio de Pago</label>
-                <select
-                  value={cobroMetodo}
-                  onChange={e => setCobroMetodo(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500"
+              <div className="mt-8 flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowMovementModal(false)}
+                  className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-black text-slate-600 transition hover:bg-slate-50"
                 >
-                  {paymentMethods.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                  {paymentMethods.length === 0 && (
-                    <>
-                      <option>Transferencia</option>
-                      <option>Efectivo</option>
-                      <option>Cheque</option>
-                    </>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingMovement}
+                  className={`flex-1 rounded-2xl py-3.5 text-sm font-black text-white shadow-lg transition disabled:opacity-50 ${
+                    movementModalType === 'Compra'
+                      ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-900/20'
+                      : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20'
+                  }`}
+                >
+                  {savingMovement ? (
+                    <Loader2 size={18} className="animate-spin mx-auto" />
+                  ) : (
+                    'Registrar'
                   )}
-                </select>
+                </button>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Descripción</label>
-                <input
-                  type="text"
-                  value={cobroDescripcion}
-                  onChange={e => setCobroDescripcion(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-teal-500 focus:bg-white"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <RecordTypeSelector value={recordType} onChange={setRecordType} />
-              </div>
-            </div>
-
-
-            <button
-              onClick={registrarCobroCliente}
-              disabled={guardandoCobro || !cobroMonto || Number(cobroMonto) <= 0}
-              className="w-full rounded-2xl bg-cyan-600 py-3 text-sm font-bold text-white transition hover:bg-cyan-500 disabled:opacity-50 cursor-pointer"
-            >
-              {guardandoCobro ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Registrar Cobro'}
-            </button>
+            </form>
           </div>
         </div>
       )}

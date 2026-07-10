@@ -4,6 +4,11 @@ import { Arca } from '@arcasdk/core'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import https from 'https'
+
+// AFIP homologation servers use 1024-bit Diffie-Hellman keys. Modern Node/OpenSSL (>= 17) requires 2048-bit keys by default (@SECLEVEL=2).
+// Lowering the security level to 1 programmatically bypasses the 'dh key too small' error.
+https.globalAgent.options.ciphers = 'DEFAULT:@SECLEVEL=1'
 
 export async function POST(request: Request) {
   const tempDir = os.tmpdir()
@@ -30,21 +35,80 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Configuración fiscal no encontrada' }, { status: 404 })
     }
 
+    // Split certificate content to separate the actual cert from cached ticket
+    const certParts = config.cert_content.split('===WSAA_TICKET===')
+    const actualCert = certParts[0].trim()
+    const cachedTicketStr = certParts[1]?.trim()
+
+    let cachedTicket: any = null
+    if (cachedTicketStr) {
+      try {
+        cachedTicket = JSON.parse(cachedTicketStr)
+      } catch (e) {
+        console.error('Error parsing cached ticket:', e)
+      }
+    }
+
+    const now = Date.now()
+    const isTicketValid = cachedTicket && cachedTicket.expiresAt && cachedTicket.expiresAt > now + 60000
+
     // 2. Crear archivos temporales
-    fs.writeFileSync(certPath, config.cert_content)
-    fs.writeFileSync(keyPath, config.key_content)
+    fs.writeFileSync(certPath, actualCert)
+    fs.writeFileSync(keyPath, config.key_content.split('===WSAA_TICKET===')[0].trim())
 
     // 3. Inicializar ARCA SDK
-    const arca = new Arca({
+    const arcaOptions: any = {
       key: fs.readFileSync(keyPath, 'utf8'),
       cert: fs.readFileSync(certPath, 'utf8'),
       cuit: parseInt(config.cuit.replace(/-/g, '')),
       production: !config.is_sandbox,
-      ticketPath: path.join(os.tmpdir(), 'arca-tickets-stable')
-    })
+      useHttpsAgent: true,
+    }
+
+    if (isTicketValid) {
+      arcaOptions.credentials = cachedTicket.credentials
+      arcaOptions.handleTicket = true
+    } else {
+      arcaOptions.ticketPath = path.join(os.tmpdir(), 'arca-tickets-stable')
+    }
+
+    const arca = new Arca(arcaOptions)
 
     // 4. Probar estado del servidor WSFE
     const status = await arca.electronicBillingService.getServerStatus()
+
+    // Si no teníamos un ticket válido en DB y se creó uno nuevo en disco, guardarlo en la DB
+    if (!isTicketValid) {
+      const cuitClean = config.cuit.replace(/-/g, '')
+      const ticketFileName = `TA-${cuitClean}-wsfe.json`
+      const ticketFilePath = path.join(os.tmpdir(), 'arca-tickets-stable', ticketFileName)
+      
+      if (fs.existsSync(ticketFilePath)) {
+        try {
+          const ticketContent = fs.readFileSync(ticketFilePath, 'utf8')
+          const ticketData = JSON.parse(ticketContent)
+          const expirationStr = ticketData.header?.[1]?.expirationtime
+          if (expirationStr) {
+            const expiresAt = new Date(expirationStr).getTime()
+            const payload = {
+              credentials: {
+                header: ticketData.header,
+                credentials: ticketData.credentials
+              },
+              expiresAt
+            }
+            const updatedCertContent = `${actualCert}\n===WSAA_TICKET===\n${JSON.stringify(payload)}`
+            await supabaseAdmin
+              .from('afip_configs')
+              .update({ cert_content: updatedCertContent })
+              .eq('company_id', company_id)
+            console.log('Successfully cached WSAA ticket in database from test-connection.')
+          }
+        } catch (err) {
+          console.error('Failed to cache ticket in database from test-connection:', err)
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -59,7 +123,8 @@ export async function POST(request: Request) {
       (error.message || '') + 
       (error.response?.data?.message || '') + 
       (error.body?.message || '') +
-      JSON.stringify(error)
+      (error.faultstring || '') +
+      (error.toString?.() || '')
     ).toLowerCase()
 
     const isAlreadyAuth = 

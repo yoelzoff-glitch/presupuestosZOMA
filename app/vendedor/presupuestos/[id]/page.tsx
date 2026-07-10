@@ -184,9 +184,152 @@ export default function VendedorPresupuestoDetalle() {
       <style jsx global>{`
         #print-section { display: none !important; }
         @media print {
-          nav, aside, header, .no-print, button { display: none !important; }
-          #print-section { display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: white; padding: 20px; z-index: 9999; }
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          nav, aside, header, .no-print, button, .print-hidden, [class*="print:hidden"] { 
+            display: none !important; 
+            visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          html, body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 210mm !important;
+            height: auto !important;
+          }
+          #__next, main, .main-content {
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+          }
+          #print-section { 
+            display: block !important; 
+            visibility: visible !important; 
+            position: absolute !important; 
+            top: 0 !important; 
+            left: 0 !important; 
+            width: 210mm !important; 
+            min-height: 297mm !important; 
+            background: white !important; 
+            padding: 15mm !important; 
+            z-index: 9999 !important; 
+          }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+          /* SISTEMA DE ESCALADO INTELIGENTE SEGÚN CANTIDAD DE ÍTEMS */
+
+          /* 1. DENSE LAYOUT (8-11 ítems) */
+          #print-section.dense {
+            padding: 12mm !important;
+          }
+          #print-section.dense .pb-6 {
+            padding-bottom: 10px !important;
+          }
+          #print-section.dense .mb-8 {
+            margin-bottom: 12px !important;
+          }
+          #print-section.dense .p-4, #print-section.dense .bg-slate-50 {
+            padding: 12px !important;
+            margin-bottom: 12px !important;
+          }
+          #print-section.dense table {
+            margin-bottom: 12px !important;
+            font-size: 9.5px !important;
+          }
+          #print-section.dense table th,
+          #print-section.dense table td {
+            padding: 6px 8px !important;
+          }
+          #print-section.dense .text-xl {
+            font-size: 1.25rem !important;
+          }
+          #print-section.dense .text-2xl {
+            font-size: 1.35rem !important;
+          }
+          #print-section.dense .bg-slate-950 {
+            padding: 12px !important;
+            border-radius: 14px !important;
+          }
+          #print-section.dense .text-3xl {
+            font-size: 1.6rem !important;
+          }
+
+          /* 2. ULTRA DENSE LAYOUT (12-17 ítems) */
+          #print-section.ultra-dense {
+            padding: 10mm !important;
+          }
+          #print-section.ultra-dense .pb-6 {
+            padding-bottom: 8px !important;
+          }
+          #print-section.ultra-dense .mb-8 {
+            margin-bottom: 10px !important;
+          }
+          #print-section.ultra-dense .p-4, #print-section.ultra-dense .bg-slate-50 {
+            padding: 8px !important;
+            margin-bottom: 10px !important;
+          }
+          #print-section.ultra-dense table {
+            margin-bottom: 10px !important;
+            font-size: 8.8px !important;
+          }
+          #print-section.ultra-dense table th,
+          #print-section.ultra-dense table td {
+            padding: 4.5px 6px !important;
+          }
+          #print-section.ultra-dense .text-xl {
+            font-size: 1.1rem !important;
+          }
+          #print-section.ultra-dense .text-2xl {
+            font-size: 1.2rem !important;
+          }
+          #print-section.ultra-dense .bg-slate-950 {
+            padding: 8px !important;
+            border-radius: 12px !important;
+          }
+          #print-section.ultra-dense .text-3xl {
+            font-size: 1.4rem !important;
+          }
+
+          /* 3. SUPER DENSE LAYOUT (18+ ítems) */
+          #print-section.super-dense {
+            padding: 8mm !important;
+          }
+          #print-section.super-dense .pb-6 {
+            padding-bottom: 4px !important;
+          }
+          #print-section.super-dense .mb-8 {
+            margin-bottom: 8px !important;
+          }
+          #print-section.super-dense .p-4, #print-section.super-dense .bg-slate-50 {
+            padding: 6px !important;
+            margin-bottom: 8px !important;
+          }
+          #print-section.super-dense table {
+            margin-bottom: 8px !important;
+            font-size: 8px !important;
+          }
+          #print-section.super-dense table th,
+          #print-section.super-dense table td {
+            padding: 3px 5px !important;
+          }
+          #print-section.super-dense .text-xl {
+            font-size: 1.0rem !important;
+          }
+          #print-section.super-dense .text-2xl {
+            font-size: 1.1rem !important;
+          }
+          #print-section.super-dense .bg-slate-950 {
+            padding: 6px !important;
+            border-radius: 10px !important;
+          }
+          #print-section.super-dense .text-3xl {
+            font-size: 1.25rem !important;
+          }
         }
       `}</style>
 
@@ -269,7 +412,7 @@ export default function VendedorPresupuestoDetalle() {
       </div>
 
       {/* PDF PRINT SECTION */}
-      <div id="print-section">
+      <div id="print-section" className={items.length > 17 ? 'super-dense' : items.length > 11 ? 'ultra-dense' : items.length > 7 ? 'dense' : ''}>
         <div className="flex justify-between border-b-2 border-slate-900 pb-6 mb-8">
           <div>
             <h1 className="text-2xl font-black">{company?.name}</h1>

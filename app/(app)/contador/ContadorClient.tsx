@@ -1,17 +1,17 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { 
-  FileText, 
-  Download, 
-  Search, 
-  Building2, 
-  Calendar, 
-  DollarSign, 
-  Receipt, 
-  Percent, 
-  Loader2, 
-  CheckCircle2, 
+import {
+  FileText,
+  Download,
+  Search,
+  Building2,
+  Calendar,
+  DollarSign,
+  Receipt,
+  Percent,
+  Loader2,
+  CheckCircle2,
   UserPlus,
   Users,
   Settings,
@@ -81,10 +81,10 @@ type Props = {
   contadoresIniciales: DBContador[]
 }
 
-export default function ContadorClient({ 
-  invoicesIniciales, 
-  idEmpresa, 
-  nombreEmpresa, 
+export default function ContadorClient({
+  invoicesIniciales,
+  idEmpresa,
+  nombreEmpresa,
   configFiscal,
   clients,
   movements,
@@ -93,7 +93,7 @@ export default function ContadorClient({
 }: Props) {
   const [activeTab, setActiveTab] = useState<'iva' | 'cc' | 'config' | 'fiscal'>('iva')
   const [invoices] = useState<Invoice[]>(invoicesIniciales)
-  
+
   const [fiscalConfig, setFiscalConfig] = useState({
     cuit: configFiscal?.cuit || configFiscal?.afip_cuit || '',
     tipo_contribuyente: configFiscal?.tipo_contribuyente || 'monotributo',
@@ -154,7 +154,7 @@ export default function ContadorClient({
       setTestingFiscal(false)
     }
   }
-  
+
   // Estados para Búsqueda
   const [busquedaIva, setBusquedaIva] = useState('')
   const [busquedaCc, setBusquedaCc] = useState('')
@@ -178,14 +178,14 @@ export default function ContadorClient({
   // Filtrar facturas por mes seleccionado e input de búsqueda
   const facturasFiltradas = useMemo(() => {
     const [selYear, selMonth] = mesSeleccionado.split('-')
-    
+
     return invoices.filter(f => {
       const [fYear, fMonth] = f.invoice_date.split('-')
       const coincideMes = fYear === selYear && fMonth === selMonth
 
       const q = busquedaIva.toLowerCase().trim()
-      const coincideBusqueda = !q || 
-        f.client?.name?.toLowerCase().includes(q) || 
+      const coincideBusqueda = !q ||
+        f.client?.name?.toLowerCase().includes(q) ||
         f.client?.cuit?.replace(/-/g, '').includes(q) ||
         String(f.afip_comprobante_numero).includes(q)
 
@@ -204,7 +204,7 @@ export default function ContadorClient({
     facturasFiltradas.forEach(f => {
       const isNC = [3, 8, 13].includes(f.afip_comprobante_tipo) || f.status === 'cancelled'
       const total = Number(f.total_amount)
-      
+
       const esInscripto = [1, 6, 3, 8, 2, 7].includes(f.afip_comprobante_tipo)
       const neto = esInscripto ? total / 1.21 : total
       const iva = esInscripto ? total - neto : 0
@@ -238,7 +238,7 @@ export default function ContadorClient({
       const debito = ms.reduce((sum, m) => sum + Number(m.debit || 0), 0)
       const credito = ms.reduce((sum, m) => sum + Number(m.credit || 0), 0)
       const saldo = debito - credito
-      
+
       return {
         ...c,
         debito,
@@ -247,8 +247,8 @@ export default function ContadorClient({
       }
     }).filter(c => {
       const q = busquedaCc.toLowerCase().trim()
-      return !q || 
-        c.name.toLowerCase().includes(q) || 
+      return !q ||
+        c.name.toLowerCase().includes(q) ||
         c.cuit?.replace(/-/g, '').includes(q)
     })
   }, [clients, movements, busquedaCc])
@@ -346,7 +346,7 @@ export default function ContadorClient({
         .select('id, full_name, created_at')
         .eq('company_id', idEmpresa)
         .eq('role', 'contador')
-      
+
       if (updated) {
         setContadores(updated)
       }
@@ -366,16 +366,16 @@ export default function ContadorClient({
 
   async function desvincularContador(id: string) {
     if (!confirm('¿Estás seguro de que deseas desvincular este estudio contable? Perderá el acceso de forma inmediata.')) return
-    
+
     setDesvinculando(id)
     try {
       const { error } = await supabase
         .from('users_profiles')
         .delete()
         .eq('id', id)
-      
+
       if (error) throw error
-      
+
       setContadores(prev => prev.filter(c => c.id !== id))
       toast.success('Estudio contable desvinculado con éxito')
       if (contadores.length <= 1) {
@@ -391,14 +391,13 @@ export default function ContadorClient({
   return (
     <div className="space-y-6">
       {/* TABS DE NAVEGACIÓN PRINCIPAL */}
-      <div className="flex border-b border-slate-200 bg-white rounded-2xl p-1.5 shadow-sm max-w-2xl">
+      <div className="flex gap-2 border border-slate-200 bg-white rounded-2xl p-1.5 shadow-sm max-w-3xl">
         <button
           onClick={() => setActiveTab('iva')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${
-            activeTab === 'iva'
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${activeTab === 'iva'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
               : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-          }`}
+            }`}
         >
           <FileText size={16} />
           <span>Libro IVA Digital</span>
@@ -406,11 +405,10 @@ export default function ContadorClient({
 
         <button
           onClick={() => setActiveTab('cc')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${
-            activeTab === 'cc'
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${activeTab === 'cc'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
               : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-          }`}
+            }`}
         >
           <Users size={16} />
           <span>Cuentas Corrientes</span>
@@ -418,11 +416,10 @@ export default function ContadorClient({
 
         <button
           onClick={() => setActiveTab('fiscal')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${
-            activeTab === 'fiscal'
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${activeTab === 'fiscal'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
               : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-          }`}
+            }`}
         >
           <Settings size={16} />
           <span>Credenciales ARCA</span>
@@ -431,11 +428,10 @@ export default function ContadorClient({
         {userRole === 'admin' && (
           <button
             onClick={() => setActiveTab('config')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${
-              activeTab === 'config'
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition ${activeTab === 'config'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-            }`}
+              }`}
           >
             <UserPlus size={16} />
             <span>Vincular Contador</span>
@@ -724,8 +720,8 @@ export default function ContadorClient({
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {contadores.map((c) => (
-                  <div 
-                    key={c.id} 
+                  <div
+                    key={c.id}
                     className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-all flex items-start justify-between gap-4"
                   >
                     <div className="flex items-start gap-3.5">
@@ -775,7 +771,7 @@ export default function ContadorClient({
               <p className="text-xs font-semibold text-slate-500 leading-relaxed">
                 Crea un usuario exclusivo para tu estudio contable. Tu contador podrá iniciar sesión y ver únicamente esta interfaz fiscal de consultas y exportaciones, bloqueando por completo la vista de tus recetas de producción y operaciones de venta directa preventistas.
               </p>
-              
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Nombre Completo / Estudio</label>
@@ -869,7 +865,7 @@ export default function ContadorClient({
                 {testingFiscal ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={20} />}
                 Probar Conexión
               </button>
-              
+
               <button
                 onClick={handleSaveFiscal}
                 disabled={savingFiscal || testingFiscal}
@@ -922,21 +918,21 @@ export default function ContadorClient({
               </div>
 
               <div className="bg-amber-50 rounded-[2rem] p-8 border border-amber-100">
-                 <div className="flex items-center gap-3 text-amber-700 mb-4 font-black text-sm uppercase tracking-wider">
-                   <AlertCircle size={20} /> Entorno
-                 </div>
-                 <div className="flex items-center justify-between bg-white/50 p-4 rounded-2xl border border-amber-200">
-                    <span className="text-xs font-bold text-amber-900">Modo Testing (Homologación)</span>
-                    <input 
-                      type="checkbox"
-                      checked={fiscalConfig.is_sandbox}
-                      onChange={(e) => setFiscalConfig({...fiscalConfig, is_sandbox: e.target.checked})}
-                      className="w-5 h-5 accent-amber-600 cursor-pointer"
-                    />
-                 </div>
-                 <p className="mt-4 text-[11px] font-medium text-amber-800 leading-relaxed">
-                   Recomendamos probar siempre en modo Testing antes de pasar a Producción para evitar facturas legales erróneas.
-                 </p>
+                <div className="flex items-center gap-3 text-amber-700 mb-4 font-black text-sm uppercase tracking-wider">
+                  <AlertCircle size={20} /> Entorno
+                </div>
+                <div className="flex items-center justify-between bg-white/50 p-4 rounded-2xl border border-amber-200">
+                  <span className="text-xs font-bold text-amber-900">Modo Testing (Homologación)</span>
+                  <input
+                    type="checkbox"
+                    checked={fiscalConfig.is_sandbox}
+                    onChange={(e) => setFiscalConfig({ ...fiscalConfig, is_sandbox: e.target.checked })}
+                    className="w-5 h-5 accent-amber-600 cursor-pointer"
+                  />
+                </div>
+                <p className="mt-4 text-[11px] font-medium text-amber-800 leading-relaxed">
+                  Recomendamos probar siempre en modo Testing antes de pasar a Producción para evitar facturas legales erróneas.
+                </p>
               </div>
             </div>
 
@@ -944,13 +940,13 @@ export default function ContadorClient({
             <div className="md:col-span-2 space-y-8">
               <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm space-y-8">
                 <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
-                   <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                      <Key size={24} />
-                   </div>
-                   <div>
-                      <h3 className="font-black text-slate-900 tracking-tight">Certificados Digitales</h3>
-                      <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Credenciales de acceso a Web Services</p>
-                   </div>
+                  <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                    <Key size={24} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 tracking-tight">Certificados Digitales</h3>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Credenciales de acceso a Web Services</p>
+                  </div>
                 </div>
 
                 <div className="space-y-6">
@@ -982,10 +978,10 @@ export default function ContadorClient({
                 </div>
 
                 <div className="bg-slate-50 rounded-2xl p-6 flex items-start gap-4">
-                   <ShieldCheck className="text-slate-400 shrink-0" size={20} />
-                   <p className="text-xs font-medium text-slate-500 leading-relaxed">
-                      Tus certificados se almacenan de forma segura y solo se utilizan para firmar las peticiones ante ARCA. ZOMA nunca compartirá estas credenciales.
-                   </p>
+                  <ShieldCheck className="text-slate-400 shrink-0" size={20} />
+                  <p className="text-xs font-medium text-slate-500 leading-relaxed">
+                    Tus certificados se almacenan de forma segura y solo se utilizan para firmar las peticiones ante ARCA. ZOMA nunca compartirá estas credenciales.
+                  </p>
                 </div>
               </div>
             </div>

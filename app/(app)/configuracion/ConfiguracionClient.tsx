@@ -32,9 +32,10 @@ type MpStatus = {
 
 type Props = {
   companyId: string
+  planType?: string
 }
 
-export default function ConfiguracionClient({ companyId }: Props) {
+export default function ConfiguracionClient({ companyId, planType = 'base' }: Props) {
   const [mpStatus, setMpStatus] = useState<MpStatus | null>(null)
   const [loadingMp, setLoadingMp] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)

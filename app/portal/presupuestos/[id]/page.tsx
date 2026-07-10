@@ -189,7 +189,7 @@ export default function PortalPresupuestoDetallePage() {
     <>
       <style jsx global>{`
         @media print {
-          @page { size: A4; margin: 12mm; }
+          @page { size: A4; margin: 8mm; }
           html, body { width: 210mm; min-height: 297mm; background: white !important; overflow: visible !important; }
           body * { visibility: hidden !important; }
           .print-area, .print-area * { visibility: visible !important; }
@@ -203,11 +203,140 @@ export default function PortalPresupuestoDetallePage() {
           .print-table th { background: #f1f5f9 !important; padding: 8px !important; border-bottom: 1px solid #d7dee8 !important; }
           .print-table td { padding: 8px !important; border-bottom: 1px solid #e2e8f0 !important; }
           .print-total { margin-top: 16px !important; margin-left: auto !important; width: 260px !important; border: 2px solid #0f172a !important; padding: 12px !important; }
+          
+          /* SISTEMA DE IMPRESIÓN COMPACTO INTELIGENTE (PORTAL DE PRESUPUESTOS) */
+          
+          /* 1. DENSE LAYOUT (8-11 ítems) */
+          .print-area.dense {
+            border: none !important;
+            padding: 4mm !important;
+          }
+          .print-area.dense .print-header {
+            padding-bottom: 10px !important;
+            margin-bottom: 12px !important;
+            gap: 16px !important;
+          }
+          .print-area.dense .print-company-logo {
+            max-height: 45px !important;
+            margin-bottom: 4px !important;
+          }
+          .print-area.dense .print-title {
+            font-size: 22px !important;
+          }
+          .print-area.dense .p-6, .print-area.dense .p-5 {
+            padding: 12px !important;
+          }
+          .print-area.dense .print-table {
+            font-size: 9.5px !important;
+          }
+          .print-area.dense .print-table th, .print-area.dense .print-table td {
+            padding: 6px 8px !important;
+          }
+          .print-area.dense .print-total {
+            padding: 12px !important;
+            width: 220px !important;
+            border-radius: 14px !important;
+            margin-top: 12px !important;
+          }
+          .print-area.dense .print-total p {
+            font-size: 1.6rem !important;
+          }
+          .print-area.dense .max-w-xl {
+            padding: 12px !important;
+            border-radius: 14px !important;
+          }
+
+          /* 2. ULTRA DENSE LAYOUT (12-17 ítems) */
+          .print-area.ultra-dense {
+            border: none !important;
+            padding: 2mm !important;
+          }
+          .print-area.ultra-dense .print-header {
+            padding-bottom: 8px !important;
+            margin-bottom: 10px !important;
+            gap: 12px !important;
+          }
+          .print-area.ultra-dense .print-company-logo {
+            max-height: 38px !important;
+            margin-bottom: 2px !important;
+          }
+          .print-area.ultra-dense .print-title {
+            font-size: 18px !important;
+          }
+          .print-area.ultra-dense .p-6, .print-area.ultra-dense .p-5 {
+            padding: 8px !important;
+          }
+          .print-area.ultra-dense .print-table {
+            font-size: 8.8px !important;
+          }
+          .print-area.ultra-dense .print-table th, .print-area.ultra-dense .print-table td {
+            padding: 4.5px 6px !important;
+          }
+          .print-area.ultra-dense .print-total {
+            padding: 8px !important;
+            width: 180px !important;
+            border-radius: 12px !important;
+            margin-top: 10px !important;
+          }
+          .print-area.ultra-dense .print-total p {
+            font-size: 1.4rem !important;
+          }
+          .print-area.ultra-dense .max-w-xl {
+            padding: 8px !important;
+            border-radius: 12px !important;
+          }
+          .print-area.ultra-dense .whitespace-pre-line {
+            font-size: 8.5px !important;
+            line-height: 1.25 !important;
+          }
+
+          /* 3. SUPER DENSE LAYOUT (18+ ítems) */
+          .print-area.super-dense {
+            border: none !important;
+            padding: 0 !important;
+          }
+          .print-area.super-dense .print-header {
+            padding-bottom: 4px !important;
+            margin-bottom: 8px !important;
+            gap: 8px !important;
+          }
+          .print-area.super-dense .print-company-logo {
+            max-height: 32px !important;
+            margin-bottom: 1px !important;
+          }
+          .print-area.super-dense .print-title {
+            font-size: 15px !important;
+          }
+          .print-area.super-dense .p-6, .print-area.super-dense .p-5 {
+            padding: 6px !important;
+          }
+          .print-area.super-dense .print-table {
+            font-size: 8px !important;
+          }
+          .print-area.super-dense .print-table th, .print-area.super-dense .print-table td {
+            padding: 3px 5px !important;
+          }
+          .print-area.super-dense .print-total {
+            padding: 6px !important;
+            width: 150px !important;
+            border-radius: 10px !important;
+            margin-top: 8px !important;
+          }
+          .print-area.super-dense .print-total p {
+            font-size: 1.25rem !important;
+          }
+          .print-area.super-dense .max-w-xl {
+            padding: 6px !important;
+            border-radius: 10px !important;
+          }
+          .print-area.super-dense .whitespace-pre-line {
+            font-size: 8px !important;
+            line-height: 1.15 !important;
+          }
         }
       `}</style>
 
       <div className="space-y-6">
-        {/* Hero */}
         <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 p-7 text-white shadow-xl print-hidden print:hidden">
           <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-blue-500/20 blur-3xl" />
           <div className="absolute bottom-0 left-16 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
@@ -279,7 +408,9 @@ export default function PortalPresupuestoDetallePage() {
         </section>
 
         {/* Document */}
-        <section className="print-area print-card rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+        <section className={`print-area print-card rounded-[1.5rem] border border-slate-200 bg-white shadow-sm ${
+          items.length > 17 ? 'super-dense' : items.length > 11 ? 'ultra-dense' : items.length > 7 ? 'dense' : ''
+        }`}>
           <div className="print-header border-b border-slate-200 p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>

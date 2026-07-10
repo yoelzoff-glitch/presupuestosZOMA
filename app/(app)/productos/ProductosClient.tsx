@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
+import * as XLSX from 'xlsx'
 import {
   Package,
   Search,
@@ -70,6 +71,31 @@ export default function ProductosClient({ productosIniciales, idEmpresa, enableS
     if (error) setMensajeError('Error al cargar productos.')
     else setProductos(data || [])
     setActualizando(false)
+  }
+
+  function descargarListaPrecios() {
+    const productosVenta = productos.filter((p) => p.show_in_catalog)
+
+    const filas = productosVenta.map((p) => ({
+      Codigo: p.internal_code || '',
+      Producto: p.name || '',
+      Categoria: p.category || '',
+      Precio: Number(p.sale_price || p.cost_price || 0),
+      Fecha: new Date().toLocaleDateString('es-AR'),
+    }))
+
+    const hoja = XLSX.utils.json_to_sheet(filas)
+    hoja['!cols'] = [
+      { wch: 18 }, // Codigo
+      { wch: 45 }, // Producto
+      { wch: 25 }, // Categoria
+      { wch: 15 }, // Precio
+      { wch: 15 }, // Fecha
+    ]
+
+    const libro = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(libro, hoja, 'Lista de precios')
+    XLSX.writeFile(libro, 'lista-de-precios.xlsx', { bookType: 'xlsx' })
   }
 
   const productosFiltrados = useMemo(() => {
@@ -152,7 +178,16 @@ export default function ProductosClient({ productosIniciales, idEmpresa, enableS
                 <Boxes size={16} /> Stock
               </Link>
             )}
-            <Link href="/productos/importar" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"><FileSpreadsheet size={16} /> Excel</Link>
+            <Link href="/productos/importar" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15">
+              <FileSpreadsheet size={16} /> Importar
+            </Link>
+            <button
+              type="button"
+              onClick={descargarListaPrecios}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15 cursor-pointer"
+            >
+              <FileSpreadsheet size={16} /> Descargar Lista
+            </button>
             <Link href="/productos/aumentos" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15"><ArrowUp size={16} /> Aumentos</Link>
           </div>
         </div>
