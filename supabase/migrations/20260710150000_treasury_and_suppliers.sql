@@ -70,7 +70,7 @@ SELECT
   am.company_id,
   am.movement_date AS entry_date,
   'ingreso'::text AS entry_type,
-  COALESCE(am.description, 'Pago recibido de cliente'::text) AS concept,
+  COALESCE(am.description, 'Pago recibido de cliente '::text) AS concept,
   am.credit AS amount,
   am.payment_method,
   am.created_at,
