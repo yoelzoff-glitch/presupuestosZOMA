@@ -1,105 +1,74 @@
 import crypto from 'crypto'
-import { NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-function safeCompare(a: string, b: string) {
-  const bufferA = Buffer.from(a)
-  const bufferB = Buffer.from(b)
-
-  if (bufferA.length !== bufferB.length) return false
-
-  return crypto.timingSafeEqual(bufferA, bufferB)
+type SignatureOptions = {
+  secret?: string
+  toleranceMs?: number
 }
 
-export function verifyMercadoPagoWebhookSignature(req: NextRequest) {
-  const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim()
+function safeCompareHex(left: string, right: string) {
+  if (!/^[a-f0-9]+$/i.test(left) || !/^[a-f0-9]+$/i.test(right)) return false
 
-  if (!secret) {
-    console.error('❌ No se encontró MERCADOPAGO_WEBHOOK_SECRET');
+  const leftBuffer = Buffer.from(left, 'hex')
+  const rightBuffer = Buffer.from(right, 'hex')
+  if (leftBuffer.length !== rightBuffer.length) return false
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+export function verifyMercadoPagoWebhookSignature(
+  request: NextRequest,
+  options: SignatureOptions = {}
+) {
+  const secret =
+    options.secret?.trim() || process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim()
+
+  if (!secret) return false
+
+  const signatureHeader = request.headers.get('x-signature')
+  const requestId = request.headers.get('x-request-id')
+  if (!signatureHeader) return false
+
+  const signatureParts = new Map(
+    signatureHeader.split(',').map((part) => {
+      const separator = part.indexOf('=')
+      if (separator === -1) return [part.trim(), '']
+      return [part.slice(0, separator).trim(), part.slice(separator + 1).trim()]
+    })
+  )
+
+  const timestamp = signatureParts.get('ts') || ''
+  const receivedHash = signatureParts.get('v1') || ''
+  if (!timestamp || !receivedHash) return false
+
+  const timestampNumber = Number(timestamp)
+  const timestampMs = timestamp.length <= 10 ? timestampNumber * 1000 : timestampNumber
+  const toleranceMs = options.toleranceMs ?? 10 * 60 * 1000
+
+  if (
+    !Number.isFinite(timestampMs) ||
+    Math.abs(Date.now() - timestampMs) > toleranceMs
+  ) {
     return false
   }
 
-  const xSignature = req.headers.get('x-signature')
-  const xRequestId = req.headers.get('x-request-id')
-
-  console.log('🔍 Debug Signature - Headers:', { 'x-signature': xSignature, 'x-request-id': xRequestId });
-
-  if (!xSignature) {
-    console.error('❌ Falta header x-signature');
-    return false
-  }
-
-  let ts = ''
-  let receivedHash = ''
-
-  const parts = xSignature.split(',')
-
-  for (const part of parts) {
-    const [key, value] = part.split('=')
-
-    if (key?.trim() === 'ts') ts = value?.trim() || ''
-    if (key?.trim() === 'v1') receivedHash = value?.trim() || ''
-  }
-
-  if (!ts || !receivedHash) {
-    console.error('❌ Faltan componentes de firma (ts o v1)', { ts, receivedHash });
-    return false;
-  }
-
-  const url = new URL(req.url)
-
-  const dataId =
+  const url = new URL(request.url)
+  const dataId = (
     url.searchParams.get('data.id') ||
     url.searchParams.get('id') ||
     ''
+  ).toLowerCase()
 
-  // Intento 1: Formato estándar (con request-id si existe)
-  let manifest1 = `id:${dataId};`
-  if (xRequestId) manifest1 += `request-id:${xRequestId};`
-  manifest1 += `ts:${ts};`
+  if (!dataId) return false
 
-  const generatedHash1 = crypto
+  let manifest = `id:${dataId};`
+  if (requestId) manifest += `request-id:${requestId};`
+  manifest += `ts:${timestamp};`
+
+  const generatedHash = crypto
     .createHmac('sha256', secret)
-    .update(manifest1)
+    .update(manifest)
     .digest('hex')
 
-  if (safeCompare(generatedHash1, receivedHash)) {
-    console.log('✅ Firma válida (Formato estándar)');
-    return true
-  }
-
-  // Intento 2: Formato sin request-id (algunas implementaciones de MP lo omiten)
-  const manifest2 = `id:${dataId};ts:${ts};`
-  const generatedHash2 = crypto
-    .createHmac('sha256', secret)
-    .update(manifest2)
-    .digest('hex')
-
-  if (safeCompare(generatedHash2, receivedHash)) {
-    console.log('✅ Firma válida (Formato sin request-id)');
-    return true
-  }
-
-  console.log('🔍 Debug Signature - Secret (last 4):', secret.slice(-4));
-  console.log('🔍 Debug Signature - Manifest 1:', manifest1);
-  console.log('🔍 Debug Signature - Generated 1:', generatedHash1);
-  console.log('🔍 Debug Signature - Manifest 2:', manifest2);
-  console.log('🔍 Debug Signature - Generated 2:', generatedHash2);
-  console.log('🔍 Debug Signature - Received:', receivedHash);
-
-  const timestamp = Number(ts)
-  const timestampMs =
-    ts.length === 10 ? timestamp * 1000 : timestamp
-
-  const now = Date.now()
-  const toleranceMs = 10 * 60 * 1000
-
-  if (
-    Number.isFinite(timestampMs) &&
-    Math.abs(now - timestampMs) > toleranceMs
-  ) {
-    console.error('Webhook Mercado Pago fuera de tolerancia')
-    return false
-  }
-
-  return false
+  return safeCompareHex(generatedHash, receivedHash)
 }
