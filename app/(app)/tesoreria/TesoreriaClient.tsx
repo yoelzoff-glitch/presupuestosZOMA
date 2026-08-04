@@ -605,15 +605,6 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
           if (pagoError) throw pagoError
         }
       } else {
-        const currentDebt = selectedSupplier.balance || 0
-        if (amount > currentDebt) {
-          toast.error(
-            `El monto del pago (${formatCurrency(amount)}) no puede superar la deuda actual con el proveedor (${formatCurrency(currentDebt)}).`
-          )
-          setSavingMovement(false)
-          return
-        }
-
         const { error } = await supabase.from('supplier_movements').insert({
           company_id: companyId,
           supplier_id: selectedSupplier.id,
@@ -1138,7 +1129,7 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                     <th className="px-8 py-5">Nombre / Razón Social</th>
                     <th className="px-8 py-5">CUIT</th>
                     <th className="px-8 py-5">Contacto</th>
-                    <th className="px-8 py-5 text-right">Saldo Deuda</th>
+                    <th className="px-8 py-5 text-right">Saldo / Deuda</th>
                     <th className="px-8 py-5 text-center">Acciones</th>
                   </tr>
                 </thead>
@@ -1191,10 +1182,14 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                           </td>
                           <td
                             className={`whitespace-nowrap px-8 py-5 text-right font-black text-base ${
-                              bal > 0 ? 'text-rose-600' : 'text-slate-500'
+                              bal > 0 ? 'text-rose-600' : bal < 0 ? 'text-emerald-600' : 'text-slate-500'
                             }`}
                           >
-                            {formatCurrency(bal)}
+                            {bal > 0
+                              ? formatCurrency(bal)
+                              : bal < 0
+                              ? `${formatCurrency(Math.abs(bal))} (A favor)`
+                              : formatCurrency(0)}
                           </td>
                           <td className="whitespace-nowrap px-8 py-5 text-center">
                             <button
@@ -1273,18 +1268,33 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                 Dirección: <span>{selectedSupplier.address || 'Sin dirección'}</span>
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                Saldo Deudor Actual
-              </p>
-              <p
-                className={`text-2xl font-black mt-1 ${
-                  (selectedSupplier.balance || 0) > 0 ? 'text-rose-600' : 'text-slate-600'
-                }`}
-              >
-                {formatCurrency(selectedSupplier.balance || 0)}
-              </p>
-            </div>
+            {(() => {
+              const currentBal = selectedSupplier.balance || 0
+              return (
+                <div className="text-right">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                    {currentBal > 0
+                      ? 'Saldo Deudor Actual'
+                      : currentBal < 0
+                      ? 'Saldo a Favor'
+                      : 'Saldo Actual'}
+                  </p>
+                  <p
+                    className={`text-2xl font-black mt-1 ${
+                      currentBal > 0
+                        ? 'text-rose-600'
+                        : currentBal < 0
+                        ? 'text-emerald-600'
+                        : 'text-slate-600'
+                    }`}
+                  >
+                    {currentBal < 0
+                      ? `${formatCurrency(Math.abs(currentBal))} A favor`
+                      : formatCurrency(currentBal)}
+                  </p>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Tabla de Movimientos del Proveedor */}
@@ -1343,8 +1353,18 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                           <td className="whitespace-nowrap px-8 py-5 text-right text-emerald-600 font-black">
                             {movement.debit > 0 ? `-${formatCurrency(movement.debit)}` : '-'}
                           </td>
-                          <td className="whitespace-nowrap px-8 py-5 text-right font-black">
-                            {formatCurrency(movement.runningBalance)}
+                          <td
+                            className={`whitespace-nowrap px-8 py-5 text-right font-black ${
+                              movement.runningBalance > 0
+                                ? 'text-rose-600'
+                                : movement.runningBalance < 0
+                                ? 'text-emerald-600'
+                                : 'text-slate-700'
+                            }`}
+                          >
+                            {movement.runningBalance < 0
+                              ? `${formatCurrency(Math.abs(movement.runningBalance))} (A favor)`
+                              : formatCurrency(movement.runningBalance)}
                           </td>
                           <td className="whitespace-nowrap px-8 py-5 text-center">
                             <button
@@ -1499,7 +1519,6 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                   required
                   step="0.01"
                   min="0.01"
-                  max={movementModalType === 'Pago' ? (selectedSupplier.balance || 0) : undefined}
                   value={movementAmount}
                   onChange={(e) => {
                     setMovementAmount(e.target.value)
