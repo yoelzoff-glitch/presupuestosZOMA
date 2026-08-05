@@ -348,14 +348,7 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
           if (pagoError) throw pagoError
         }
       } else {
-        const currentDebt = selectedSupplier.balance || 0
-        if (amount > currentDebt) {
-          toast.error(
-            `El monto del pago (${formatCurrency(amount)}) no puede superar la deuda actual con el proveedor (${formatCurrency(currentDebt)}).`
-          )
-          setSavingMovement(false)
-          return
-        }
+
 
         const { error } = await supabase.from('supplier_movements').insert({
           company_id: companyId,
@@ -872,10 +865,10 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                           </td>
                           <td
                             className={`whitespace-nowrap px-8 py-5 text-right font-black text-base ${
-                              bal > 0 ? 'text-rose-600' : 'text-slate-500'
+                              bal > 0 ? 'text-rose-600' : bal < 0 ? 'text-emerald-600' : 'text-slate-500'
                             }`}
                           >
-                            {formatCurrency(bal)}
+                            {bal < 0 ? `${formatCurrency(Math.abs(bal))} (A favor)` : formatCurrency(bal)}
                           </td>
                           <td className="whitespace-nowrap px-8 py-5 text-center">
                             <button
@@ -956,14 +949,20 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
             </div>
             <div className="text-right">
               <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-                Saldo Deudor Actual
+                {(selectedSupplier.balance || 0) < 0 ? 'Saldo a Favor Actual' : 'Saldo Deudor Actual'}
               </p>
               <p
                 className={`text-2xl font-black mt-1 ${
-                  (selectedSupplier.balance || 0) > 0 ? 'text-rose-600' : 'text-slate-600'
+                  (selectedSupplier.balance || 0) > 0
+                    ? 'text-rose-600'
+                    : (selectedSupplier.balance || 0) < 0
+                    ? 'text-emerald-600'
+                    : 'text-slate-600'
                 }`}
               >
-                {formatCurrency(selectedSupplier.balance || 0)}
+                {(selectedSupplier.balance || 0) < 0
+                  ? formatCurrency(Math.abs(selectedSupplier.balance || 0))
+                  : formatCurrency(selectedSupplier.balance || 0)}
               </p>
             </div>
           </div>
@@ -1024,8 +1023,12 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                           <td className="whitespace-nowrap px-8 py-5 text-right text-emerald-600 font-black">
                             {movement.debit > 0 ? `-${formatCurrency(movement.debit)}` : '-'}
                           </td>
-                          <td className="whitespace-nowrap px-8 py-5 text-right font-black">
-                            {formatCurrency(movement.runningBalance)}
+                          <td className={`whitespace-nowrap px-8 py-5 text-right font-black ${
+                            movement.runningBalance > 0 ? 'text-rose-600' : movement.runningBalance < 0 ? 'text-emerald-600' : 'text-slate-800'
+                          }`}>
+                            {movement.runningBalance < 0
+                              ? `${formatCurrency(Math.abs(movement.runningBalance))} (A favor)`
+                              : formatCurrency(movement.runningBalance)}
                           </td>
                           <td className="whitespace-nowrap px-8 py-5 text-center">
                             <button
@@ -1180,7 +1183,6 @@ export default function TesoreriaClient({ companyId, initialPaymentMethods }: Pr
                   required
                   step="0.01"
                   min="0.01"
-                  max={movementModalType === 'Pago' ? (selectedSupplier.balance || 0) : undefined}
                   value={movementAmount}
                   onChange={(e) => {
                     setMovementAmount(e.target.value)
