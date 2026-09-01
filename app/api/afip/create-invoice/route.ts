@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseAdminClient } from '@/lib/supabase/server'
+import { createSupabaseAdminClient, getServerUserContext } from '@/lib/supabase/server'
 import { Arca } from '@arcasdk/core'
+import { SupabaseTicketStorage } from '@/lib/afip/supabase-ticket-storage'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -13,37 +14,37 @@ export async function POST(request: Request) {
   try {
     const supabaseAdmin = createSupabaseAdminClient()
 
-    // 1. Autenticación y Autorización del usuario
-    const authHeader = request.headers.get('Authorization')
-    let userId: string | null = null
+    // 1. Autenticación robusta de sesión (Cookies SSR / Bearer token)
+    let companyId: string | null = null
 
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token)
-      userId = user?.id || null
+    // Intento 1: Sesión por Cookies (SSR Next.js)
+    const userContext = await getServerUserContext()
+    if (userContext?.idEmpresa) {
+      companyId = userContext.idEmpresa
     }
 
-    if (!userId) {
-      const { data: { user } } = await supabaseAdmin.auth.getUser()
-      userId = user?.id || null
+    // Intento 2: Header Authorization Bearer
+    if (!companyId) {
+      const authHeader = request.headers.get('Authorization')
+      if (authHeader) {
+        const token = authHeader.replace('Bearer ', '').trim()
+        const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+        if (user) {
+          const { data: profile } = await supabaseAdmin
+            .from('users_profiles')
+            .select('company_id')
+            .eq('id', user.id)
+            .single()
+          companyId = profile?.company_id || null
+        }
+      }
     }
 
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!companyId) {
+      return NextResponse.json({ error: 'No autorizado. Inicie sesión para facturar.' }, { status: 401 })
     }
 
-    // Obtener la empresa del usuario autenticado
-    const { data: userProfile } = await supabaseAdmin
-      .from('users_profiles')
-      .select('company_id, role')
-      .eq('id', userId)
-      .single()
-
-    if (!userProfile?.company_id) {
-      return NextResponse.json({ error: 'Perfil de usuario o empresa no encontrada' }, { status: 403 })
-    }
-
-    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount, addIva, serviceDates } = await request.json()
+    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount, addIva, serviceDates } = await request.json().catch(() => ({}))
     if (!budget_id) return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
 
     const esCorrectivo = isCreditNote || isDebitNote
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
 
     if (bError || !budget) throw new Error('Presupuesto no encontrado')
 
-    if (budget.company_id !== userProfile.company_id) {
+    if (budget.company_id !== companyId) {
       return NextResponse.json({ error: 'No tiene permiso para facturar este presupuesto' }, { status: 403 })
     }
 
@@ -111,31 +112,39 @@ export async function POST(request: Request) {
       throw new Error('Certificados o CUIT no configurados en la sección fiscal')
     }
 
-    // 4. Inicializar ARCA con gestión limpia de certificados y tickets
-    const cleanCert = config.cert_content.split('===WSAA_TICKET===')[0].trim()
-    const cleanKey = config.key_content.split('===WSAA_TICKET===')[0].replace(/\r\n/g, '\n').trim()
+    const ptoVta = Number(config.punto_venta)
+    if (!ptoVta || ptoVta <= 0) {
+      throw new Error('Debe configurar un Punto de Venta válido mayor a 0 en Configuración Fiscal')
+    }
+
+    // 4. Inicializar ARCA con almacenamiento persistente de tickets (L1 Disco + L2 Supabase)
+    const cleanCert = config.cert_content.split('===WSAA_TICKET')[0].trim()
+    const cleanKey = config.key_content.split('===WSAA_TICKET')[0].replace(/\r\n/g, '\n').trim()
     const cuitClean = config.cuit.replace(/-/g, '').trim()
     const isProduction = !config.is_sandbox
 
     fs.writeFileSync(certPath, cleanCert)
     fs.writeFileSync(keyPath, cleanKey)
 
-    const ticketDir = path.join(os.tmpdir(), 'arca-tickets-stable')
+    const ticketStorage = new SupabaseTicketStorage({
+      supabaseAdmin,
+      companyId,
+      cuit: cuitClean,
+      production: isProduction
+    })
 
-    const arcaOptions: any = {
+    const arca = new Arca({
       key: fs.readFileSync(keyPath, 'utf8'),
       cert: fs.readFileSync(certPath, 'utf8'),
       cuit: parseInt(cuitClean),
       production: isProduction,
-      ticketPath: ticketDir,
+      ticketStorage,
       useHttpsAgent: true
-    }
-
-    const arca = new Arca(arcaOptions)
+    })
 
     // 5. Lógica impositiva y determinación del comprobante ARCA
     const esRI = config.tipo_contribuyente === 'responsable_inscripto'
-    const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
+    const cuitLimpio = client?.cuit?.replace(/-/g, '').trim() || ''
     const esCuitValido = cuitLimpio.length === 11
     const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
     let montoTotal = customAmount 
@@ -150,10 +159,20 @@ export async function POST(request: Request) {
     let docNro = 0
     let condicionIvaReceptor = 5 // Consumidor Final
 
+    // Mapear condición IVA del cliente si está presente en DB
+    const clientCondIva = (client?.tax_condition || client?.condicion_iva || '').toLowerCase()
+    if (clientCondIva === 'responsable_inscripto' || clientCondIva === 'ri') {
+      condicionIvaReceptor = 1
+    } else if (clientCondIva === 'monotributo' || clientCondIva === 'monotributista') {
+      condicionIvaReceptor = 6
+    } else if (clientCondIva === 'exento') {
+      condicionIvaReceptor = 4
+    }
+
     if (esRI) {
-      if (client?.client_type === 'distribuidor' || esCuitValido) {
+      if (client?.client_type === 'distribuidor' || condicionIvaReceptor === 1) {
         if (!esCuitValido) {
-          throw new Error('Para emitir Factura A se requiere un CUIT válido del cliente')
+          throw new Error('Para emitir Factura A se requiere un CUIT válido del cliente (11 dígitos)')
         }
         cbteTipo = 1 // Factura A
         docTipo = 80 // CUIT
@@ -163,14 +182,19 @@ export async function POST(request: Request) {
         cbteTipo = 6 // Factura B
         docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
         docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
-        condicionIvaReceptor = 5
+        if (condicionIvaReceptor === 5 && esCuitValido) {
+          // Si tiene CUIT pero es Factura B, es Consumidor Final o Monotributo
+          condicionIvaReceptor = clientCondIva === 'monotributo' ? 6 : 5
+        }
       }
     } else {
       // Monotributista (Factura C)
       cbteTipo = 11
       docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
       docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
-      condicionIvaReceptor = esCuitValido ? 1 : 5
+      if (!clientCondIva) {
+        condicionIvaReceptor = esCuitValido ? 6 : 5
+      }
     }
 
     // Aplicar Override si fue especificado por el usuario
@@ -188,11 +212,10 @@ export async function POST(request: Request) {
       } else if (cbteTipo === 6) {
          docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
          docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
-         condicionIvaReceptor = 5
       }
     }
 
-    // Convertir a comprobante correctivo de AFIP
+    // Convertir a comprobante correctivo de AFIP si es Nota de Crédito/Débito
     if (isCreditNote) {
       if (cbteTipo === 1) cbteTipo = 3   // Nota de Crédito A
       else if (cbteTipo === 6) cbteTipo = 8   // Nota de Crédito B
@@ -219,7 +242,7 @@ export async function POST(request: Request) {
     // 6. Construir objeto Voucher para ARCA WSFE
     const voucherData: any = {
       CantReg: 1,
-      PtoVta: Number(config.punto_venta) || 1,
+      PtoVta: ptoVta,
       CbteTipo: cbteTipo,
       Concepto: businessType === 'services' ? 2 : 1, // 1: Productos, 2: Servicios
       DocTipo: docTipo,
@@ -276,83 +299,31 @@ export async function POST(request: Request) {
     if (esCorrectivo && budget.afip_comprobante_numero) {
       voucherData.CbtesAsoc = [{
         Tipo: budget.afip_comprobante_tipo || (esRI ? (client?.client_type === 'distribuidor' || esCuitValido ? 1 : 6) : 11),
-        PtoVta: Number(config.punto_venta) || 1,
+        PtoVta: ptoVta,
         Nro: budget.afip_comprobante_numero
       }]
     }
 
     // 7. Solicitar CAE ante ARCA
-    let result: any
-    try {
-      result = await arca.electronicBillingService.createNextVoucher(voucherData)
-    } catch (error: any) {
-      console.error('Error al solicitar CAE a ARCA:', error)
-      const fullErrorText = (
-        (error.message || '') + 
-        (error.response?.data?.message || '') + 
-        (error.body?.message || '') +
-        (error.faultstring || '') +
-        (error.toString?.() || '')
-      ).toLowerCase()
+    const result = await arca.electronicBillingService.createNextVoucher(voucherData)
 
-      const isAlreadyAuth = 
-        fullErrorText.includes('alreadyauthenticated') || 
-        fullErrorText.includes('cee ya posee un ta valido')
-
-      if (isAlreadyAuth) {
-        // En Producción, el SDK busca el archivo con sufijo '-production'
-        const ticketFileName = `TA-${cuitClean}-wsfe${isProduction ? '-production' : ''}.json`
-        const ticketFilePath = path.join(ticketDir, ticketFileName)
-        let credentialsToUse: any = null
-
-        if (fs.existsSync(ticketFilePath)) {
-          try {
-            const ticketData = JSON.parse(fs.readFileSync(ticketFilePath, 'utf8'))
-            credentialsToUse = {
-              header: ticketData.header,
-              credentials: ticketData.credentials
-            }
-          } catch (e) {
-            console.error('Error leyendo ticket persistido en disco:', e)
-          }
-        }
-
-        if (credentialsToUse) {
-          console.log('Reutilizando credenciales WSAA válidas en disco para entorno:', isProduction ? 'Producción' : 'Homologación')
-          const arcaRetry = new Arca({
-            key: cleanKey,
-            cert: cleanCert,
-            cuit: parseInt(cuitClean),
-            production: isProduction,
-            credentials: credentialsToUse,
-            handleTicket: true,
-            useHttpsAgent: true
-          })
-          result = await arcaRetry.electronicBillingService.createNextVoucher(voucherData)
-        } else {
-          throw error
-        }
-      } else {
-        throw error
-      }
-    }
-
-    const resDet = result.response?.FeDetResp?.FECAEDetResponse?.[0]
-    const status = result.response?.FeCabResp?.Resultado || result.Resultado
-    const cae = result.cae || result.CAE || resDet?.CAE
-    const caeFchVto = result.caeFchVto || result.CAEFchVto || resDet?.CAEFchVto
-    const cbteNro = result.cbteDesde || result.CbteDesde || resDet?.CbteDesde
+    const resAny = result as any
+    const resDet = resAny.response?.FeDetResp?.FECAEDetResponse?.[0]
+    const status = resAny.response?.FeCabResp?.Resultado || resAny.Resultado || resDet?.Resultado
+    const cae = resAny.cae || resAny.CAE || resDet?.CAE
+    const caeFchVto = resAny.caeFchVto || resAny.CAEFchVto || resDet?.CAEFchVto
+    const cbteNro = resAny.cbteDesde || resAny.CbteDesde || resDet?.CbteDesde
 
     if (status !== 'A') {
-      const obs = resDet?.Observaciones?.Obs?.[0]?.Msg || result.Observaciones?.Obs?.[0]?.Msg
-      const err = result.Errors?.Err?.[0]?.Msg || result.response?.Errors?.Err?.[0]?.Msg
+      const obs = resDet?.Observaciones?.Obs?.[0]?.Msg || resAny.Observaciones?.Obs?.[0]?.Msg
+      const err = resAny.Errors?.Err?.[0]?.Msg || resAny.response?.Errors?.Err?.[0]?.Msg
       const msg = obs || err || `Error ARCA (Resultado ${status})`
       throw new Error(msg)
     }
 
     const fechaFormateada = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date())
 
-    // 8. Persistir comprobante y actualizar estado en base de datos de manera atómica
+    // 8. Persistir comprobante en base de datos
     if (esCorrectivo) {
       if (isCreditNote) {
         const esAnulacionTotal = !customAmount || Number(customAmount) >= Number(budget.total_amount)
@@ -450,7 +421,7 @@ export async function POST(request: Request) {
       success: true,
       cae: cae,
       invoice_number: cbteNro,
-      punto_venta: voucherData.PtoVta,
+      punto_venta: ptoVta,
       is_production: isProduction,
       message: `Factura autorizada por ARCA con éxito (CAE: ${cae})`
     })

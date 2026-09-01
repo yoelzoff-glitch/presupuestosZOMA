@@ -48,14 +48,12 @@ export default function ConfigFiscalPage() {
 
       const response = await fetch('/api/afip/test-connection', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_id: profile.company_id })
+        headers: { 'Content-Type': 'application/json' }
       })
 
       const result = await response.json()
       if (result.success) {
-        toast.success('Conexión exitosa: ' + result.message)
-        console.log('Estado AFIP:', result.status)
+        toast.success(result.message)
       } else {
         throw new Error(result.error)
       }
@@ -63,33 +61,6 @@ export default function ConfigFiscalPage() {
       toast.error('Error de conexión: ' + error.message)
     } finally {
       setTesting(false)
-    }
-  }
-
-  const [resetting, setResetting] = useState(false)
-
-  const handleResetTestInvoices = async () => {
-    if (!confirm('¿Querés eliminar todas las facturas de prueba de Sandbox y liberar los presupuestos para facturar en Producción?')) return
-    setResetting(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const response = await fetch('/api/afip/reset-test-invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user?.id })
-      })
-
-      const result = await response.json()
-      if (result.success) {
-        toast.success(result.message)
-        setTimeout(() => window.location.reload(), 1000)
-      } else {
-        throw new Error(result.error)
-      }
-    } catch (error: any) {
-      toast.error('Error al resetear: ' + error.message)
-    } finally {
-      setResetting(false)
     }
   }
 
@@ -156,8 +127,8 @@ export default function ConfigFiscalPage() {
         cuit: config.cuit,
         tipo_contribuyente: config.tipo_contribuyente,
         punto_venta: parseInt(config.punto_venta) || 0,
-        cert_content: config.cert_content.split('===WSAA_TICKET===')[0].trim(),
-        key_content: config.key_content,
+        cert_content: config.cert_content.split('===WSAA_TICKET')[0].trim(),
+        key_content: config.key_content.split('===WSAA_TICKET')[0].trim(),
         is_sandbox: config.is_sandbox,
         updated_at: new Date()
       }
@@ -185,15 +156,7 @@ export default function ConfigFiscalPage() {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Configuración Fiscal</h1>
           <p className="text-slate-500 font-medium">Vinculá ZOMA con ARCA para facturación electrónica.</p>
         </div>
-          <button
-            onClick={handleResetTestInvoices}
-            disabled={resetting || saving || testing}
-            className="flex items-center gap-2 bg-rose-50 text-rose-600 border border-rose-200 px-5 py-3 rounded-2xl font-black hover:bg-rose-100 transition-all disabled:opacity-50 text-xs uppercase tracking-wider"
-          >
-            {resetting ? <Loader2 className="animate-spin" size={18} /> : <RefreshCw size={18} />}
-            Resetear Facturas Sandbox
-          </button>
-
+        <div className="flex items-center gap-3">
           <button
             onClick={testConnection}
             disabled={testing || saving}
@@ -211,6 +174,7 @@ export default function ConfigFiscalPage() {
             {saving ? <Database className="animate-spin" size={20} /> : <Save size={20} />}
             Guardar Cambios
           </button>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-8">
