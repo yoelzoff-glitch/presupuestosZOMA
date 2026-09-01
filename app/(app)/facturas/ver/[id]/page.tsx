@@ -104,8 +104,8 @@ export default function VerFacturaPage() {
       const companyId = budgetData.company_id
       if (companyId) {
          const { data: afipData } = await supabase
-            .from('afip_config')
-            .select('tipo_contribuyente')
+            .from('afip_configs')
+            .select('tipo_contribuyente, punto_venta')
             .eq('company_id', companyId)
             .maybeSingle()
 
@@ -205,11 +205,12 @@ export default function VerFacturaPage() {
       return dateStr
    }
 
+   const realPtoVta = Number(budget?.company_afip_config?.punto_venta) || 4
    const qrData = {
       ver: 1,
       fecha: budget.budget_date,
       cuit: company?.cuit || 20412886128,
-      ptoVta: 2,
+      ptoVta: realPtoVta,
       tipoCmp: comprobanteTipo,
       nroCmp: budget.afip_comprobante_numero || 0,
       importe: Math.abs(budget.total_amount),
