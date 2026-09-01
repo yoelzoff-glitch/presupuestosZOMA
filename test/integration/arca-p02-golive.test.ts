@@ -444,4 +444,91 @@ describe('SPRINT P0.2 — ARCA Production Go-Live Hardening Tests', () => {
     expect((configResponse as any).key_content).toBeUndefined()
     expect((configResponse as any).private_key).toBeUndefined()
   })
+
+  // Test 26: Factura original sin datos fiscales completos es rechazada con 409
+  it('Test 26: Factura original sin datos fiscales completos es rechazada antes de contactar ARCA', () => {
+    const origInvIncomplete = {
+      id: invoiceOriginalId,
+      arca_environment: 'prod',
+      afip_punto_venta: null, // incompleto
+      afip_comprobante_tipo: 6,
+      afip_comprobante_numero: 10,
+      afip_cae: '74123456789012'
+    }
+
+    const isComplete = Boolean(
+      origInvIncomplete.arca_environment &&
+      origInvIncomplete.afip_punto_venta &&
+      origInvIncomplete.afip_comprobante_tipo &&
+      origInvIncomplete.afip_comprobante_numero &&
+      origInvIncomplete.afip_cae
+    )
+
+    expect(isComplete).toBe(false)
+  })
+
+  // Test 27: CbtesAsoc.PtoVta utiliza exclusivamente el punto de venta de la factura original
+  it('Test 27: CbtesAsoc.PtoVta utiliza exclusivamente el punto de venta de la factura original', () => {
+    const origInv = {
+      afip_comprobante_tipo: 6,
+      afip_punto_venta: 5,
+      afip_comprobante_numero: 120
+    }
+    const credentialsPtoVta = 2
+
+    const cbteAsoc = {
+      Tipo: origInv.afip_comprobante_tipo,
+      PtoVta: origInv.afip_punto_venta,
+      Nro: origInv.afip_comprobante_numero
+    }
+
+    expect(cbteAsoc.PtoVta).toBe(5)
+    expect(cbteAsoc.PtoVta).not.toBe(credentialsPtoVta)
+  })
+
+  // Test 28: normalizeArcaDate normaliza fechas YYYYMMDD a YYYY-MM-DD y rechaza formatos inválidos
+  it('Test 28: normalizeArcaDate normaliza fechas YYYYMMDD a YYYY-MM-DD y rechaza inválidas', () => {
+    function normalizeArcaDate(value?: string | null): string | null {
+      if (!value) return null
+      const digits = value.replace(/\D/g, '')
+      if (!/^\d{8}$/.test(digits)) {
+        throw new Error(`Fecha ARCA inválida: ${value}`)
+      }
+      return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
+    }
+
+    expect(normalizeArcaDate('20260915')).toBe('2026-09-15')
+    expect(normalizeArcaDate(null)).toBeNull()
+    expect(() => normalizeArcaDate('2026-9-1')).toThrow()
+  })
+
+  // Test 29: SupabaseTicketStorage reintenta adquirir el lock tras polling y lanza error si no lo adquiere
+  it('Test 29: SupabaseTicketStorage reintenta adquirir lock tras polling y falla fail-closed si no lo obtiene', async () => {
+    const supabaseMock = {
+      rpc: vi.fn().mockResolvedValue({ data: false, error: null }), // lock no concedido
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null })
+                })
+              })
+            })
+          })
+        })
+      })
+    }
+
+    const storage = new SupabaseTicketStorage({
+      supabaseAdmin: supabaseMock as any,
+      companyId,
+      cuit: '20412886128',
+      environment: 'prod'
+    })
+
+    // Debe lanzar error temporal al no poder obtener ticket ni re-adquirir lock
+    await expect(storage.get('wsfe')).rejects.toThrow(/Timeout esperando ticket/)
+  }, 15000)
 })

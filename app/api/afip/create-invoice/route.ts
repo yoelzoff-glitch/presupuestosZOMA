@@ -14,6 +14,18 @@ import {
 } from '@/lib/arca/idempotency'
 import crypto from 'crypto'
 
+function normalizeArcaDate(value?: string | null): string | null {
+  if (!value) return null
+
+  const digits = value.replace(/\D/g, '')
+
+  if (!/^\d{8}$/.test(digits)) {
+    throw new Error(`Fecha ARCA inválida: ${value}`)
+  }
+
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
+}
+
 export async function POST(request: Request) {
   let lockKey: string | null = null
   let lockToken: string | null = null
@@ -150,15 +162,21 @@ export async function POST(request: Request) {
         }, { status: 403 })
       }
 
-      if (!origInv.afip_cae) {
+      if (
+        !origInv.arca_environment ||
+        !origInv.afip_punto_venta ||
+        !origInv.afip_comprobante_tipo ||
+        !origInv.afip_comprobante_numero ||
+        !origInv.afip_cae
+      ) {
         return NextResponse.json({
           success: false,
-          error: 'La factura original no cuenta con CAE autorizado para corregir.'
-        }, { status: 400 })
+          error: 'La factura original no posee datos fiscales completos.'
+        }, { status: 409 })
       }
 
       // Validar coincidencia de entorno
-      if (origInv.arca_environment && origInv.arca_environment !== environment) {
+      if (origInv.arca_environment !== environment) {
         return NextResponse.json({
           success: false,
           error: `La factura original fue emitida en ${origInv.arca_environment.toUpperCase()} y la corrección debe realizarse en ese mismo entorno.`
@@ -390,7 +408,7 @@ export async function POST(request: Request) {
           invoiceOriginalId: invoice_original_id,
           totalAmount: taxes.montoTotal,
           cae: reconciliation.cae,
-          caeExpiresAt: reconciliation.caeExpiresAt || null,
+          caeExpiresAt: normalizeArcaDate(reconciliation.caeExpiresAt),
           comprobanteNumero: plannedNumber,
           comprobanteTipo: cbteTipo,
           invoiceDate: fechaArgentina,
@@ -486,7 +504,7 @@ export async function POST(request: Request) {
     if (esCorrectivo && originalInvoice) {
       voucherData.CbtesAsoc = [{
         Tipo: originalInvoice.afip_comprobante_tipo,
-        PtoVta: originalInvoice.afip_punto_venta || credentials.puntoVenta,
+        PtoVta: originalInvoice.afip_punto_venta,
         Nro: originalInvoice.afip_comprobante_numero
       }]
     }
@@ -543,7 +561,7 @@ export async function POST(request: Request) {
       .update({
         status: 'authorized_pending_persistence',
         cae,
-        cae_expires_at: caeFchVto ? `${caeFchVto.slice(0, 4)}-${caeFchVto.slice(4, 6)}-${caeFchVto.slice(6, 8)}` : null,
+        cae_expires_at: normalizeArcaDate(caeFchVto),
         arca_response: createResult as Record<string, unknown>,
         updated_at: new Date().toISOString()
       })
@@ -569,7 +587,7 @@ export async function POST(request: Request) {
         invoiceOriginalId: invoice_original_id,
         totalAmount: taxes.montoTotal,
         cae,
-        caeExpiresAt: caeFchVto ? `${caeFchVto.slice(0, 4)}-${caeFchVto.slice(4, 6)}-${caeFchVto.slice(6, 8)}` : null,
+        caeExpiresAt: normalizeArcaDate(caeFchVto),
         comprobanteNumero: cbteDesde,
         comprobanteTipo: cbteTipo,
         invoiceDate: fechaFormateada,

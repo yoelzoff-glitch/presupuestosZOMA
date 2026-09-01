@@ -224,9 +224,9 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
 
   async function legalizarFactura(
     id: string,
+    environment: 'homo' | 'prod',
     cbteTipoOverride?: number,
     addIva?: boolean,
-    environment: 'homo' | 'prod' = 'homo',
     serviceDates?: { FchServDesde: string; FchServHasta: string; FchVtoPago: string }
   ) {
     setProcesandoId(id)
@@ -586,7 +586,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
         onClose={() => setModalPreview({ ...modalPreview, isOpen: false })}
         onConfirm={(tipo, addIva, env, serviceDates) => {
           setModalPreview({ ...modalPreview, isOpen: false })
-          legalizarFactura(modalPreview.budgetId!, tipo, addIva, env, serviceDates)
+          legalizarFactura(modalPreview.budgetId!, env, tipo, addIva, serviceDates)
         }}
         budgetId={modalPreview.budgetId || ''}
         clientName={modalPreview.clientName}
@@ -718,6 +718,12 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                     }
                   }
 
+                  const originalEnv = modalConfirmacion.factura?.arca_environment;
+                  if (!originalEnv) {
+                    toast.error('La factura original no tiene entorno fiscal clasificado y no puede corregirse.');
+                    return;
+                  }
+
                   const customAmt = esCorreccionParcial && montoPersonalizado ? parseFloat(montoPersonalizado) : undefined;
 
                   setModalConfirmacion({ isOpen: false, tipo: null, factura: null });
@@ -725,7 +731,6 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                   // Ejecutar la autorización real llamando al backend oficial
                   toast.promise(
                     (async () => {
-                      const originalEnv = modalConfirmacion.factura?.arca_environment || 'homo';
                       const response = await fetch('/api/afip/create-invoice', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

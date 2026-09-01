@@ -208,8 +208,14 @@ export class SupabaseTicketStorage implements ITicketStoragePort {
       }
     }
 
-    // Si terminó el tiempo de espera sin ticket, devolver null como fallback
-    return null
+    // 5. Si terminó el tiempo de espera sin ticket persistido, reintentar adquirir el lock
+    const retryLock = await this.acquireWsaaLock(serviceName, 60)
+    if (retryLock.acquired) {
+      return null
+    }
+
+    // Si no se pudo adquirir el lock ni se encontró ticket en base de datos: error temporal
+    throw new Error(`Timeout esperando ticket de autenticación WSAA para el servicio ${serviceName}. Concurrencia alta o fallo en worker emisor.`)
   }
 
   /**
