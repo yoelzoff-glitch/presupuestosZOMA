@@ -222,7 +222,7 @@ export async function POST(request: Request) {
       Concepto: businessType === 'services' ? 2 : 1, // 1: Productos, 2: Servicios
       DocTipo: docTipo,
       DocNro: docNro,
-      CbteFch: new Date().toISOString().replace(/-/g, '').split('T')[0],
+      CbteFch: new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()).replace(/-/g, ''),
       ImpTotal: montoTotal,
       ImpTotConc: 0,
       ImpNeto: cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7
