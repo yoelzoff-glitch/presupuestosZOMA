@@ -1,7 +1,17 @@
 'use client'
-import { X, FileText, User, Calendar, DollarSign, Loader2, CheckCircle2, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { X, FileText, User, Calendar, DollarSign, Loader2, CheckCircle2, ShieldAlert, ShieldCheck, AlertCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+
+export interface FiscalConfigResponse {
+  configured: boolean
+  environment: 'homo' | 'prod'
+  cuit: string
+  punto_venta: number
+  tipo_contribuyente: 'monotributo' | 'responsable_inscripto' | 'exento'
+  verified_at: string | null
+  certificate_fingerprint: string | null
+}
 
 type Props = {
   isOpen: boolean
@@ -28,13 +38,15 @@ export default function InvoicePreviewModal({
   isEmitting
 }: Props) {
   const [items, setItems] = useState<any[]>([])
-  const [environment, setEnvironment] = useState<'homo' | 'prod'>('homo')
-  const [fiscalMetadata, setFiscalMetadata] = useState<any>(null)
+  const [environment, setEnvironment] = useState<'homo' | 'prod' | null>(null)
+  const [fiscalMetadata, setFiscalMetadata] = useState<FiscalConfigResponse | null>(null)
+  const [fiscalLoading, setFiscalLoading] = useState(false)
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [tipoCbte, setTipoCbte] = useState<number>(11)
   const [addIva, setAddIva] = useState(false)
   const [businessType, setBusinessType] = useState<string>('products')
+  const [prodConfirmed, setProdConfirmed] = useState(false)
   const [serviceDates, setServiceDates] = useState({ desde: '', hasta: '', vto: '' })
 
   const getInitialDates = () => {
@@ -63,37 +75,46 @@ export default function InvoicePreviewModal({
 
   useEffect(() => {
     if (isOpen && budgetId) {
+      setEnvironment(null)
+      setFiscalMetadata(null)
+      setProdConfirmed(false)
       setAddIva(false)
       setServiceDates(getInitialDates())
-      fetchData(environment)
+      fetchBudgetData()
     }
   }, [isOpen, budgetId])
 
   useEffect(() => {
-    if (isOpen && budgetId) {
+    if (environment) {
       fetchFiscalConfig(environment)
+    } else {
+      setFiscalMetadata(null)
     }
   }, [environment])
 
   async function fetchFiscalConfig(env: 'homo' | 'prod') {
+    setFiscalLoading(true)
     try {
       const res = await fetch(`/api/afip/config?environment=${env}`)
-      const data = await res.json()
-      if (data.success && data.config) {
-        setFiscalMetadata(data.config)
-        if (data.config.tipo_contribuyente === 'responsable_inscripto') {
-          const rawCond = (client?.condicion_iva || '').toLowerCase()
-          setTipoCbte(rawCond === 'responsable_inscripto' ? 1 : 6)
-        } else {
-          setTipoCbte(11)
-        }
+      if (!res.ok) throw new Error('Error al consultar configuración fiscal')
+      const data: FiscalConfigResponse = await res.json()
+
+      setFiscalMetadata(data)
+      if (data.tipo_contribuyente === 'responsable_inscripto') {
+        const rawCond = (client?.condicion_iva || '').toLowerCase()
+        setTipoCbte(rawCond === 'responsable_inscripto' ? 1 : 6)
+      } else {
+        setTipoCbte(11)
       }
     } catch (err) {
       console.error('Error fetching fiscal config:', err)
+      setFiscalMetadata(null)
+    } finally {
+      setFiscalLoading(false)
     }
   }
 
-  async function fetchData(env: 'homo' | 'prod') {
+  async function fetchBudgetData() {
     setLoading(true)
     try {
       const { data: budgetData } = await supabase
@@ -107,7 +128,6 @@ export default function InvoicePreviewModal({
         const cl = Array.isArray(budgetData.clients) ? budgetData.clients[0] : budgetData.clients
         setClient(cl)
 
-        // Fetch company business type
         const { data: compData } = await supabase
           .from('companies')
           .select('business_type')
@@ -115,8 +135,6 @@ export default function InvoicePreviewModal({
           .single()
 
         setBusinessType(compData?.business_type || 'products')
-
-        await fetchFiscalConfig(env)
       }
     } catch (err) {
       console.error(err)
@@ -144,6 +162,22 @@ export default function InvoicePreviewModal({
 
   const isFacturaAInvalid = tipoCbte === 1 && (!esReceptorRI || cuitLimpio.length !== 11)
 
+  const isProdBlocked = environment === 'prod' && (
+    !fiscalMetadata?.configured ||
+    !fiscalMetadata?.verified_at ||
+    !prodConfirmed
+  )
+
+  const canConfirm = Boolean(
+    environment &&
+    fiscalMetadata &&
+    !fiscalLoading &&
+    !loading &&
+    !isEmitting &&
+    !isFacturaAInvalid &&
+    !isProdBlocked
+  )
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl animate-in zoom-in-95 duration-300">
@@ -159,7 +193,7 @@ export default function InvoicePreviewModal({
             <div>
               <h3 className="text-lg font-black text-slate-900">Emisión de Factura ARCA</h3>
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Entorno: {environment === 'prod' ? 'Producción (Fiscal Real)' : 'Homologación (Prueba)'}
+                {environment === 'prod' ? 'Entorno: Producción (Fiscal Real)' : (environment === 'homo' ? 'Entorno: Homologación (Prueba)' : 'Seleccione el entorno fiscal')}
               </p>
             </div>
           </div>
@@ -171,7 +205,7 @@ export default function InvoicePreviewModal({
         {/* Content */}
         <div className="max-h-[70vh] overflow-y-auto p-8 space-y-6">
 
-          {/* Selector de Entorno (OBLIGATORIO) */}
+          {/* Selector de Entorno (OBLIGATORIO - SIN DEFAULT SILENCIOSO) */}
           <div className="rounded-[2rem] border-2 border-slate-200 bg-slate-50/80 p-5">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">
               1. Seleccione el Entorno de Emisión *
@@ -180,18 +214,18 @@ export default function InvoicePreviewModal({
               <button
                 type="button"
                 onClick={() => setEnvironment('homo')}
-                className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black transition border-2 ${
+                className={`flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-xs font-black transition border-2 ${
                   environment === 'homo'
                     ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
-                <ShieldCheck size={16} /> Homologación (Prueba)
+                <ShieldCheck size={16} /> Homologación (Testing)
               </button>
               <button
                 type="button"
                 onClick={() => setEnvironment('prod')}
-                className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black transition border-2 ${
+                className={`flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-xs font-black transition border-2 ${
                   environment === 'prod'
                     ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-500/20'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
@@ -201,16 +235,66 @@ export default function InvoicePreviewModal({
               </button>
             </div>
 
+            {/* Avisos de Configuración para Producción */}
             {environment === 'prod' && (
-              <div className="mt-4 p-3.5 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-2.5">
-                <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={16} />
-                <p className="text-xs font-bold text-amber-900 leading-snug">
-                  Esta operación emitirá un comprobante fiscal real en ARCA Producción y no puede eliminarse posteriormente.
-                </p>
+              <div className="mt-4 space-y-3">
+                {fiscalLoading ? (
+                  <div className="flex items-center gap-2 p-3 bg-slate-100 rounded-xl text-xs text-slate-600 font-bold">
+                    <Loader2 size={15} className="animate-spin text-emerald-600" /> Verificando credenciales productivas...
+                  </div>
+                ) : !fiscalMetadata?.configured ? (
+                  <div className="p-3.5 bg-red-50 rounded-xl border border-red-200 flex items-start gap-2.5">
+                    <AlertCircle className="text-red-600 shrink-0 mt-0.5" size={16} />
+                    <div>
+                      <p className="text-xs font-black text-red-900">Producción No Configurada</p>
+                      <p className="text-xs text-red-700 mt-0.5">
+                        Debe cargar los certificados y punto de venta de Producción en Configuración Fiscal antes de emitir.
+                      </p>
+                    </div>
+                  </div>
+                ) : !fiscalMetadata?.verified_at ? (
+                  <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-2.5">
+                    <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={16} />
+                    <div>
+                      <p className="text-xs font-black text-amber-900">Producción No Validada</p>
+                      <p className="text-xs text-amber-800 mt-0.5">
+                        Debe presionar "Probar Conexión (PROD)" en Configuración Fiscal para habilitar la emisión real.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200">
+                    <div className="flex items-center gap-2 text-xs font-black text-emerald-900">
+                      <ShieldCheck size={16} className="text-emerald-600" />
+                      Credenciales Validadas ({new Date(fiscalMetadata.verified_at).toLocaleString('es-AR')})
+                    </div>
+                    {fiscalMetadata.certificate_fingerprint && (
+                      <p className="text-[10px] font-mono text-emerald-700 mt-1">
+                        Fingerprint: {fiscalMetadata.certificate_fingerprint}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Confirmación explícita para Producción */}
+                {fiscalMetadata?.configured && fiscalMetadata?.verified_at && (
+                  <label className="flex items-start gap-3 p-3.5 bg-amber-50 rounded-xl border border-amber-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={prodConfirmed}
+                      onChange={(e) => setProdConfirmed(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-amber-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-xs font-bold text-amber-900 leading-snug">
+                      Confirmo que deseo emitir un comprobante fiscal legal definitivo en ARCA Producción con impacto tributario real.
+                    </span>
+                  </label>
+                )}
               </div>
             )}
           </div>
 
+          {/* Información Receptor & Emisor */}
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
@@ -226,10 +310,12 @@ export default function InvoicePreviewModal({
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                  <Calendar size={12} /> Emisor & Fecha
+                  <Calendar size={12} /> Emisor & Punto de Venta
                 </div>
-                <p className="font-bold text-slate-900">CUIT: {fiscalMetadata?.cuit || '...'}</p>
-                <p className="text-xs text-slate-500 mt-1">Punto de Venta: <span className="font-bold text-slate-700">{fiscalMetadata?.punto_venta || 1}</span></p>
+                <p className="font-bold text-slate-900">CUIT: {fiscalMetadata?.cuit || '---'}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Punto de Venta: <span className="font-bold text-slate-700">{fiscalMetadata ? fiscalMetadata.punto_venta : '---'}</span>
+                </p>
                 <p className="text-xs text-slate-500 mt-0.5">Fecha: {new Date().toLocaleDateString('es-AR')}</p>
               </div>
             </div>
@@ -289,11 +375,11 @@ export default function InvoicePreviewModal({
                 <button
                   key={t.id}
                   type="button"
-                  disabled={t.disabled || loading}
+                  disabled={t.disabled || loading || !environment}
                   onClick={() => setTipoCbte(t.id)}
                   className={`
                     flex flex-col items-center gap-1 rounded-2xl py-4 px-2 transition-all border-2
-                    ${t.disabled ? 'opacity-30 cursor-not-allowed bg-slate-100 border-transparent grayscale' :
+                    ${t.disabled || !environment ? 'opacity-30 cursor-not-allowed bg-slate-100 border-transparent grayscale' :
                       tipoCbte === t.id ? 'bg-indigo-600 border-indigo-200 text-white shadow-xl shadow-indigo-100' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300'}
                   `}
                 >
@@ -337,9 +423,9 @@ export default function InvoicePreviewModal({
           <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-5 space-y-2">
             <h5 className="text-xs font-black uppercase tracking-wider text-slate-700">Resumen Fiscal de Emisión:</h5>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-bold text-slate-600">
-              <p>Entorno: <span className="text-slate-900 uppercase font-black">{environment}</span></p>
+              <p>Entorno: <span className="text-slate-900 uppercase font-black">{environment || 'NO SELECCIONADO'}</span></p>
               <p>CUIT Emisor: <span className="text-slate-900">{fiscalMetadata?.cuit || '---'}</span></p>
-              <p>Punto Venta: <span className="text-slate-900">{fiscalMetadata?.punto_venta || 1}</span></p>
+              <p>Punto Venta: <span className="text-slate-900">{fiscalMetadata ? fiscalMetadata.punto_venta : '---'}</span></p>
               <p>Comprobante: <span className="text-slate-900 font-black">{tipoCbte === 1 ? 'Factura A' : (tipoCbte === 6 ? 'Factura B' : 'Factura C')}</span></p>
               <p>Condición Receptor: <span className="text-slate-900">{condicionLabel}</span></p>
               <p>Total ARCA: <span className="text-slate-900 font-black">${finalTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span></p>
@@ -357,15 +443,19 @@ export default function InvoicePreviewModal({
             Cancelar
           </button>
           <button
-            onClick={() => onConfirm(
-              tipoCbte,
-              addIva,
-              environment,
-              businessType === 'services'
-                ? { FchServDesde: serviceDates.desde, FchServHasta: serviceDates.hasta, FchVtoPago: serviceDates.vto }
-                : undefined
-            )}
-            disabled={isEmitting || loading || isFacturaAInvalid}
+            onClick={() => {
+              if (environment) {
+                onConfirm(
+                  tipoCbte,
+                  addIva,
+                  environment,
+                  businessType === 'services'
+                    ? { FchServDesde: serviceDates.desde, FchServHasta: serviceDates.hasta, FchVtoPago: serviceDates.vto }
+                    : undefined
+                )
+              }
+            }}
+            disabled={!canConfirm}
             className={`flex items-center gap-2 rounded-2xl px-8 py-3 text-sm font-black text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${
               environment === 'prod'
                 ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-200'
@@ -373,7 +463,7 @@ export default function InvoicePreviewModal({
             }`}
           >
             {isEmitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-            Confirmar y Emitir en {environment.toUpperCase()}
+            {environment ? `Confirmar y Emitir en ${environment.toUpperCase()}` : 'Seleccione Entorno'}
           </button>
         </div>
       </div>

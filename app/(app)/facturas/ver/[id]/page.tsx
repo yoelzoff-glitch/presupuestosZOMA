@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { notFound, useParams, useSearchParams } from 'next/navigation'
-import { FileText, Printer, Loader2, ArrowLeft, Send, Calendar } from 'lucide-react'
+import { FileText, Printer, Loader2, ArrowLeft, Send, Calendar, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
 
 export default function VerFacturaPage() {
    const params = useParams()
@@ -14,6 +15,7 @@ export default function VerFacturaPage() {
    const [budget, setBudget] = useState<any>(null)
    const [loading, setLoading] = useState(true)
    const [emitiendo, setEmitiendo] = useState(false)
+   const [modalPreviewOpen, setModalPreviewOpen] = useState(false)
    const [serviceDates, setServiceDates] = useState({ desde: '', hasta: '', vto: '' })
 
    const getInitialDates = () => {
@@ -53,10 +55,10 @@ export default function VerFacturaPage() {
          .from('budgets')
          .select(`
         *,
-        clients ( name, cuit, address, email ),
+        clients ( name, cuit, address, email, condicion_iva ),
         budget_items ( * ),
         companies ( name, cuit, address, logo_url, business_type ),
-        invoices ( id, afip_comprobante_tipo, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, afip_servicio_desde, afip_servicio_hasta, afip_servicio_vto, invoice_items ( * ) )
+        invoices ( id, afip_comprobante_tipo, afip_punto_venta, arca_environment, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, afip_servicio_desde, afip_servicio_hasta, afip_servicio_vto, invoice_items ( * ) )
       `)
          .eq('id', id)
          .single()
@@ -84,6 +86,8 @@ export default function VerFacturaPage() {
          finalBudget.afip_cae_vencimiento = activeInvoice.afip_cae_vencimiento
          finalBudget.afip_comprobante_numero = activeInvoice.afip_comprobante_numero
          finalBudget.afip_comprobante_tipo = activeInvoice.afip_comprobante_tipo
+         finalBudget.afip_punto_venta = activeInvoice.afip_punto_venta || finalBudget.afip_punto_venta
+         finalBudget.arca_environment = activeInvoice.arca_environment || finalBudget.arca_environment
          finalBudget.total_amount = activeInvoice.total_amount
          if (activeInvoice.invoice_date) {
             finalBudget.budget_date = activeInvoice.invoice_date
@@ -118,7 +122,12 @@ export default function VerFacturaPage() {
       setLoading(false)
    }
 
-   async function emitirFactura(env: 'homo' | 'prod' = 'homo') {
+   async function emitirFacturaConParametros(
+      tipoCbte: number,
+      addIva: boolean,
+      env: 'homo' | 'prod',
+      srvDates?: { FchServDesde: string; FchServHasta: string; FchVtoPago: string }
+   ) {
       try {
          setEmitiendo(true)
          const response = await fetch('/api/afip/create-invoice', {
@@ -127,22 +136,23 @@ export default function VerFacturaPage() {
             body: JSON.stringify({
                budget_id: budget.id,
                environment: env,
-               serviceDates: budget.companies?.business_type === 'services' ? {
-                  FchServDesde: serviceDates.desde,
-                  FchServHasta: serviceDates.hasta,
-                  FchVtoPago: serviceDates.vto
-               } : undefined
+               cbteTipoOverride: tipoCbte,
+               addIva,
+               serviceDates: srvDates
             })
          })
 
          const result = await response.json()
-         if (!response.ok) throw new Error(result.error || 'Error al emitir factura')
+         if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Error al emitir factura en ARCA')
+         }
 
-         toast.success('Factura emitida con éxito')
-         fetchBudget() // Recargar para mostrar el CAE
+         toast.success(`Factura autorizada con éxito en ${env.toUpperCase()} (CAE: ${result.cae})`)
+         setModalPreviewOpen(false)
+         fetchBudget()
       } catch (error: any) {
          console.error(error)
-         toast.error(error.message || 'Error de conexión con AFIP')
+         toast.error(error.message || 'Error de conexión con ARCA')
       } finally {
          setEmitiendo(false)
       }
@@ -163,10 +173,12 @@ export default function VerFacturaPage() {
    const esBorrador = !budget.afip_cae
    const invoice = budget.selected_invoice || (budget.invoices && budget.invoices.length > 0 ? budget.invoices[0] : null)
    const esAnulada = budget.selected_invoice ? false : (invoice?.status === 'cancelled')
+   const arcaEnv: 'homo' | 'prod' = budget.arca_environment || invoice?.arca_environment || 'homo'
+   const esProdOficial = !esBorrador && arcaEnv === 'prod'
+   const esHomoTesting = !esBorrador && arcaEnv === 'homo'
 
-   // Obtener el tipo de comprobante. Si está emitido, usa el del budget. Si es borrador, usa el de la tabla invoices. Si no, default a 11.
    const comprobanteTipo = budget.afip_comprobante_tipo || (invoice ? invoice.afip_comprobante_tipo : 11)
-    const esComprobanteA = [1, 2, 3, 7, 8].includes(comprobanteTipo)
+   const esComprobanteA = [1, 2, 3, 7, 8].includes(comprobanteTipo)
 
    const afipConfig = budget.company_afip_config
    const condicionIvaEmpresa = afipConfig?.tipo_contribuyente === 'responsable_inscripto'
@@ -206,24 +218,30 @@ export default function VerFacturaPage() {
       return dateStr
    }
 
-   const realPtoVta = Number(budget?.company_afip_config?.punto_venta) || 4
-   const qrData = {
-      ver: 1,
-      fecha: budget.budget_date,
-      cuit: company?.cuit || 20412886128,
-      ptoVta: realPtoVta,
-      tipoCmp: comprobanteTipo,
-      nroCmp: budget.afip_comprobante_numero || 0,
-      importe: Math.abs(budget.total_amount),
-      moneda: "PES",
-      ctz: 1,
-      tipoDocRec: 99,
-      nroDocRec: 0,
-      tipoCodAut: "E",
-      codAut: budget.afip_cae || "00000000000000"
+   // Punto de venta persistido en la factura o budget
+   const realPtoVta = Number(budget.afip_punto_venta || invoice?.afip_punto_venta || budget?.company_afip_config?.punto_venta || 1)
+
+   // QR Oficial generado ÚNICAMENTE si está emitido en PRODUCCIÓN
+   let qrUrl = ''
+   if (esProdOficial && budget.afip_cae && budget.afip_comprobante_numero) {
+      const qrData = {
+         ver: 1,
+         fecha: budget.budget_date,
+         cuit: parseInt(String(company?.cuit || '').replace(/\D/g, ''), 10) || 0,
+         ptoVta: realPtoVta,
+         tipoCmp: comprobanteTipo,
+         nroCmp: budget.afip_comprobante_numero,
+         importe: Math.abs(budget.total_amount),
+         moneda: "PES",
+         ctz: 1,
+         tipoDocRec: 99,
+         nroDocRec: 0,
+         tipoCodAut: "E",
+         codAut: budget.afip_cae
+      }
+      const qrBase64 = typeof window !== 'undefined' ? btoa(JSON.stringify(qrData)) : ''
+      qrUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`
    }
-   const qrBase64 = typeof window !== 'undefined' ? btoa(JSON.stringify(qrData)) : ''
-   const qrUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`
 
    return (
       <div className="min-h-screen bg-slate-100 p-4 md:p-8 print:p-0 print:bg-white font-sans">
@@ -234,20 +252,24 @@ export default function VerFacturaPage() {
                   <ArrowLeft size={20} />
                </Link>
                <div className="h-8 w-[1px] bg-slate-200 mx-1" />
-               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
+               <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-lg ${
+                  esProdOficial ? 'bg-emerald-600 shadow-emerald-200' : 'bg-indigo-600 shadow-indigo-200'
+               }`}>
                   <FileText size={20} />
                </div>
                <div>
                   <h1 className="font-black text-slate-900 leading-none">Comprobante AFIP</h1>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                     {esBorrador ? 'Documento Borrador' : 'Legalizado por ARCA'}
+                     {esBorrador
+                        ? 'Documento Borrador'
+                        : (esProdOficial ? 'Legalizado por ARCA (Producción)' : 'Homologación (Testing - Sin validez fiscal)')}
                   </p>
                </div>
             </div>
             <div className="flex gap-2">
                {esBorrador && (
                   <button
-                     onClick={() => emitirFactura('homo')}
+                     onClick={() => setModalPreviewOpen(true)}
                      disabled={emitiendo}
                      className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-black text-white hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 disabled:opacity-50"
                   >
@@ -261,83 +283,39 @@ export default function VerFacturaPage() {
             </div>
          </div>
 
-         {/* Fechas de Servicio si es empresa de Servicios y es borrador */}
-         {esBorrador && company?.business_type === 'services' && (
-            <div className="mx-auto mb-6 max-w-4xl rounded-2xl bg-white p-6 shadow-sm border border-slate-200 print:hidden animate-in fade-in slide-in-from-top-2 duration-200">
-               <div className="flex items-center gap-3 mb-4">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                     <Calendar size={18} />
-                  </div>
-                  <div>
-                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Período de Facturación del Servicio</h3>
-                     <p className="text-[11px] font-medium text-slate-500">Configurá las fechas requeridas por AFIP para la prestación de servicios y vencimiento de pago.</p>
-                  </div>
+         {/* Banner de Homologación si es comprobante de testing */}
+         {esHomoTesting && (
+            <div className="mx-auto mb-6 max-w-4xl rounded-2xl bg-amber-50 border-2 border-amber-300 p-4 text-xs font-black text-amber-900 flex items-center justify-between shadow-sm">
+               <div className="flex items-center gap-2">
+                  <AlertTriangle className="text-amber-600 shrink-0" size={18} />
+                  <span>HOMOLOGACIÓN — SIN VALIDEZ FISCAL (Comprobante generado en ambiente de testing ARCA Sandbox)</span>
                </div>
-
-               <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="space-y-1.5">
-                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Servicio Desde</label>
-                     <input
-                        type="date"
-                        value={serviceDates.desde}
-                        onChange={(e) => setServiceDates({ ...serviceDates, desde: e.target.value })}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                        required
-                     />
-                  </div>
-
-                  <div className="space-y-1.5">
-                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Servicio Hasta</label>
-                     <input
-                        type="date"
-                        value={serviceDates.hasta}
-                        onChange={(e) => setServiceDates({ ...serviceDates, hasta: e.target.value })}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                        required
-                     />
-                  </div>
-
-                  <div className="space-y-1.5">
-                     <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Vencimiento Pago</label>
-                     <input
-                        type="date"
-                        value={serviceDates.vto}
-                        onChange={(e) => setServiceDates({ ...serviceDates, vto: e.target.value })}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                        required
-                     />
-                  </div>
-               </div>
+               <span className="bg-amber-600 text-white px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider">
+                  Testing
+               </span>
             </div>
          )}
 
          {/* Factura Layout */}
          <div className="mx-auto max-w-4xl border border-slate-300 bg-white p-10 pt-14 shadow-2xl print:shadow-none print:border-none print:p-0 print:pt-10 rounded-[2rem] print:rounded-none overflow-hidden relative">
 
-            {/* Marca de agua / Decoración */}
-            <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none print:hidden">
-               <FileText size={200} />
-            </div>
-
-            {esAnulada && (
-               <div className="mb-6 rounded-2xl bg-rose-50 border border-rose-200 p-4 text-xs font-black text-rose-700 flex items-center justify-between print:hidden">
-                  <span className="flex items-center gap-2">
-                     ⚠️ Este comprobante ha sido ANULADO mediante una Nota de Crédito.
-                  </span>
-                  <span className="bg-rose-600 text-white px-2.5 py-1 rounded-md text-[9px] uppercase tracking-wider">
-                     Documento sin validez comercial
-                  </span>
+            {/* Marcas de agua */}
+            {esHomoTesting && (
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.07] z-0 select-none">
+                  <p className="text-[90px] font-black tracking-tighter whitespace-nowrap text-amber-800 border-8 border-amber-800 px-12 py-4 rounded-3xl uppercase">
+                     SIN VALIDEZ FISCAL
+                  </p>
                </div>
             )}
 
             {esBorrador && (
-               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.05] z-0">
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.05] z-0 select-none">
                   <p className="text-[140px] font-black tracking-tighter whitespace-nowrap text-slate-900">BORRADOR</p>
                </div>
             )}
 
             {esAnulada && (
-               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.08] z-10">
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 pointer-events-none opacity-[0.08] z-10 select-none">
                   <p className="text-[120px] font-black tracking-tighter whitespace-nowrap text-rose-600 border-8 border-rose-600 px-10 rounded-3xl uppercase">ANULADA</p>
                </div>
             )}
@@ -362,9 +340,21 @@ export default function VerFacturaPage() {
                </div>
 
                <div className="flex-1 p-6 border-l-2 border-slate-900 bg-slate-50/30">
-                  <h2 className="text-2xl font-black uppercase text-slate-900 tracking-tighter">{getComprobanteNombre(comprobanteTipo)}</h2>
+                  <div className="flex items-center justify-between">
+                     <h2 className="text-2xl font-black uppercase text-slate-900 tracking-tighter">{getComprobanteNombre(comprobanteTipo)}</h2>
+                     {esProdOficial && (
+                        <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-600 text-white px-2 py-0.5 rounded">
+                           PRODUCCIÓN
+                        </span>
+                     )}
+                     {esHomoTesting && (
+                        <span className="text-[9px] font-black uppercase tracking-wider bg-amber-600 text-white px-2 py-0.5 rounded">
+                           HOMOLOGACIÓN
+                        </span>
+                     )}
+                  </div>
                   <div className="mt-4 space-y-1 text-sm font-black text-slate-900">
-                     <p>Punto de Venta: {String(qrData.ptoVta).padStart(5, '0')}</p>
+                     <p>Punto de Venta: {String(realPtoVta).padStart(5, '0')}</p>
                      <p>Comp. Nro: {budget.afip_comprobante_numero ? String(budget.afip_comprobante_numero).padStart(8, '0') : '---'}</p>
                      <p>Fecha: {new Date(budget.budget_date).toLocaleDateString('es-AR')}</p>
                      <div className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
@@ -456,17 +446,28 @@ export default function VerFacturaPage() {
             {/* Totales y AFIP Info */}
             <div className="mt-4 flex justify-between items-start">
                <div className="flex gap-6 items-center">
-                  <div className="h-28 w-28 border-2 border-slate-900 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
-                     <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrUrl)}`}
-                        alt="QR AFIP"
-                        className="h-24 w-24"
-                     />
+                  <div className="h-28 w-28 border-2 border-slate-900 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm p-1">
+                     {qrUrl ? (
+                        <img
+                           src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrUrl)}`}
+                           alt="QR Oficial AFIP"
+                           className="h-24 w-24"
+                        />
+                     ) : (
+                        <div className="flex flex-col items-center justify-center text-center p-1 text-[8px] font-bold text-slate-400">
+                           <FileText size={20} className="text-slate-300 mb-1" />
+                           {esHomoTesting ? 'Sin QR Fiscal (HOMO)' : 'Sin QR (Borrador)'}
+                        </div>
+                     )}
                   </div>
                   <div className="text-[10px] font-black uppercase text-slate-900 space-y-1">
-                     <p className={`flex items-center gap-2 mb-2 px-2 py-1 w-fit rounded ${esBorrador ? 'bg-amber-100 text-amber-700' : 'bg-slate-900 text-white'}`}>
+                     <p className={`flex items-center gap-2 mb-2 px-2 py-1 w-fit rounded ${
+                        esBorrador
+                           ? 'bg-amber-100 text-amber-700'
+                           : (esProdOficial ? 'bg-slate-900 text-white' : 'bg-amber-600 text-white')
+                     }`}>
                         <img src="https://www.afip.gob.ar/images/logo_afip.png" className={`h-3 ${esBorrador ? 'grayscale' : 'brightness-0 invert'}`} alt="AFIP" />
-                        {esBorrador ? 'Borrador sin autorizar' : 'Comprobante Autorizado'}
+                        {esBorrador ? 'Borrador sin autorizar' : (esProdOficial ? 'Comprobante Autorizado (PROD)' : 'Autorizado en Testing (HOMO)')}
                      </p>
                      <p>CAE: <span className={`font-black text-base ml-1 tracking-tighter ${esBorrador ? 'text-slate-400' : 'text-indigo-600'}`}>{budget.afip_cae || "00000000000000"}</span></p>
                      <p>Vencimiento CAE: {budget.afip_cae_vencimiento ? new Date(budget.afip_cae_vencimiento).toLocaleDateString('es-AR') : '--/--/----'}</p>
@@ -507,9 +508,28 @@ export default function VerFacturaPage() {
             </div>
 
             <div className="mt-10 text-center text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">
-               Esta es una representación gráfica de un comprobante electrónico autorizado por ARCA (AFIP).
+               {esProdOficial
+                  ? 'Esta es una representación gráfica de un comprobante electrónico autorizado por ARCA (AFIP) en ambiente de Producción Oficial.'
+                  : (esHomoTesting
+                     ? 'COMPROBANTE DE HOMOLOGACIÓN / PRUEBAS — SIN VALIDEZ FISCAL NI COMERCIAL.'
+                     : 'Documento Borrador sin validez contable ni impositiva.')}
             </div>
          </div>
+
+         {/* Modal de Previsualización y Emisión con Selección Explícita */}
+         {modalPreviewOpen && (
+            <InvoicePreviewModal
+               isOpen={modalPreviewOpen}
+               onClose={() => setModalPreviewOpen(false)}
+               onConfirm={(tipo, addIva, env, srvDates) => {
+                  emitirFacturaConParametros(tipo, addIva, env, srvDates)
+               }}
+               budgetId={budget.id}
+               clientName={client?.name || ''}
+               totalAmount={budget.total_amount}
+               isEmitting={emitiendo}
+            />
+         )}
       </div>
    )
 }

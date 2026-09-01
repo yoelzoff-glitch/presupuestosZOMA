@@ -299,6 +299,7 @@ describe('Integration & Security Tests: Sprint P0.1 ARCA Hardening (22 Scenarios
       environment: 'homo' as const,
       isCreditNote: true,
       is_total_cancellation: false,
+      invoice_original_id: '550e8400-e29b-41d4-a716-446655440001',
       correction_request_id: '550e8400-e29b-41d4-a716-446655440000',
       customAmount: 500
     }
@@ -313,6 +314,7 @@ describe('Integration & Security Tests: Sprint P0.1 ARCA Hardening (22 Scenarios
       environment: 'homo' as const,
       isCreditNote: true,
       is_total_cancellation: true,
+      invoice_original_id: '550e8400-e29b-41d4-a716-446655440001',
       correction_request_id: '550e8400-e29b-41d4-a716-446655440000'
     }
     const resultTotal = CreateInvoiceRequestSchema.safeParse(totalCorrection)

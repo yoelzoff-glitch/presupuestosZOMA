@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
 
   let newBudgetId: string | null = null
   let newInvoiceId: string | null = null
+  let afipContacted = false
 
   try {
     const {
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
       ? Number(lastBudgetData[0].budget_number) + 1
       : 1950
 
-    // 4. Crear registro en la tabla budgets
+    // 4. Crear registro en la tabla budgets con arca_environment explícito
     const { data: budget, error: budgetError } = await supabase
       .from('budgets')
       .insert({
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
         budget_date: new Date().toISOString().split('T')[0],
         total_amount: totalAmount,
         status: 'approved',
+        arca_environment: environment,
         notes: `Cobro mensual de abono: ${sub.name}`
       })
       .select('id')
@@ -115,7 +117,7 @@ export async function POST(request: NextRequest) {
       throw new Error(`Error al insertar ítems del presupuesto: ${itemsError.message}`)
     }
 
-    // 6. Crear borrador de factura en la tabla invoices
+    // 6. Crear borrador de factura en la tabla invoices con arca_environment explícito
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .insert({
@@ -124,6 +126,7 @@ export async function POST(request: NextRequest) {
         budget_id: budget.id,
         total_amount: totalAmount,
         status: 'draft',
+        arca_environment: environment,
         afip_comprobante_tipo: cbteTipoOverride || null,
         invoice_date: new Date().toISOString().split('T')[0]
       })
@@ -155,7 +158,8 @@ export async function POST(request: NextRequest) {
       throw new Error(`Error al copiar ítems a la factura: ${invItemsError.message}`)
     }
 
-    // 8. Invocar la API oficial de AFIP
+    // 8. Invocar la API oficial de AFIP/ARCA
+    afipContacted = true
     const afipResponse = await fetch(`${request.nextUrl.origin}/api/afip/create-invoice`, {
       method: 'POST',
       headers: {
@@ -178,13 +182,12 @@ export async function POST(request: NextRequest) {
     const afipResult = await afipResponse.json()
 
     if (!afipResponse.ok || !afipResult.success) {
-      throw new Error(afipResult.error || 'Fallo en la autorización ante AFIP')
+      throw new Error(afipResult.error || 'Fallo en la autorización ante ARCA')
     }
 
     // 9. Actualizar last_billed_month en abono para evitar dobles cobros
     const currentMonthLabel = (service_desde || new Date().toISOString()).slice(0, 7)
-
-    await supabase
+    const { error: updateSubErr } = await supabase
       .from('subscriptions')
       .update({
         last_billed_month: currentMonthLabel,
@@ -192,32 +195,42 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', subscription_id)
 
+    if (updateSubErr) {
+      console.error('[CRITICAL] Error actualizando last_billed_month en subscription:', updateSubErr)
+    }
+
     return NextResponse.json({
       success: true,
       cae: afipResult.cae,
       invoice_number: afipResult.invoice_number,
+      environment,
       budget_id: budget.id,
-      message: 'Abono facturado y autorizado ante AFIP correctamente.'
+      status: afipResult.status || 'persisted',
+      message: 'Abono facturado y autorizado ante ARCA correctamente.'
     })
 
   } catch (error: any) {
     console.error('❌ Error facturando abono:', error.message)
 
-    // Rollback de base de datos para mantener integridad en caso de fallos AFIP/ARCA
-    try {
-      if (newInvoiceId) {
-        await supabase.from('invoices').delete().eq('id', newInvoiceId)
+    // FAIL-CLOSED: Solo ejecutar rollback de registros temporales si NO se contactó a ARCA.
+    // Si ARCA fue contactado, los registros deben preservarse para posibilitar reconciliación.
+    if (!afipContacted) {
+      try {
+        if (newInvoiceId) {
+          await supabase.from('invoices').delete().eq('id', newInvoiceId)
+        }
+        if (newBudgetId) {
+          await supabase.from('budgets').delete().eq('id', newBudgetId)
+        }
+      } catch (cleanupError) {
+        console.error('Error durante rollback local previo a ARCA:', cleanupError)
       }
-      if (newBudgetId) {
-        await supabase.from('budgets').delete().eq('id', newBudgetId)
-      }
-    } catch (cleanupError) {
-      console.error('Error durante rollback:', cleanupError)
     }
 
     return NextResponse.json({
       success: false,
-      error: error.message || 'Error interno facturando abono'
+      error: error.message || 'Error interno facturando abono',
+      afipContacted
     }, { status: 500 })
   }
 }

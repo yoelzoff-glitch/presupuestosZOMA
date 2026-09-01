@@ -74,7 +74,7 @@ function normalizeDateStr(d: string): string {
 export const CreateInvoiceRequestSchema = z.object({
   budget_id: z.string().uuid({ message: 'El ID del presupuesto debe ser un UUID válido.' }),
   environment: z.enum(['homo', 'prod'], {
-    error: 'El parámetro environment es obligatorio y debe ser "homo" o "prod".'
+    message: 'El parámetro environment es obligatorio y debe ser "homo" o "prod".'
   }),
   cbteTipoOverride: z.number().int().refine(val => (ALLOWED_CBTE_TIPOS as readonly number[]).includes(val), {
     message: 'Tipo de comprobante no permitido. Solo se permiten Facturas (1, 6, 11), Notas de Débito (2, 7, 12) y Notas de Crédito (3, 8, 13).'
@@ -90,14 +90,15 @@ export const CreateInvoiceRequestSchema = z.object({
     FchServDesde: z.string().regex(/^\d{4}-?\d{2}-?\d{2}$/, { message: 'Formato de fecha de servicio inválido' }),
     FchServHasta: z.string().regex(/^\d{4}-?\d{2}-?\d{2}$/, { message: 'Formato de fecha de servicio inválido' }),
     FchVtoPago: z.string().regex(/^\d{4}-?\d{2}-?\d{2}$/, { message: 'Formato de fecha de vencimiento inválido' }),
-  }).refine(dates => {
+  }).optional().refine(dates => {
+    if (!dates) return true
     const d1 = normalizeDateStr(dates.FchServDesde)
     const d2 = normalizeDateStr(dates.FchServHasta)
     const d3 = normalizeDateStr(dates.FchVtoPago)
     return d1 <= d2 && d2 <= d3
   }, {
     message: 'Las fechas del servicio deben respetar el orden cronológico: FchServDesde <= FchServHasta <= FchVtoPago.'
-  }).optional()
+  })
 }).refine(data => !(data.isCreditNote && data.isDebitNote), {
   message: 'Un comprobante no puede ser Nota de Crédito y Nota de Débito simultáneamente.'
 }).refine(data => {
@@ -108,6 +109,14 @@ export const CreateInvoiceRequestSchema = z.object({
 }, {
   message: 'correction_request_id es obligatorio para emitir Notas de Crédito o Débito.',
   path: ['correction_request_id']
+}).refine(data => {
+  if ((data.isCreditNote || data.isDebitNote) && !data.invoice_original_id) {
+    return false
+  }
+  return true
+}, {
+  message: 'invoice_original_id es obligatorio para emitir Notas de Crédito o Débito.',
+  path: ['invoice_original_id']
 })
 
 export const UpdateFiscalConfigSchema = z.object({
@@ -117,11 +126,11 @@ export const UpdateFiscalConfigSchema = z.object({
       message: 'El CUIT debe tener exactamente 11 dígitos numéricos.'
     }),
   tipo_contribuyente: z.enum(['monotributo', 'responsable_inscripto', 'exento'], {
-    error: 'La condición fiscal debe ser monotributo, responsable_inscripto o exento.'
+    message: 'La condición fiscal debe ser monotributo, responsable_inscripto o exento.'
   }),
   punto_venta: z.number().int().positive('El Punto de Venta debe ser un número entero mayor a 0.'),
   environment: z.enum(['homo', 'prod'], {
-    error: 'El entorno debe ser homo o prod.'
+    message: 'El entorno debe ser homo o prod.'
   }),
   cert_content: z.string().optional(),
   key_content: z.string().optional()

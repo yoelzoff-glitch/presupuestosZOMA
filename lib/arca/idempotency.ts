@@ -171,12 +171,18 @@ export async function reconcileVoucherWithArca(
       comprobanteTipo
     )
 
-    if (voucherInfo && (voucherInfo.resultado === 'A' || voucherInfo.codAutorizacion)) {
+    const rawAny = voucherInfo as any
+    const resGet = rawAny?.resultGet || rawAny
+    const codAut = resGet?.codAutorizacion || resGet?.CAE || resGet?.cae || rawAny?.codAutorizacion
+    const fchVto = resGet?.fchVto || resGet?.CAEFchVto || resGet?.caeFchVto || rawAny?.fchVto
+    const resultado = resGet?.resultado || resGet?.Resultado || rawAny?.resultado
+
+    if (codAut || resultado === 'A') {
       return {
         status: 'authorized',
         authorized: true,
-        cae: String(voucherInfo.codAutorizacion || ''),
-        caeExpiresAt: voucherInfo.fchVto,
+        cae: String(codAut || ''),
+        caeExpiresAt: fchVto,
         rawResponse: voucherInfo
       }
     }

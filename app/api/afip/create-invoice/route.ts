@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     const esCorrectivo = Boolean(isCreditNote || isDebitNote)
     const operationType = isCreditNote ? 'credit_note' : (isDebitNote ? 'debit_note' : 'invoice')
 
-    // 2. Pre-flight check de infraestructura (verificar tablas y RPCs antes de contactar ARCA)
+    // 2. Pre-flight check de infraestructura
     const { error: infraCheckErr } = await supabaseAdmin
       .from('arca_invoice_attempts')
       .select('id')
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       }, { status: 503 })
     }
 
-    // 3. Obtener datos del presupuesto e ítems (validando pertenencia a la empresa)
+    // 3. Obtener datos del presupuesto e ítems
     const { data: budget, error: bError } = await supabaseAdmin
       .from('budgets')
       .select('*, budget_items(*), clients(*)')
@@ -80,6 +80,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'No tiene permiso para facturar este presupuesto' }, { status: 403 })
     }
 
+    // Reglas estrictas sobre presupuesto con CAE previo si no es correctivo
+    if (budget.afip_cae && !esCorrectivo) {
+      if (budget.arca_environment === environment) {
+        return NextResponse.json({
+          success: true,
+          message: 'El presupuesto ya cuenta con factura autorizada en este entorno.',
+          cae: budget.afip_cae,
+          comprobante_numero: budget.afip_comprobante_numero,
+          punto_venta: budget.afip_punto_venta || 0,
+          environment: budget.arca_environment,
+          is_production: environment === 'prod',
+          status: 'persisted'
+        })
+      }
+
+      if (budget.arca_environment && budget.arca_environment !== environment) {
+        return NextResponse.json({
+          success: false,
+          error: `El presupuesto fue emitido previamente en entorno ${budget.arca_environment.toUpperCase()} y no puede reutilizarse en ${environment.toUpperCase()}. Debe crear un nuevo presupuesto para este entorno.`
+        }, { status: 409 })
+      }
+
+      if (!budget.arca_environment) {
+        return NextResponse.json({
+          success: false,
+          error: 'El comprobante existente no cuenta con entorno fiscal clasificado. Clasifique el comprobante legacy antes de continuar.'
+        }, { status: 409 })
+      }
+    }
+
     // Obtener tipo de negocio de la empresa
     const { data: companyObj } = await supabaseAdmin
       .from('companies')
@@ -88,18 +118,77 @@ export async function POST(request: Request) {
       .single()
     const businessType = companyObj?.business_type || 'products'
 
-    // Si el presupuesto ya cuenta con CAE y no es una nota correctiva
-    if (budget.afip_cae && !esCorrectivo) {
-      return NextResponse.json({
-        success: true,
-        message: 'El presupuesto ya cuenta con factura legalizada autorizada.',
-        cae: budget.afip_cae,
-        comprobante_numero: budget.afip_comprobante_numero,
-        punto_venta: budget.afip_punto_venta || 0
-      })
+    // 4. Validaciones específicas para Notas de Crédito / Débito
+    let originalInvoice: any = null
+    let remainingBalance = 0
+
+    if (esCorrectivo) {
+      if (!invoice_original_id) {
+        return NextResponse.json({
+          success: false,
+          error: 'invoice_original_id es obligatorio para emitir Notas de Crédito o Débito.'
+        }, { status: 400 })
+      }
+
+      const { data: origInv, error: origInvErr } = await supabaseAdmin
+        .from('invoices')
+        .select('*')
+        .eq('id', invoice_original_id)
+        .single()
+
+      if (origInvErr || !origInv) {
+        return NextResponse.json({
+          success: false,
+          error: 'Factura original a corregir no encontrada.'
+        }, { status: 404 })
+      }
+
+      if (origInv.company_id !== companyId || origInv.budget_id !== budget_id) {
+        return NextResponse.json({
+          success: false,
+          error: 'La factura original no corresponde a esta empresa o presupuesto.'
+        }, { status: 403 })
+      }
+
+      if (!origInv.afip_cae) {
+        return NextResponse.json({
+          success: false,
+          error: 'La factura original no cuenta con CAE autorizado para corregir.'
+        }, { status: 400 })
+      }
+
+      // Validar coincidencia de entorno
+      if (origInv.arca_environment && origInv.arca_environment !== environment) {
+        return NextResponse.json({
+          success: false,
+          error: `La factura original fue emitida en ${origInv.arca_environment.toUpperCase()} y la corrección debe realizarse en ese mismo entorno.`
+        }, { status: 409 })
+      }
+
+      originalInvoice = origInv
+
+      // Calcular saldo restante acreditable de la factura original
+      if (isCreditNote) {
+        const { data: existingNCs } = await supabaseAdmin
+          .from('invoices')
+          .select('total_amount')
+          .eq('budget_id', budget_id)
+          .in('afip_comprobante_tipo', [3, 8, 13])
+          .eq('status', 'emitted')
+
+        const totalCredited = (existingNCs || []).reduce((acc, curr) => acc + Math.abs(Number(curr.total_amount)), 0)
+        remainingBalance = Math.max(0, Number(origInv.total_amount) - totalCredited)
+
+        if (remainingBalance <= 0) {
+          return NextResponse.json({
+            success: false,
+            error: 'La factura original ya ha sido totalmente acreditada y no posee saldo disponible.'
+          }, { status: 400 })
+        }
+      }
     }
 
-    // 4. Inicializar cliente ARCA para el entorno seleccionado
+    // 5. Inicializar cliente ARCA para el entorno seleccionado
     const { arca, credentials, isProduction } = await createArcaClient(
       supabaseAdmin,
       companyId,
@@ -116,14 +205,26 @@ export async function POST(request: Request) {
       .eq('status', 'draft')
       .maybeSingle()
 
-    // 5. Mapeo explícito de Condición IVA según normativa ARCA
+    // 6. Mapeo explícito de Condición IVA según normativa ARCA
     const esRI = credentials.tipoContribuyente === 'responsable_inscripto'
     const cuitLimpio = (client?.cuit || '').replace(/[-_ ]/g, '').trim()
     const esCuitValido = cuitLimpio.length === 11
     const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
-    const montoBase = customAmount
+
+    let montoBase = customAmount
       ? Number(customAmount)
       : (existingDraft ? Number(existingDraft.total_amount) : Number(budget.total_amount))
+
+    if (isCreditNote) {
+      if (is_total_cancellation) {
+        montoBase = remainingBalance
+      } else if (montoBase > remainingBalance + 0.01) {
+        return NextResponse.json({
+          success: false,
+          error: `El monto de la Nota de Crédito ($${montoBase.toLocaleString('es-AR')}) supera el saldo disponible acreditable ($${remainingBalance.toLocaleString('es-AR')}).`
+        }, { status: 400 })
+      }
+    }
 
     const rawCondIva = (client?.condicion_iva || client?.tax_condition || '').toLowerCase().trim()
     let condicionIvaReceptor = 5 // Consumidor Final por defecto
@@ -193,7 +294,7 @@ export async function POST(request: Request) {
       else if (cbteTipo === 11) cbteTipo = 12
     }
 
-    // Cálculo centralizado de impuestos (alícuota estricta 21% en A/B, sin IVA en C)
+    // Cálculo centralizado de impuestos
     const taxes = calculateInvoiceTaxes({
       montoTotal: montoBase,
       cbteTipo,
@@ -209,7 +310,7 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    // 6. Idempotencia y Reclamación Atómica de Intento
+    // 7. Idempotencia y Reclamación Atómica de Intento
     const idempotencyKey = buildIdempotencyKey({
       companyId,
       budgetId: budget_id,
@@ -227,7 +328,7 @@ export async function POST(request: Request) {
       idempotencyKey,
       puntoVenta: credentials.puntoVenta,
       comprobanteTipo: cbteTipo,
-      requestPayload: { montoBase, taxes, cbteTipo, docTipo, docNro, is_total_cancellation, correction_request_id }
+      requestPayload: { montoBase, taxes, cbteTipo, docTipo, docNro, is_total_cancellation, correction_request_id, invoice_original_id }
     })
 
     if (claimResult.type === 'persisted') {
@@ -237,7 +338,9 @@ export async function POST(request: Request) {
         cae: claimResult.attempt.cae,
         comprobante_numero: claimResult.attempt.comprobante_numero,
         punto_venta: claimResult.attempt.punto_venta,
-        is_production: isProduction
+        environment,
+        is_production: isProduction,
+        status: 'persisted'
       })
     }
 
@@ -248,7 +351,7 @@ export async function POST(request: Request) {
       }, { status: 409 })
     }
 
-    // 7. Adquisición del Lock Distribuido en PostgreSQL
+    // 8. Adquisición del Lock Distribuido en PostgreSQL
     lockKey = getEmissionLockKey(companyId, environment, credentials.puntoVenta, cbteTipo)
     lockToken = crypto.randomUUID()
     const lockAcquired = await acquireEmissionLockDistributed(supabaseAdmin, lockKey, lockToken)
@@ -263,7 +366,7 @@ export async function POST(request: Request) {
     const attempt = claimResult.attempt
     let plannedNumber: number | null = attempt.comprobante_numero
 
-    // 8. Reconciliación Segura Tri-Estado
+    // 9. Reconciliación Segura Tri-Estado
     if (claimResult.type === 'needs_reconciliation' && plannedNumber) {
       const reconciliation = await reconcileVoucherWithArca(
         arca,
@@ -273,7 +376,6 @@ export async function POST(request: Request) {
       )
 
       if (reconciliation.status === 'authorized' && reconciliation.cae) {
-        // ARCA ya tenía el comprobante autorizado -> Persistir directamente sin llamar a createVoucher
         const fechaArgentina = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date())
 
         await persistInvoiceData(supabaseAdmin, {
@@ -281,6 +383,7 @@ export async function POST(request: Request) {
           companyId,
           budgetId: budget_id,
           clientId: budget.client_id,
+          environment,
           isCorrective: esCorrectivo,
           isCreditNote: Boolean(isCreditNote),
           isTotalCancellation: is_total_cancellation,
@@ -301,25 +404,25 @@ export async function POST(request: Request) {
           cae: reconciliation.cae,
           invoice_number: plannedNumber,
           punto_venta: credentials.puntoVenta,
+          environment,
           is_production: isProduction,
+          status: 'persisted',
           message: `Factura reconciliada y sincronizada con éxito (CAE: ${reconciliation.cae})`
         })
       } else if (reconciliation.status === 'indeterminate') {
-        // Error de red / servicio ARCA -> No llamar a createVoucher, mantener reconciliation_required
         return NextResponse.json({
           success: false,
           error: `No se pudo verificar el estado previo en ARCA (${reconciliation.error}). Reintente en unos momentos.`
         }, { status: 503 })
       }
-      // Si status === 'not_found', continuamos con el mismo plannedNumber sin calcular uno nuevo
     }
 
-    // 9. Si aún no tiene número planificado, consultar último comprobante en ARCA
+    // 10. Si aún no tiene número planificado, consultar último comprobante en ARCA
     if (!plannedNumber) {
       const lastVoucherRes = await arca.electronicBillingService.getLastVoucher(credentials.puntoVenta, cbteTipo)
       plannedNumber = (Number(lastVoucherRes?.cbteNro) || 0) + 1
 
-      // REGLA CRÍTICA FAIL-CLOSED: Guardar el número planificado en DB antes de contactar a ARCA
+      // Fail-closed: Guardar el número planificado en DB antes de contactar a ARCA
       const { error: saveNumberErr } = await supabaseAdmin
         .from('arca_invoice_attempts')
         .update({ comprobante_numero: plannedNumber, updated_at: new Date().toISOString() })
@@ -332,7 +435,7 @@ export async function POST(request: Request) {
 
     const fechaArgentina = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()).replace(/-/g, '')
 
-    // 10. Construir payload para ARCA WSFE
+    // 11. Construir payload para ARCA WSFE
     const voucherData: Record<string, unknown> = {
       CantReg: 1,
       PtoVta: credentials.puntoVenta,
@@ -379,20 +482,20 @@ export async function POST(request: Request) {
       voucherData.Iva = taxes.ivaArray
     }
 
-    if (esCorrectivo && budget.afip_comprobante_numero) {
+    // Asociar comprobante original si es nota correctiva
+    if (esCorrectivo && originalInvoice) {
       voucherData.CbtesAsoc = [{
-        Tipo: budget.afip_comprobante_tipo || (esRI ? (condicionIvaReceptor === 1 ? 1 : 6) : 11),
-        PtoVta: credentials.puntoVenta,
-        Nro: budget.afip_comprobante_numero
+        Tipo: originalInvoice.afip_comprobante_tipo,
+        PtoVta: originalInvoice.afip_punto_venta || credentials.puntoVenta,
+        Nro: originalInvoice.afip_comprobante_numero
       }]
     }
 
-    // 11. Solicitar autorización ante ARCA
+    // 12. Solicitar autorización ante ARCA
     let createResult: unknown
     try {
       createResult = await arca.electronicBillingService.createVoucher(voucherData as any)
     } catch (arcaNetErr: unknown) {
-      // Timeout o fallo de red durante el llamado: NO marcar rejected, marcar reconciliation_required
       const netMsg = arcaNetErr instanceof Error ? arcaNetErr.message : String(arcaNetErr)
       await supabaseAdmin
         .from('arca_invoice_attempts')
@@ -416,7 +519,7 @@ export async function POST(request: Request) {
     const caeFchVto = resAny.caeFchVto || resAny.CAEFchVto || resDet?.CAEFchVto
     const cbteDesde = resAny.cbteDesde || resAny.CbteDesde || resDet?.CbteDesde || plannedNumber
 
-    if (resultado !== 'A') {
+    if (resultado !== 'A' || !cae) {
       const obs = resDet?.Observaciones?.Obs?.[0]?.Msg || resAny.Observaciones?.Obs?.[0]?.Msg
       const err = resAny.Errors?.Err?.[0]?.Msg || resAny.response?.Errors?.Err?.[0]?.Msg
       const errMsg = obs || err || `Autorización rechazada por ARCA (Resultado ${resultado})`
@@ -434,7 +537,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: errMsg }, { status: 400 })
     }
 
-    // 12. Guardar inmediatamente CAE y respuesta ARCA como authorized_pending_persistence
+    // 13. Guardar inmediatamente CAE y respuesta ARCA como authorized_pending_persistence
     const { error: authPendingErr } = await supabaseAdmin
       .from('arca_invoice_attempts')
       .update({
@@ -450,7 +553,7 @@ export async function POST(request: Request) {
       console.error('[ARCA CRITICAL] Error actualizando authorized_pending_persistence:', authPendingErr)
     }
 
-    // 13. Persistencia Transaccional Atómica en Base de Datos (FAIL-CLOSED)
+    // 14. Persistencia Transaccional Atómica en Base de Datos (FAIL-CLOSED)
     const fechaFormateada = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date())
 
     try {
@@ -459,6 +562,7 @@ export async function POST(request: Request) {
         companyId,
         budgetId: budget_id,
         clientId: budget.client_id,
+        environment,
         isCorrective: esCorrectivo,
         isCreditNote: Boolean(isCreditNote),
         isTotalCancellation: is_total_cancellation,
@@ -491,6 +595,8 @@ export async function POST(request: Request) {
         cae,
         invoice_number: cbteDesde,
         punto_venta: credentials.puntoVenta,
+        environment,
+        is_production: isProduction,
         status: 'reconciliation_required',
         warning: 'Factura autorizada por ARCA con éxito pero con demoras en la sincronización de base de datos local. El comprobante está resguardado.'
       })
@@ -501,7 +607,9 @@ export async function POST(request: Request) {
       cae,
       invoice_number: cbteDesde,
       punto_venta: credentials.puntoVenta,
+      environment,
       is_production: isProduction,
+      status: 'persisted',
       message: `Factura autorizada por ARCA con éxito (CAE: ${cae})`
     })
 
@@ -521,7 +629,7 @@ export async function POST(request: Request) {
 }
 
 /**
- * Persiste los datos autorizados en la base de datos de forma atómica y consistente mediante RPC
+ * Persiste los datos autorizados en la base de datos de forma atómica y consistente mediante RPC V3
  */
 async function persistInvoiceData(
   supabaseAdmin: ReturnType<typeof createSupabaseAdminClient>,
@@ -530,6 +638,7 @@ async function persistInvoiceData(
     companyId: string
     budgetId: string
     clientId: string
+    environment: 'homo' | 'prod'
     isCorrective: boolean
     isCreditNote: boolean
     isTotalCancellation?: boolean
@@ -546,7 +655,7 @@ async function persistInvoiceData(
   }
 ) {
   const {
-    attemptId, companyId, budgetId, clientId, isCorrective, isCreditNote,
+    attemptId, companyId, budgetId, clientId, environment, isCorrective, isCreditNote,
     isTotalCancellation, invoiceOriginalId, totalAmount, cae, caeExpiresAt,
     comprobanteNumero, comprobanteTipo, invoiceDate, servicioDesde, servicioHasta, servicioVto
   } = params
@@ -556,6 +665,7 @@ async function persistInvoiceData(
     p_company_id: companyId,
     p_budget_id: budgetId,
     p_client_id: clientId,
+    p_environment: environment,
     p_is_corrective: isCorrective,
     p_is_credit_note: isCreditNote,
     p_is_total_cancellation: isTotalCancellation ?? true,

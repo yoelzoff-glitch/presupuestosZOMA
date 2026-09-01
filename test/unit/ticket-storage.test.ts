@@ -27,7 +27,7 @@ describe('Unit Tests: SupabaseTicketStorage', () => {
   function createMockAccessTicket(expiresInMinutes: number): AccessTicket {
     const now = new Date()
     const exp = new Date(now.getTime() + expiresInMinutes * 60 * 1000)
-    
+
     const headers: ILoginCmsReturnHeaders = [
       { version: '1.0' },
       {
@@ -53,6 +53,7 @@ describe('Unit Tests: SupabaseTicketStorage', () => {
     const ticketsDb = new Map<string, TicketDbRecord>()
 
     const createMockSupabase = () => ({
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: (_tableName: string) => ({
         upsert: vi.fn().mockImplementation(async (record: TicketDbRecord) => {
           const key = `${record.company_id}:${record.cuit}:${record.environment}:${record.service}`
@@ -145,6 +146,7 @@ describe('Unit Tests: SupabaseTicketStorage', () => {
 
     let storedRecord: TicketDbRecord | null = null
     const supabaseMock = {
+      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
       from: () => ({
         upsert: async (record: TicketDbRecord) => { storedRecord = record; return { error: null } },
         select: () => {

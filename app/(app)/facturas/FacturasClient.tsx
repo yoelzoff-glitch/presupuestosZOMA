@@ -21,6 +21,8 @@ type Factura = {
   afip_cae?: string | null
   afip_comprobante_numero?: number | null
   afip_comprobante_tipo?: number | null
+  afip_punto_venta?: number | null
+  arca_environment?: 'homo' | 'prod' | null
   created_at: string
   client: { name: string; cuit: string } | null
   budget_id?: string | null
@@ -408,9 +410,22 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                 <tr key={f.id} className="hover:bg-indigo-50/30 transition group">
                   <td className="px-6 py-4 text-sm font-black text-slate-900">
                     {f.status !== 'draft' ? (
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         <span>{String(f.afip_comprobante_numero).padStart(8, '0')}</span>
-                        <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider">Pto. Venta 00002</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">
+                            Pto. Venta {String(f.afip_punto_venta || 1).padStart(5, '0')}
+                          </span>
+                          {f.arca_environment === 'prod' ? (
+                            <span className="inline-flex items-center text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                              PROD
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" title="Comprobante emitido en testing sin validez fiscal">
+                              HOMO
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <span className="text-slate-400 italic">Sin numerar (Borrador)</span>
@@ -710,12 +725,13 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                   // Ejecutar la autorización real llamando al backend oficial
                   toast.promise(
                     (async () => {
+                      const originalEnv = modalConfirmacion.factura?.arca_environment || 'homo';
                       const response = await fetch('/api/afip/create-invoice', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           budget_id: modalConfirmacion.factura?.budget_id,
-                          environment: 'homo', // Por defecto en listado se envía homo o el entorno configurado
+                          environment: originalEnv,
                           isCreditNote: isCredito,
                           isDebitNote: !isCredito,
                           is_total_cancellation: !esCorreccionParcial,

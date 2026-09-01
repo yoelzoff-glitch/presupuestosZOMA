@@ -79,6 +79,7 @@ export default function AbonosClient({
   // Control de facturación rápida (Express Invoicing)
   const [billingAbono, setBillingAbono] = useState<Subscription | null>(null)
   const [billingLoading, setBillingLoading] = useState(false)
+  const [billingEnv, setBillingEnv] = useState<'homo' | 'prod' | null>(null)
 
   // Obtener fechas del mes actual predeterminadas
   const defaultDates = useMemo(() => {
@@ -114,7 +115,7 @@ export default function AbonosClient({
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editingAbonoId, setEditingAbonoId] = useState<string | null>(null)
-  
+
   const [formAbono, setFormAbono] = useState({
     name: '',
     client_id: '',
@@ -204,10 +205,10 @@ export default function AbonosClient({
 
     try {
       const amount = parseFloat(formAbono.total_amount)
-      
+
       // Si no especificó ítems, creamos un ítem por defecto para la factura AFIP
-      const items = formAbono.items.length > 0 
-        ? formAbono.items 
+      const items = formAbono.items.length > 0
+        ? formAbono.items
         : [{
             product_name: formAbono.name,
             quantity: 1,
@@ -276,7 +277,7 @@ export default function AbonosClient({
         ...sub,
         clients: Array.isArray(sub.clients) ? sub.clients[0] : sub.clients
       }))
-      
+
       setAbonos(normalized as Subscription[])
       setShowCreateModal(false)
       resetForm()
@@ -329,14 +330,18 @@ export default function AbonosClient({
     setIsEditing(false)
   }
 
-  // Ejecutar el cobro/facturación express AFIP
+  // Ejecutar el cobro/facturación express ARCA
   async function handleBillAbono() {
     if (!billingAbono) return
+    if (!billingEnv) {
+      toast.error('Debe seleccionar el entorno de facturación (Homologación o Producción).')
+      return
+    }
     setBillingLoading(true)
-    
+
     try {
-      const finalAmount = customAmounts[billingAbono.id] 
-        ? parseFloat(customAmounts[billingAbono.id]) 
+      const finalAmount = customAmounts[billingAbono.id]
+        ? parseFloat(customAmounts[billingAbono.id])
         : billingAbono.total_amount
 
       const response = await fetch('/api/subscriptions/bill', {
@@ -344,6 +349,7 @@ export default function AbonosClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subscription_id: billingAbono.id,
+          environment: billingEnv,
           custom_amount: finalAmount,
           service_desde: billingParams.serviceDesde,
           service_hasta: billingParams.serviceHasta,
@@ -355,11 +361,11 @@ export default function AbonosClient({
       const data = await response.json()
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Error emitiendo factura AFIP')
+        throw new Error(data.error || 'Error emitiendo factura ARCA')
       }
 
       toast.success(`Factura Nº ${data.invoice_number} emitida con éxito. CAE: ${data.cae}`)
-      
+
       // Actualizar localmente el abono
       setAbonos((prev) =>
         prev.map((a) =>
@@ -371,7 +377,7 @@ export default function AbonosClient({
       const updatedCustoms = { ...customAmounts }
       delete updatedCustoms[billingAbono.id]
       setCustomAmounts(updatedCustoms)
-      
+
       setBillingAbono(null)
     } catch (err: any) {
       toast.error('Fallo en AFIP: ' + err.message)
@@ -386,7 +392,7 @@ export default function AbonosClient({
       <section className="relative overflow-hidden rounded-[2.5rem] bg-slate-950 p-8 text-white shadow-2xl">
         <div className="absolute right-0 top-0 h-56 w-56 rounded-full bg-indigo-500/20 blur-[100px]" />
         <div className="absolute -left-20 bottom-0 h-44 w-44 rounded-full bg-blue-500/10 blur-[80px]" />
-        
+
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full bg-indigo-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-indigo-400 ring-1 ring-indigo-400/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
@@ -747,7 +753,7 @@ export default function AbonosClient({
           {/* Gráfico Visual de Contratos */}
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
             <h3 className="text-lg font-black text-slate-900">Top Contratos de Servicios</h3>
-            
+
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
               {abonos.filter(a => a.status === 'active').length === 0 ? (
                 <p className="text-xs font-black text-slate-400 text-center py-12">No hay contratos activos para analizar.</p>
@@ -805,17 +811,48 @@ export default function AbonosClient({
                 <p className="text-xs font-bold text-slate-500 mt-0.5">Cliente: {billingAbono.clients?.name}</p>
                 <p className="text-xs font-black text-indigo-600 mt-2">
                   Total a Facturar: ${
-                    (customAmounts[billingAbono.id] 
-                      ? parseFloat(customAmounts[billingAbono.id]) 
+                    (customAmounts[billingAbono.id]
+                      ? parseFloat(customAmounts[billingAbono.id])
                       : billingAbono.total_amount
                     ).toLocaleString('es-AR')
                   }
                 </p>
               </div>
 
+              {/* Selector de Entorno Obligatorio */}
+              <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-3.5 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                  Entorno de Emisión Fiscal *
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBillingEnv('homo')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition border-2 ${
+                      billingEnv === 'homo'
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    Homologación (Testing)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBillingEnv('prod')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition border-2 ${
+                      billingEnv === 'prod'
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    Producción (Oficial)
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-3">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Período de Prestación del Servicio (AFIP)</h4>
-                
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-500 uppercase">Servicio Desde</label>
@@ -869,7 +906,7 @@ export default function AbonosClient({
               >
                 Cancelar
               </button>
-              
+
               <button
                 onClick={handleBillAbono}
                 disabled={billingLoading}

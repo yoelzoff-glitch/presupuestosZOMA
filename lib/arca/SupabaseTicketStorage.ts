@@ -109,14 +109,9 @@ export class SupabaseTicketStorage implements ITicketStoragePort {
   }
 
   /**
-   * Obtiene un ticket WSAA válido para el servicio.
-   * Exige al menos 5 minutos (300.000 ms) de vigencia restante.
-   * Diferencia explícitamente:
-   * - Ticket no encontrado (devuelve null).
-   * - Error de base de datos Supabase (lanza excepción).
-   * - Error de descifrado (lanza excepción).
+   * Consulta directa y descifrado seguro de un ticket existente en la base de datos
    */
-  async get(serviceName: string): Promise<AccessTicket | null> {
+  private async fetchPersistedTicket(serviceName: string): Promise<AccessTicket | null> {
     const { data, error } = await this.supabaseAdmin
       .from('arca_wsaa_tickets')
       .select('encrypted_payload, expires_at')
@@ -134,7 +129,6 @@ export class SupabaseTicketStorage implements ITicketStoragePort {
       return null
     }
 
-    // Verificar vigencia temporal en DB antes de descifrar
     const expiresAt = new Date(data.expires_at).getTime()
     const now = Date.now()
     const fiveMinutesMs = 5 * 60 * 1000
@@ -164,13 +158,57 @@ export class SupabaseTicketStorage implements ITicketStoragePort {
 
     if (ticketData?.header && ticketData?.credentials) {
       const ticket = AccessTicket.create(ticketData as Parameters<typeof AccessTicket.create>[0])
-
-      // Validar entidad con regla estricta de 5 minutos
       if (ticket.isValid() && ticket.getTimeUntilExpiration() > fiveMinutesMs) {
         return ticket
       }
     }
 
+    return null
+  }
+
+  /**
+   * Obtiene un ticket WSAA válido para el servicio integrando el lock distribuido:
+   * 1. Si existe un ticket válido, lo devuelve inmediatamente.
+   * 2. Si no existe:
+   *    - Si esta instancia ya adquirió el lock, devuelve null (para que el SDK solicite login).
+   *    - Si adquiere el lock, devuelve null (procederá a solicitar el login).
+   *    - Si otra instancia tiene el lock, entra en polling esperando a que la otra instancia guarde el ticket.
+   */
+  async get(serviceName: string): Promise<AccessTicket | null> {
+    // 1. Verificar si ya existe un ticket válido
+    const existingTicket = await this.fetchPersistedTicket(serviceName)
+    if (existingTicket) {
+      return existingTicket
+    }
+
+    // 2. Si esta instancia ya posee el lock activo para este servicio, evitar deadlock
+    if (this.activeLockTokens.has(serviceName)) {
+      return null
+    }
+
+    // 3. Intentar adquirir el lock distribuido en PostgreSQL
+    const { acquired } = await this.acquireWsaaLock(serviceName, 60)
+    if (acquired) {
+      // Esta instancia ejecutará el login WSAA
+      return null
+    }
+
+    // 4. Otra instancia está solicitando el ticket WSAA -> Polling con jitter limitado
+    const maxWaitMs = 10000
+    const pollIntervalMs = 500
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const jitter = Math.floor(Math.random() * 200)
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs + jitter))
+
+      const polledTicket = await this.fetchPersistedTicket(serviceName)
+      if (polledTicket) {
+        return polledTicket
+      }
+    }
+
+    // Si terminó el tiempo de espera sin ticket, devolver null como fallback
     return null
   }
 
