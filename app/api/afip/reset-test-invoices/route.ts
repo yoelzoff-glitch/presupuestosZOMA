@@ -3,35 +3,41 @@ import { createSupabaseAdminClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
   try {
-    const { user_id, company_id: requestCompanyId } = await request.json().catch(() => ({}))
     const supabaseAdmin = createSupabaseAdminClient()
 
-    let companyId = requestCompanyId
+    // 1. Autenticar usuario obligatoriamente
+    const authHeader = request.headers.get('Authorization')
+    let userId: string | null = null
 
-    if (!companyId && user_id) {
-      const { data: profile } = await supabaseAdmin
-        .from('users_profiles')
-        .select('company_id')
-        .eq('id', user_id)
-        .single()
-      companyId = profile?.company_id
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '')
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+      userId = user?.id || null
     }
 
-    if (!companyId) {
-      // Intentar obtener la empresa del CUIT 20412886128
-      const { data: afipConfig } = await supabaseAdmin
-        .from('afip_configs')
-        .select('company_id')
-        .eq('cuit', '20412886128')
-        .maybeSingle()
-      companyId = afipConfig?.company_id
+    if (!userId) {
+      const { data: { user } } = await supabaseAdmin.auth.getUser()
+      userId = user?.id || null
     }
 
-    if (!companyId) {
-      return NextResponse.json({ error: 'No se identificó la empresa' }, { status: 400 })
+    if (!userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // 1. Obtener todas las facturas de la empresa
+    // 2. Obtener perfil del usuario autenticado
+    const { data: profile } = await supabaseAdmin
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userId)
+      .single()
+
+    if (!profile?.company_id) {
+      return NextResponse.json({ error: 'Perfil o empresa no encontrada' }, { status: 403 })
+    }
+
+    const companyId = profile.company_id
+
+    // 3. Obtener todas las facturas borrador o de prueba de la empresa
     const { data: companyInvoices } = await supabaseAdmin
       .from('invoices')
       .select('id')
@@ -39,7 +45,7 @@ export async function POST(request: Request) {
 
     const invoiceIds = (companyInvoices || []).map(i => i.id)
 
-    // 2. Eliminar ítems de factura
+    // 4. Eliminar ítems de factura asociados
     if (invoiceIds.length > 0) {
       await supabaseAdmin
         .from('invoice_items')
@@ -47,13 +53,13 @@ export async function POST(request: Request) {
         .in('invoice_id', invoiceIds)
     }
 
-    // 3. Eliminar facturas de la empresa
+    // 5. Eliminar registros de facturas de la empresa
     await supabaseAdmin
       .from('invoices')
       .delete()
       .eq('company_id', companyId)
 
-    // 4. Limpiar datos de CAE en presupuestos de la empresa
+    // 6. Limpiar datos de CAE en presupuestos de la empresa
     await supabaseAdmin
       .from('budgets')
       .update({
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
       })
       .eq('company_id', companyId)
 
-    // 5. Forzar el paso a Producción Real (is_sandbox = false) y limpiar viejos tickets WSAA
+    // 7. Forzar paso a Producción Real (is_sandbox = false) y limpiar certificados
     const { data: currentAfipConfig } = await supabaseAdmin
       .from('afip_configs')
       .select('cert_content')
@@ -84,7 +90,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Se resetearon y eliminaron todas las facturas de prueba de Sandbox correctamente.'
+      message: 'Se liberaron los presupuestos y se configuró el entorno en Producción Real correctamente.'
     })
   } catch (error: any) {
     console.error('Error al resetear facturas:', error)

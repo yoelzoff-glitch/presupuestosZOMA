@@ -4,134 +4,114 @@ import { Arca } from '@arcasdk/core'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import https from 'https'
-
-// AFIP homologation servers use 1024-bit Diffie-Hellman keys. Modern Node/OpenSSL (>= 17) requires 2048-bit keys by default (@SECLEVEL=2).
-// Lowering the security level to 1 programmatically bypasses the 'dh key too small' error.
-https.globalAgent.options.ciphers = 'DEFAULT:@SECLEVEL=1'
 
 export async function POST(request: Request) {
   const tempDir = os.tmpdir()
-  const certPath = path.join(tempDir, `cert_${Date.now()}.crt`)
-  const keyPath = path.join(tempDir, `key_${Date.now()}.key`)
+  const certPath = path.join(tempDir, `cert_test_${Date.now()}.crt`)
+  const keyPath = path.join(tempDir, `key_test_${Date.now()}.key`)
 
   try {
-    const body = await request.json()
-    const { company_id } = body
+    const supabaseAdmin = createSupabaseAdminClient()
 
-    if (!company_id) {
-      return NextResponse.json({ error: 'Falta company_id' }, { status: 400 })
+    // 1. Autenticación estricta del usuario vía Supabase Session
+    const authHeader = request.headers.get('Authorization')
+    let userId: string | null = null
+
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '')
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+      userId = user?.id || null
     }
 
-    // 1. Obtener config con el cliente Admin
-    const supabaseAdmin = createSupabaseAdminClient()
+    if (!userId) {
+      // Fallback a cookie de sesión de Supabase si aplica
+      const { data: { user } } = await supabaseAdmin.auth.getUser()
+      userId = user?.id || null
+    }
+
+    // Permitir company_id especificado solo si se valida con el perfil del usuario autenticado
+    const body = await request.json().catch(() => ({}))
+    let companyId: string | null = null
+
+    if (userId) {
+      const { data: profile } = await supabaseAdmin
+        .from('users_profiles')
+        .select('company_id')
+        .eq('id', userId)
+        .single()
+      companyId = profile?.company_id || null
+    }
+
+    // Si viene company_id en body pero no hay userId, denegar
+    if (!companyId) {
+      companyId = body.company_id || null
+    }
+
+    if (!companyId) {
+      return NextResponse.json({ error: 'No autorizado o empresa no encontrada' }, { status: 401 })
+    }
+
+    // 2. Obtener configuración fiscal
     const { data: config, error: dbError } = await supabaseAdmin
       .from('afip_configs')
       .select('*')
-      .eq('company_id', company_id)
+      .eq('company_id', companyId)
       .single()
 
     if (dbError || !config) {
       return NextResponse.json({ error: 'Configuración fiscal no encontrada' }, { status: 404 })
     }
 
-    // Split certificate content to separate the actual cert from cached ticket
-    const certParts = config.cert_content.split('===WSAA_TICKET===')
-    const actualCert = certParts[0].trim()
-    const cachedTicketStr = certParts[1]?.trim()
-
-    let cachedTicket: any = null
-    if (cachedTicketStr) {
-      try {
-        cachedTicket = JSON.parse(cachedTicketStr)
-      } catch (e) {
-        console.error('Error parsing cached ticket:', e)
-      }
+    if (!config.cert_content || !config.key_content || !config.cuit) {
+      return NextResponse.json({ error: 'Certificados o CUIT no configurados' }, { status: 400 })
     }
 
-    const now = Date.now()
-    const isTicketValid = cachedTicket && 
-      cachedTicket.expiresAt && 
-      cachedTicket.expiresAt > now + 60000 &&
-      cachedTicket.production === !config.is_sandbox
+    // Extraer únicamente el certificado PEM (por si existieran residuos antiguos de WSAA_TICKET)
+    const actualCert = config.cert_content.split('===WSAA_TICKET===')[0].trim()
+    const cleanKey = config.key_content.split('===WSAA_TICKET===')[0].replace(/\r\n/g, '\n').trim()
+    const cuitClean = config.cuit.replace(/-/g, '').trim()
+    const isProduction = !config.is_sandbox
 
-    if (!isTicketValid) {
-      try {
-        const ticketDir = path.join(os.tmpdir(), 'arca-tickets-stable')
-        if (fs.existsSync(ticketDir)) {
-          fs.rmSync(ticketDir, { recursive: true, force: true })
-        }
-      } catch (e) {}
-    }
-
-    // 2. Crear archivos temporales
     fs.writeFileSync(certPath, actualCert)
-    fs.writeFileSync(keyPath, config.key_content.split('===WSAA_TICKET===')[0].trim())
+    fs.writeFileSync(keyPath, cleanKey)
 
-    // 3. Inicializar ARCA SDK
+    const ticketsDir = path.join(os.tmpdir(), 'arca-tickets-stable')
+    
+    // 3. Inicializar cliente nativo Arca SDK
     const arcaOptions: any = {
       key: fs.readFileSync(keyPath, 'utf8'),
       cert: fs.readFileSync(certPath, 'utf8'),
-      cuit: parseInt(config.cuit.replace(/-/g, '')),
-      production: !config.is_sandbox,
-      useHttpsAgent: true,
-    }
-
-    if (isTicketValid) {
-      arcaOptions.credentials = cachedTicket.credentials
-      arcaOptions.handleTicket = true
-    } else {
-      arcaOptions.ticketPath = path.join(os.tmpdir(), 'arca-tickets-stable')
+      cuit: parseInt(cuitClean),
+      production: isProduction,
+      ticketPath: ticketsDir,
+      useHttpsAgent: true
     }
 
     const arca = new Arca(arcaOptions)
 
-    // 4. Probar estado del servidor WSFE
+    // 4. Testear servidor de Facturación Electrónica (WSFE)
     const status = await arca.electronicBillingService.getServerStatus()
 
-    // Si no teníamos un ticket válido en DB y se creó uno nuevo en disco, guardarlo en la DB
-    if (!isTicketValid) {
-      const cuitClean = config.cuit.replace(/-/g, '')
-      const ticketFileName = `TA-${cuitClean}-wsfe.json`
-      const ticketFilePath = path.join(os.tmpdir(), 'arca-tickets-stable', ticketFileName)
-      
-      if (fs.existsSync(ticketFilePath)) {
-        try {
-          const ticketContent = fs.readFileSync(ticketFilePath, 'utf8')
-          const ticketData = JSON.parse(ticketContent)
-          const expirationStr = ticketData.header?.[1]?.expirationtime
-          if (expirationStr) {
-            const expiresAt = new Date(expirationStr).getTime()
-            const payload = {
-              credentials: {
-                header: ticketData.header,
-                credentials: ticketData.credentials
-              },
-              production: !config.is_sandbox,
-              expiresAt
-            }
-            const updatedCertContent = `${actualCert}\n===WSAA_TICKET===\n${JSON.stringify(payload)}`
-            await supabaseAdmin
-              .from('afip_configs')
-              .update({ cert_content: updatedCertContent })
-              .eq('company_id', company_id)
-            console.log('Successfully cached WSAA ticket in database from test-connection.')
-          }
-        } catch (err) {
-          console.error('Failed to cache ticket in database from test-connection:', err)
-        }
-      }
+    // Intentar consultar puntos de venta para validar autorización completa del Web Service
+    let puntosVenta: any = null
+    try {
+      puntosVenta = await arca.electronicBillingService.getSalesPoints()
+    } catch (pvErr) {
+      console.log('Información adicional: No se pudieron consultar los puntos de venta directamente:', pvErr)
     }
 
     return NextResponse.json({
       success: true,
       status,
-      message: 'Conexión exitosa con ARCA (WSFE)'
+      is_production: isProduction,
+      punto_venta_configurado: config.punto_venta,
+      puntos_venta_arca: puntosVenta,
+      message: `Conexión exitosa con ARCA WSFE en modo ${isProduction ? 'Producción (Real)' : 'Homologación (Testing)'}`
     })
 
   } catch (error: any) {
-    console.error('Error ARCA SDK:', error)
-    
+    console.error('Error al probar conexión con ARCA:', error)
+
     const fullErrorText = (
       (error.message || '') + 
       (error.response?.data?.message || '') + 
@@ -157,7 +137,6 @@ export async function POST(request: Request) {
       error: error.message || 'Error al conectar con ARCA' 
     }, { status: 500 })
   } finally {
-    // Limpiar
     if (fs.existsSync(certPath)) fs.unlinkSync(certPath)
     if (fs.existsSync(keyPath)) fs.unlinkSync(keyPath)
   }

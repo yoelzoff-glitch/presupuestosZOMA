@@ -4,11 +4,6 @@ import { Arca } from '@arcasdk/core'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import https from 'https'
-
-// AFIP homologation servers use 1024-bit Diffie-Hellman keys. Modern Node/OpenSSL (>= 17) requires 2048-bit keys by default (@SECLEVEL=2).
-// Lowering the security level to 1 programmatically bypasses the 'dh key too small' error.
-https.globalAgent.options.ciphers = 'DEFAULT:@SECLEVEL=1'
 
 export async function POST(request: Request) {
   const tempDir = os.tmpdir()
@@ -16,13 +11,44 @@ export async function POST(request: Request) {
   const keyPath = path.join(tempDir, `key_inv_${Date.now()}.key`)
 
   try {
+    const supabaseAdmin = createSupabaseAdminClient()
+
+    // 1. Autenticación y Autorización del usuario
+    const authHeader = request.headers.get('Authorization')
+    let userId: string | null = null
+
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '')
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+      userId = user?.id || null
+    }
+
+    if (!userId) {
+      const { data: { user } } = await supabaseAdmin.auth.getUser()
+      userId = user?.id || null
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    // Obtener la empresa del usuario autenticado
+    const { data: userProfile } = await supabaseAdmin
+      .from('users_profiles')
+      .select('company_id, role')
+      .eq('id', userId)
+      .single()
+
+    if (!userProfile?.company_id) {
+      return NextResponse.json({ error: 'Perfil de usuario o empresa no encontrada' }, { status: 403 })
+    }
+
     const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount, addIva, serviceDates } = await request.json()
     if (!budget_id) return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
 
-    const supabaseAdmin = createSupabaseAdminClient()
     const esCorrectivo = isCreditNote || isDebitNote
 
-    // 1. Obtener datos del presupuesto e ítems (con datos del cliente)
+    // 2. Obtener datos del presupuesto e ítems (validando pertenencia a la empresa del usuario)
     const { data: budget, error: bError } = await supabaseAdmin
       .from('budgets')
       .select('*, budget_items(*), clients(*)')
@@ -31,6 +57,10 @@ export async function POST(request: Request) {
 
     if (bError || !budget) throw new Error('Presupuesto no encontrado')
 
+    if (budget.company_id !== userProfile.company_id) {
+      return NextResponse.json({ error: 'No tiene permiso para facturar este presupuesto' }, { status: 403 })
+    }
+
     // Obtener tipo de negocio de la empresa
     const { data: companyObj } = await supabaseAdmin
       .from('companies')
@@ -38,11 +68,9 @@ export async function POST(request: Request) {
       .eq('id', budget.company_id)
       .single()
     const businessType = companyObj?.business_type || 'products'
-    
 
-    
     if (budget.afip_cae && !esCorrectivo) {
-      // Sincronización automática si ya tiene CAE y no es un comprobante correctivo
+      // Sincronización si ya tiene CAE en la base de datos
       await supabaseAdmin
         .from('invoices')
         .update({
@@ -71,77 +99,51 @@ export async function POST(request: Request) {
       .eq('status', 'draft')
       .maybeSingle()
 
-    // 2. Obtener config fiscal
+    // 3. Obtener configuración fiscal de la empresa
     const { data: config, error: cError } = await supabaseAdmin
       .from('afip_configs')
       .select('*')
       .eq('company_id', budget.company_id)
       .single()
 
-    if (cError || !config) throw new Error('Configuración fiscal no encontrada')
-
-    // 3. Inicializar ARCA
-    const cleanKey = config.key_content.replace(/\r\n/g, '\n').trim()
-    
-    // Separate certificate content and cached ticket
-    const certParts = config.cert_content.split('===WSAA_TICKET===')
-    const actualCert = certParts[0].trim()
-    const cachedTicketStr = certParts[1]?.trim()
-
-    let cachedTicket: any = null
-    if (cachedTicketStr) {
-      try {
-        cachedTicket = JSON.parse(cachedTicketStr)
-      } catch (e) {
-        console.error('Failed to parse cached ticket:', e)
-      }
+    if (cError || !config) throw new Error('Configuración fiscal no encontrada para esta empresa')
+    if (!config.cert_content || !config.key_content || !config.cuit) {
+      throw new Error('Certificados o CUIT no configurados en la sección fiscal')
     }
 
-    const now = Date.now()
-    const isTicketValid = cachedTicket && 
-      cachedTicket.expiresAt && 
-      cachedTicket.expiresAt > now + 60000 && 
-      cachedTicket.production === !config.is_sandbox
+    // 4. Inicializar ARCA con gestión limpia de certificados y tickets
+    const cleanCert = config.cert_content.split('===WSAA_TICKET===')[0].trim()
+    const cleanKey = config.key_content.split('===WSAA_TICKET===')[0].replace(/\r\n/g, '\n').trim()
+    const cuitClean = config.cuit.replace(/-/g, '').trim()
+    const isProduction = !config.is_sandbox
 
-    if (!isTicketValid) {
-      try {
-        const ticketDir = path.join(os.tmpdir(), 'arca-tickets-stable')
-        if (fs.existsSync(ticketDir)) {
-          fs.rmSync(ticketDir, { recursive: true, force: true })
-        }
-      } catch (e) {}
-    }
+    fs.writeFileSync(certPath, cleanCert)
+    fs.writeFileSync(keyPath, cleanKey)
+
+    const ticketDir = path.join(os.tmpdir(), 'arca-tickets-stable')
 
     const arcaOptions: any = {
-      key: cleanKey,
-      cert: actualCert,
-      cuit: parseInt(config.cuit.replace(/-/g, '')),
-      production: !config.is_sandbox,
-      useHttpsAgent: true,
-    }
-
-    if (isTicketValid) {
-      arcaOptions.credentials = cachedTicket.credentials
-      arcaOptions.handleTicket = true
-      console.log('Using valid WSAA ticket from database cache.')
-    } else {
-      arcaOptions.ticketPath = path.join(os.tmpdir(), 'arca-tickets-stable')
-      console.log('No valid WSAA ticket in database. Fetching fresh WSAA ticket.')
+      key: fs.readFileSync(keyPath, 'utf8'),
+      cert: fs.readFileSync(certPath, 'utf8'),
+      cuit: parseInt(cuitClean),
+      production: isProduction,
+      ticketPath: ticketDir,
+      useHttpsAgent: true
     }
 
     const arca = new Arca(arcaOptions)
 
-    // 5. Determinar tipo de comprobante y lógica de IVA
+    // 5. Lógica impositiva y determinación del comprobante ARCA
     const esRI = config.tipo_contribuyente === 'responsable_inscripto'
     const cuitLimpio = client?.cuit?.replace(/-/g, '') || ''
     const esCuitValido = cuitLimpio.length === 11
     const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
     let montoTotal = customAmount 
       ? Number(customAmount) 
-      : (existingDraft ? Number(existingDraft.total_amount) : Number(budget.total_amount));
+      : (existingDraft ? Number(existingDraft.total_amount) : Number(budget.total_amount))
 
-    // Límite AFIP identificación (Aprox mayo 2024)
-    const LIMITE_IDENTIFICACION = 191624
+    // Límite de identificación a Consumidor Final según normativa ARCA vigente (10 Millones)
+    const LIMITE_IDENTIFICACION = 10000000
 
     let cbteTipo = 11 // Por defecto Factura C (Monotributo)
     let docTipo = 99
@@ -151,12 +153,11 @@ export async function POST(request: Request) {
     if (esRI) {
       if (client?.client_type === 'distribuidor' || esCuitValido) {
         if (!esCuitValido) {
-           // Si no tiene CUIT pero es distribuidor, lo dejamos pasar para el cálculo pero 
-           // lanzará error si se elige Factura A
+          throw new Error('Para emitir Factura A se requiere un CUIT válido del cliente')
         }
         cbteTipo = 1 // Factura A
         docTipo = 80 // CUIT
-        docNro = parseInt(cuitLimpio) || 0
+        docNro = parseInt(cuitLimpio)
         condicionIvaReceptor = 1 // Responsable Inscripto
       } else {
         cbteTipo = 6 // Factura B
@@ -172,16 +173,14 @@ export async function POST(request: Request) {
       condicionIvaReceptor = esCuitValido ? 1 : 5
     }
 
-    // Aplicar Override del usuario si existe y es válido
+    // Aplicar Override si fue especificado por el usuario
     if (cbteTipoOverride) {
       if (esRI && cbteTipoOverride === 11) throw new Error('Un Responsable Inscripto no puede emitir Factura C')
       if (!esRI && cbteTipoOverride !== 11) throw new Error('Un Monotributista solo puede emitir Factura C')
       
       cbteTipo = cbteTipoOverride
-      // Si el usuario fuerza Factura A, validamos CUIT sí o sí
       if (cbteTipo === 1 && !esCuitValido) throw new Error('Para Factura A es obligatorio un CUIT válido del cliente')
       
-      // Ajustar docTipo/docNro según el nuevo cbteTipo si cambió la lógica
       if (cbteTipo === 1) {
          docTipo = 80
          docNro = parseInt(cuitLimpio)
@@ -193,7 +192,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Convertir a tipo correctivo de AFIP si corresponde
+    // Convertir a comprobante correctivo de AFIP
     if (isCreditNote) {
       if (cbteTipo === 1) cbteTipo = 3   // Nota de Crédito A
       else if (cbteTipo === 6) cbteTipo = 8   // Nota de Crédito B
@@ -204,32 +203,35 @@ export async function POST(request: Request) {
       else if (cbteTipo === 11) cbteTipo = 12 // Nota de Débito C
     }
 
-    // Aplicar adición de IVA si addIva es true, corresponde y no hay borrador previo ya calculado
+    // Aplicar cálculo de IVA si corresponde
     if (addIva && !existingDraft && (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)) {
-      montoTotal = parseFloat((montoTotal * 1.21).toFixed(2));
+      montoTotal = parseFloat((montoTotal * 1.21).toFixed(2))
     }
 
-    // Validación final de montos según tipo de comprobante (A, B y C tienen límites)
+    // Validación final de límite de identificación de Consumidor Final
     if (cbteTipo !== 1 && cbteTipo !== 3 && cbteTipo !== 2 && montoTotal > LIMITE_IDENTIFICACION && docTipo === 99) {
-       throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString()} es obligatorio identificar al cliente con DNI/CUIT`)
+       throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString('es-AR')} es obligatorio identificar al cliente con DNI o CUIT`)
     }
 
-    // 6. Preparar datos del voucher
+    // Fecha en zona horaria oficial de Argentina (YYYYMMDD)
+    const fechaArgentina = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()).replace(/-/g, '')
+
+    // 6. Construir objeto Voucher para ARCA WSFE
     const voucherData: any = {
       CantReg: 1,
-      PtoVta: Number(config.punto_venta) || 2,
+      PtoVta: Number(config.punto_venta) || 1,
       CbteTipo: cbteTipo,
       Concepto: businessType === 'services' ? 2 : 1, // 1: Productos, 2: Servicios
       DocTipo: docTipo,
       DocNro: docNro,
-      CbteFch: new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()).replace(/-/g, ''),
+      CbteFch: fechaArgentina,
       ImpTotal: montoTotal,
       ImpTotConc: 0,
-      ImpNeto: cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7
+      ImpNeto: (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)
         ? parseFloat((montoTotal / 1.21).toFixed(2)) 
         : montoTotal,
       ImpOpEx: 0,
-      ImpIVA: cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7
+      ImpIVA: (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)
         ? parseFloat((montoTotal - (montoTotal / 1.21)).toFixed(2)) 
         : 0,
       ImpTrib: 0,
@@ -270,21 +272,21 @@ export async function POST(request: Request) {
       }]
     }
 
-    // Agregar comprobante asociado oficial de AFIP
+    // Agregar comprobante asociado oficial si es Nota de Crédito/Débito
     if (esCorrectivo && budget.afip_comprobante_numero) {
       voucherData.CbtesAsoc = [{
         Tipo: budget.afip_comprobante_tipo || (esRI ? (client?.client_type === 'distribuidor' || esCuitValido ? 1 : 6) : 11),
-        PtoVta: Number(config.punto_venta) || 2,
+        PtoVta: Number(config.punto_venta) || 1,
         Nro: budget.afip_comprobante_numero
       }]
     }
 
-    // 7. Solicitar CAE
-    let result: any;
+    // 7. Solicitar CAE ante ARCA
+    let result: any
     try {
       result = await arca.electronicBillingService.createNextVoucher(voucherData)
     } catch (error: any) {
-      console.error('Error al solicitar CAE de forma directa:', error)
+      console.error('Error al solicitar CAE a ARCA:', error)
       const fullErrorText = (
         (error.message || '') + 
         (error.response?.data?.message || '') + 
@@ -298,33 +300,30 @@ export async function POST(request: Request) {
         fullErrorText.includes('cee ya posee un ta valido')
 
       if (isAlreadyAuth) {
+        // En Producción, el SDK busca el archivo con sufijo '-production'
+        const ticketFileName = `TA-${cuitClean}-wsfe${isProduction ? '-production' : ''}.json`
+        const ticketFilePath = path.join(ticketDir, ticketFileName)
         let credentialsToUse: any = null
-        
-        if (cachedTicket && cachedTicket.credentials) {
-          credentialsToUse = cachedTicket.credentials
-        } else {
-          // Check disk
-          const cuitClean = config.cuit.replace(/-/g, '')
-          const ticketFileName = `TA-${cuitClean}-wsfe.json`
-          const ticketFilePath = path.join(os.tmpdir(), 'arca-tickets-stable', ticketFileName)
-          if (fs.existsSync(ticketFilePath)) {
-            try {
-              const ticketData = JSON.parse(fs.readFileSync(ticketFilePath, 'utf8'))
-              credentialsToUse = {
-                header: ticketData.header,
-                credentials: ticketData.credentials
-              }
-            } catch (e) {}
+
+        if (fs.existsSync(ticketFilePath)) {
+          try {
+            const ticketData = JSON.parse(fs.readFileSync(ticketFilePath, 'utf8'))
+            credentialsToUse = {
+              header: ticketData.header,
+              credentials: ticketData.credentials
+            }
+          } catch (e) {
+            console.error('Error leyendo ticket persistido en disco:', e)
           }
         }
 
         if (credentialsToUse) {
-          console.log('WSAA reported alreadyAuthenticated. Force-reusing existing credentials.')
+          console.log('Reutilizando credenciales WSAA válidas en disco para entorno:', isProduction ? 'Producción' : 'Homologación')
           const arcaRetry = new Arca({
             key: cleanKey,
-            cert: actualCert,
-            cuit: parseInt(config.cuit.replace(/-/g, '')),
-            production: !config.is_sandbox,
+            cert: cleanCert,
+            cuit: parseInt(cuitClean),
+            production: isProduction,
             credentials: credentialsToUse,
             handleTicket: true,
             useHttpsAgent: true
@@ -347,47 +346,15 @@ export async function POST(request: Request) {
     if (status !== 'A') {
       const obs = resDet?.Observaciones?.Obs?.[0]?.Msg || result.Observaciones?.Obs?.[0]?.Msg
       const err = result.Errors?.Err?.[0]?.Msg || result.response?.Errors?.Err?.[0]?.Msg
-      const msg = obs || err || `Error ARCA (Status ${status})`
+      const msg = obs || err || `Error ARCA (Resultado ${status})`
       throw new Error(msg)
     }
 
-    // Cache ticket in database if we obtained a new one
-    if (!isTicketValid) {
-      const cuitClean = config.cuit.replace(/-/g, '')
-      const ticketFileName = `TA-${cuitClean}-wsfe.json`
-      const ticketFilePath = path.join(os.tmpdir(), 'arca-tickets-stable', ticketFileName)
-      if (fs.existsSync(ticketFilePath)) {
-        try {
-          const ticketContent = fs.readFileSync(ticketFilePath, 'utf8')
-          const ticketData = JSON.parse(ticketContent)
-          const expirationStr = ticketData.header?.[1]?.expirationtime
-          if (expirationStr) {
-            const expiresAt = new Date(expirationStr).getTime()
-            const payload = {
-              credentials: {
-                header: ticketData.header,
-                credentials: ticketData.credentials
-              },
-              production: !config.is_sandbox,
-              expiresAt
-            }
-            const updatedCertContent = `${actualCert}\n===WSAA_TICKET===\n${JSON.stringify(payload)}`
-            await supabaseAdmin
-              .from('afip_configs')
-              .update({ cert_content: updatedCertContent })
-              .eq('company_id', budget.company_id)
-            console.log('Successfully cached WSAA ticket in database after voucher generation.')
-          }
-        } catch (err) {
-          console.error('Failed to cache ticket in database:', err)
-        }
-      }
-    }
+    const fechaFormateada = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date())
 
-    // 8. Actualización Dual o Inserción de Comprobante Correctivo
+    // 8. Persistir comprobante y actualizar estado en base de datos de manera atómica
     if (esCorrectivo) {
       if (isCreditNote) {
-        // Anular la factura original solo si es anulación total (sin customAmount o igual/mayor al total)
         const esAnulacionTotal = !customAmount || Number(customAmount) >= Number(budget.total_amount)
         if (esAnulacionTotal) {
           await supabaseAdmin
@@ -398,7 +365,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // Insertar el nuevo comprobante correctivo en la tabla invoices
       await supabaseAdmin
         .from('invoices')
         .insert({
@@ -411,7 +377,7 @@ export async function POST(request: Request) {
           afip_cae_vencimiento: caeFchVto,
           afip_comprobante_numero: cbteNro,
           afip_comprobante_tipo: cbteTipo,
-          invoice_date: new Date().toISOString().split('T')[0],
+          invoice_date: fechaFormateada,
           invoice_number: cbteNro,
           ...(businessType === 'services' ? {
             afip_servicio_desde: voucherData.FchServDesde,
@@ -420,7 +386,6 @@ export async function POST(request: Request) {
           } : {})
         })
     } else {
-      // Flujo de factura estándar (guardado dual original)
       await supabaseAdmin
         .from('budgets')
         .update({
@@ -448,13 +413,15 @@ export async function POST(request: Request) {
             afip_cae_vencimiento: caeFchVto,
             afip_comprobante_numero: cbteNro,
             afip_comprobante_tipo: cbteTipo,
+            invoice_date: fechaFormateada,
+            invoice_number: cbteNro,
             ...(businessType === 'services' ? {
               afip_servicio_desde: voucherData.FchServDesde,
               afip_servicio_hasta: voucherData.FchServHasta,
               afip_servicio_vto: voucherData.FchVtoPago
             } : {})
           })
-          .eq('budget_id', budget_id);
+          .eq('budget_id', budget_id)
       } else {
         await supabaseAdmin
           .from('invoices')
@@ -468,7 +435,7 @@ export async function POST(request: Request) {
             afip_cae_vencimiento: caeFchVto,
             afip_comprobante_numero: cbteNro,
             afip_comprobante_tipo: cbteTipo,
-            invoice_date: new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()),
+            invoice_date: fechaFormateada,
             invoice_number: cbteNro,
             ...(businessType === 'services' ? {
               afip_servicio_desde: voucherData.FchServDesde,
@@ -477,47 +444,22 @@ export async function POST(request: Request) {
             } : {})
           })
       }
-
-      if (addIva && !existingDraft) {
-        const { data: inv } = await supabaseAdmin
-          .from('invoices')
-          .select('id')
-          .eq('budget_id', budget_id)
-          .single();
-        
-        if (inv) {
-          const { data: items } = await supabaseAdmin
-            .from('invoice_items')
-            .select('*')
-            .eq('invoice_id', inv.id);
-          
-          if (items) {
-            for (const item of items) {
-              await supabaseAdmin
-                .from('invoice_items')
-                .update({
-                  unit_price: parseFloat((item.unit_price * 1.21).toFixed(2)),
-                  total: parseFloat((item.total * 1.21).toFixed(2))
-                })
-                .eq('id', item.id);
-            }
-          }
-        }
-      }
     }
 
     return NextResponse.json({
       success: true,
       cae: cae,
       invoice_number: cbteNro,
-      message: 'Factura emitida con éxito'
+      punto_venta: voucherData.PtoVta,
+      is_production: isProduction,
+      message: `Factura autorizada por ARCA con éxito (CAE: ${cae})`
     })
 
   } catch (error: any) {
-    console.error('Error emitiendo factura:', error)
+    console.error('Error al emitir factura en ARCA:', error)
     return NextResponse.json({
       success: false,
-      error: error.message || 'Error al emitir factura'
+      error: error.message || 'Error al emitir factura en ARCA'
     }, { status: 500 })
   } finally {
     if (fs.existsSync(certPath)) fs.unlinkSync(certPath)
