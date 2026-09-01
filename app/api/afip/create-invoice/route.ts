@@ -432,22 +432,51 @@ export async function POST(request: Request) {
         })
         .eq('id', budget_id)
 
-      await supabaseAdmin
+      const { data: invRow } = await supabaseAdmin
         .from('invoices')
-        .update({
-          status: 'emitted',
-          total_amount: montoTotal,
-          afip_cae: cae,
-          afip_cae_vencimiento: caeFchVto,
-          afip_comprobante_numero: cbteNro,
-          afip_comprobante_tipo: cbteTipo,
-          ...(businessType === 'services' ? {
-            afip_servicio_desde: voucherData.FchServDesde,
-            afip_servicio_hasta: voucherData.FchServHasta,
-            afip_servicio_vto: voucherData.FchVtoPago
-          } : {})
-        })
-        .eq('budget_id', budget_id);
+        .select('id')
+        .eq('budget_id', budget_id)
+        .maybeSingle()
+
+      if (invRow) {
+        await supabaseAdmin
+          .from('invoices')
+          .update({
+            status: 'emitted',
+            total_amount: montoTotal,
+            afip_cae: cae,
+            afip_cae_vencimiento: caeFchVto,
+            afip_comprobante_numero: cbteNro,
+            afip_comprobante_tipo: cbteTipo,
+            ...(businessType === 'services' ? {
+              afip_servicio_desde: voucherData.FchServDesde,
+              afip_servicio_hasta: voucherData.FchServHasta,
+              afip_servicio_vto: voucherData.FchVtoPago
+            } : {})
+          })
+          .eq('budget_id', budget_id);
+      } else {
+        await supabaseAdmin
+          .from('invoices')
+          .insert({
+            company_id: budget.company_id,
+            client_id: budget.client_id,
+            budget_id: budget_id,
+            status: 'emitted',
+            total_amount: montoTotal,
+            afip_cae: cae,
+            afip_cae_vencimiento: caeFchVto,
+            afip_comprobante_numero: cbteNro,
+            afip_comprobante_tipo: cbteTipo,
+            invoice_date: new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()),
+            invoice_number: cbteNro,
+            ...(businessType === 'services' ? {
+              afip_servicio_desde: voucherData.FchServDesde,
+              afip_servicio_hasta: voucherData.FchServHasta,
+              afip_servicio_vto: voucherData.FchVtoPago
+            } : {})
+          })
+      }
 
       if (addIva && !existingDraft) {
         const { data: inv } = await supabaseAdmin
