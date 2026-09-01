@@ -221,8 +221,21 @@ DECLARE
     v_updated_rows INTEGER;
 BEGIN
     -- 1. Validar parámetros de entrada
-    IF p_environment NOT IN ('homo', 'prod') THEN
+    IF p_attempt_id IS NULL
+       OR p_company_id IS NULL
+       OR p_budget_id IS NULL
+       OR p_client_id IS NULL THEN
+        RAISE EXCEPTION 'Los identificadores obligatorios no pueden ser NULL.';
+    END IF;
+
+    IF p_environment IS NULL OR p_environment NOT IN ('homo', 'prod') THEN
         RAISE EXCEPTION 'Entorno fiscal inválido: %. Debe ser homo o prod.', p_environment;
+    END IF;
+
+    IF p_is_corrective IS NULL
+       OR p_is_credit_note IS NULL
+       OR p_is_total_cancellation IS NULL THEN
+        RAISE EXCEPTION 'Los indicadores de operación no pueden ser NULL.';
     END IF;
 
     IF p_cae IS NULL OR NOT (p_cae ~ '^\d{14}$') THEN
@@ -233,15 +246,19 @@ BEGIN
         RAISE EXCEPTION 'La fecha de vencimiento del CAE es obligatoria.';
     END IF;
 
-    IF p_comprobante_numero <= 0 THEN
+    IF p_comprobante_numero IS NULL OR p_comprobante_numero <= 0 THEN
         RAISE EXCEPTION 'El número de comprobante debe ser mayor a 0.';
+    END IF;
+
+    IF p_comprobante_tipo IS NULL OR p_comprobante_tipo <= 0 THEN
+        RAISE EXCEPTION 'El tipo de comprobante es obligatorio y debe ser mayor a 0.';
     END IF;
 
     IF p_invoice_date IS NULL OR NOT (p_invoice_date ~ '^\d{4}-\d{2}-\d{2}$') THEN
         RAISE EXCEPTION 'La fecha del comprobante es obligatoria y debe tener formato YYYY-MM-DD.';
     END IF;
 
-    IF p_total_amount <= 0 THEN
+    IF p_total_amount IS NULL OR p_total_amount <= 0 THEN
         RAISE EXCEPTION 'El importe total del comprobante debe ser mayor a cero.';
     END IF;
 
@@ -286,8 +303,8 @@ BEGIN
 
     -- Validar coherencia de la operación según attempt.operation_type
     IF v_attempt.operation_type = 'invoice' THEN
-        IF p_is_corrective THEN
-            RAISE EXCEPTION 'Incoherencia: el intento es de tipo factura pero se recibió is_corrective=true.';
+        IF p_is_corrective OR p_is_credit_note THEN
+            RAISE EXCEPTION 'Incoherencia: el intento es de tipo factura pero se recibieron indicadores de operación correctiva.';
         END IF;
         IF p_comprobante_tipo NOT IN (1, 6, 11) THEN
             RAISE EXCEPTION 'Incoherencia: tipo de comprobante (%) no válido para facturas originales.', p_comprobante_tipo;
