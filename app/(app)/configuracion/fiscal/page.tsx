@@ -261,20 +261,13 @@ export default function ConfigFiscalPage() {
                 <span className="text-xs font-bold text-amber-900">Modo Testing (Homologación)</span>
                 <input 
                   type="checkbox"
-                  disabled={userRole !== 'super_admin'}
                   checked={config.is_sandbox}
                   onChange={(e) => setConfig({...config, is_sandbox: e.target.checked})}
-                  className="w-5 h-5 accent-amber-600 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
+                  className="w-5 h-5 accent-amber-600 cursor-pointer"
                 />
              </div>
-             {userRole !== 'super_admin' && (
-                <p className="mt-3 text-[10px] font-bold text-amber-700/80 leading-normal flex items-start gap-1">
-                  <span>⚠️</span>
-                  <span>Solo los administradores de ZOMA pueden cambiar el entorno del sistema.</span>
-                </p>
-             )}
              <p className="mt-4 text-[11px] font-medium text-amber-800 leading-relaxed">
-               Recomendamos probar siempre en modo Testing antes de pasar a Producción para evitar facturas legales erróneas.
+               Desmarcá esta casilla para operar en Producción (Real). Recomendamos probar antes en modo Testing para evitar errores legales.
              </p>
           </div>
         </div>

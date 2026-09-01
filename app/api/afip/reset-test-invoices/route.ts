@@ -64,6 +64,24 @@ export async function POST(request: Request) {
       })
       .eq('company_id', companyId)
 
+    // 5. Forzar el paso a Producción Real (is_sandbox = false) y limpiar viejos tickets WSAA
+    const { data: currentAfipConfig } = await supabaseAdmin
+      .from('afip_configs')
+      .select('cert_content')
+      .eq('company_id', companyId)
+      .maybeSingle()
+
+    if (currentAfipConfig) {
+      const cleanCert = currentAfipConfig.cert_content?.split('===WSAA_TICKET===')[0].trim() || ''
+      await supabaseAdmin
+        .from('afip_configs')
+        .update({
+          is_sandbox: false,
+          cert_content: cleanCert
+        })
+        .eq('company_id', companyId)
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Se resetearon y eliminaron todas las facturas de prueba de Sandbox correctamente.'
