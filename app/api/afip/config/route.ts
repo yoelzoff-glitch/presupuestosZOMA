@@ -2,36 +2,41 @@ import { NextResponse } from 'next/server'
 import { requireCompanyUser } from '@/lib/auth/requireCompanyUser'
 import { createSupabaseAdminClient } from '@/lib/supabase/server'
 import { UpdateFiscalConfigSchema } from '@/lib/arca/validations'
+import { getArcaCredentialsMetadata, saveArcaCredentials } from '@/lib/arca/credentialsService'
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireCompanyUser({ allowedRoles: ['admin', 'super_admin'] })
   if (!auth.success) return auth.response
 
   const { companyId } = auth.user
   const supabaseAdmin = createSupabaseAdminClient()
 
-  const { data: config, error } = await supabaseAdmin
-    .from('afip_configs')
-    .select('cuit, punto_venta, tipo_contribuyente, is_sandbox, cert_content, key_content, updated_at')
-    .eq('company_id', companyId)
-    .maybeSingle()
+  const url = new URL(request.url)
+  const envParam = url.searchParams.get('environment')
+  const requestedEnv: 'homo' | 'prod' = envParam === 'prod' ? 'prod' : 'homo'
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  const [homoMeta, prodMeta] = await Promise.all([
+    getArcaCredentialsMetadata(supabaseAdmin, companyId, 'homo'),
+    getArcaCredentialsMetadata(supabaseAdmin, companyId, 'prod')
+  ])
 
-  const hasCert = Boolean(config?.cert_content && config.cert_content.includes('BEGIN CERTIFICATE'))
-  const hasKey = Boolean(config?.key_content && (config.key_content.includes('BEGIN PRIVATE KEY') || config.key_content.includes('BEGIN RSA PRIVATE KEY')))
+  const currentMeta = requestedEnv === 'prod' ? prodMeta : homoMeta
 
   return NextResponse.json({
-    configured: Boolean(config && hasCert && hasKey),
-    cuit: config?.cuit || '',
-    punto_venta: config?.punto_venta || 0,
-    tipo_contribuyente: config?.tipo_contribuyente || 'monotributo',
-    is_sandbox: config?.is_sandbox ?? true,
-    certificate_configured: hasCert,
-    key_configured: hasKey,
-    updated_at: config?.updated_at || null
+    configured: currentMeta.configured,
+    environment: requestedEnv,
+    cuit: currentMeta.cuit,
+    punto_venta: currentMeta.punto_venta,
+    tipo_contribuyente: currentMeta.tipo_contribuyente,
+    certificate_configured: currentMeta.certificate_configured,
+    key_configured: currentMeta.key_configured,
+    certificate_fingerprint: currentMeta.certificate_fingerprint,
+    verified_at: currentMeta.verified_at,
+    // Estado comparativo para UI
+    environments: {
+      homo: homoMeta,
+      prod: prodMeta
+    }
   })
 }
 
@@ -48,34 +53,27 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: errorMsg }, { status: 400 })
   }
 
-  const { cuit, tipo_contribuyente, punto_venta, cert_content, key_content, is_sandbox } = validation.data
+  const { cuit, tipo_contribuyente, punto_venta, environment, cert_content, key_content } = validation.data
   const supabaseAdmin = createSupabaseAdminClient()
 
-  // Extraer únicamente el certificado PEM limpio
-  const cleanCert = cert_content.split('===WSAA_TICKET')[0].trim()
-  const cleanKey = key_content.split('===WSAA_TICKET')[0].trim()
+  try {
+    const result = await saveArcaCredentials(supabaseAdmin, {
+      companyId,
+      environment,
+      cuit,
+      puntoVenta: punto_venta,
+      tipoContribuyente: tipo_contribuyente,
+      certPem: cert_content,
+      keyPem: key_content
+    })
 
-  const payload = {
-    company_id: companyId,
-    cuit: cuit.replace(/-/g, '').trim(),
-    tipo_contribuyente,
-    punto_venta,
-    cert_content: cleanCert,
-    key_content: cleanKey,
-    is_sandbox,
-    updated_at: new Date()
+    return NextResponse.json({
+      success: true,
+      environment,
+      certificate_fingerprint: result.fingerprint,
+      message: `Configuración fiscal para ${environment === 'prod' ? 'Producción' : 'Homologación'} guardada y cifrada con éxito.`
+    })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Error al guardar credenciales' }, { status: 500 })
   }
-
-  const { error } = await supabaseAdmin
-    .from('afip_configs')
-    .upsert(payload, { onConflict: 'company_id' })
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({
-    success: true,
-    message: 'Configuración fiscal guardada y cifrada correctamente en el servidor.'
-  })
 }

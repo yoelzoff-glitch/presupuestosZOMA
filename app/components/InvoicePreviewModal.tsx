@@ -79,9 +79,9 @@ export default function InvoicePreviewModal({
         
         const { data: afipData } = await supabase
           .from('afip_configs')
-          .select('*')
+          .select('tipo_contribuyente, punto_venta')
           .eq('company_id', budgetData.company_id)
-          .single()
+          .maybeSingle()
         
         setConfig(afipData)
 

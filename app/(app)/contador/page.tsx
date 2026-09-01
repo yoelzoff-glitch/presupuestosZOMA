@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createServerComponentClient, getServerUserContext } from '@/lib/supabase/server'
+import { createServerComponentClient, getServerUserContext, createSupabaseAdminClient } from '@/lib/supabase/server'
+import { getArcaCredentialsMetadata } from '@/lib/arca/credentialsService'
 import ContadorClient from './ContadorClient'
 
 export default async function AccountantPage() {
@@ -7,6 +8,7 @@ export default async function AccountantPage() {
   if (!contexto) redirect('/auth/login')
 
   const supabase = await createServerComponentClient()
+  const supabaseAdmin = createSupabaseAdminClient()
 
   // 1. Obtener facturas legalizadas
   const { data: invoices, error: invoicesError } = await supabase
@@ -21,12 +23,13 @@ export default async function AccountantPage() {
 
   if (invoicesError) console.error('Error cargando facturas para contador:', invoicesError)
 
-  // 2. Obtener configuración fiscal de la empresa
-  const { data: config } = await supabase
-    .from('afip_configs')
-    .select('*')
-    .eq('company_id', contexto.idEmpresa)
-    .single()
+  // 2. Obtener metadatos fiscales seguros (sin secretos ni payloads)
+  const [homoMeta, prodMeta] = await Promise.all([
+    getArcaCredentialsMetadata(supabaseAdmin, contexto.idEmpresa, 'homo'),
+    getArcaCredentialsMetadata(supabaseAdmin, contexto.idEmpresa, 'prod')
+  ])
+
+  const configFiscalMeta = prodMeta.configured ? prodMeta : homoMeta
 
   // 3. Obtener clientes para la Cuenta Corriente
   const { data: clients } = await supabase
@@ -54,10 +57,10 @@ export default async function AccountantPage() {
       invoicesIniciales={invoices || []} 
       idEmpresa={contexto.idEmpresa}
       nombreEmpresa={contexto.nombreEmpresa}
-      configFiscal={config || null}
+      configFiscal={configFiscalMeta}
       clients={clients || []}
       movements={movements || []}
-      userRole={contexto.rol} // Pasamos el rol real del usuario para habilitar/deshabilitar invitaciones
+      userRole={contexto.rol}
       contadoresIniciales={contadores || []}
     />
   )

@@ -27,6 +27,7 @@ export default function NuevoCliente() {
   const [phone, setPhone] = useState('')
   const [selectedSellerId, setSelectedSellerId] = useState<string>('')
   const [clientType, setClientType] = useState<'consumidor_final' | 'distribuidor'>('consumidor_final')
+  const [condicionIva, setCondicionIva] = useState<'consumidor_final' | 'responsable_inscripto' | 'monotributo' | 'exento'>('consumidor_final')
   
   const [sellers, setSellers] = useState<SellerProfile[]>([])
   const [loading, setLoading] = useState(false)
@@ -75,7 +76,8 @@ export default function NuevoCliente() {
         email: email.trim() || null,
         phone: phone.trim() || null,
         seller_id: selectedSellerId || null,
-        client_type: clientType
+        client_type: clientType,
+        condicion_iva: condicionIva
       })
 
       if (error) throw error
@@ -200,6 +202,20 @@ export default function NuevoCliente() {
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition" />
                   <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Dirección completa" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition" />
                   
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Condición Fiscal ARCA</p>
+                    <select
+                      value={condicionIva}
+                      onChange={(e: any) => setCondicionIva(e.target.value)}
+                      className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-3.5 text-xs font-bold text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition"
+                    >
+                      <option value="consumidor_final">Consumidor Final</option>
+                      <option value="responsable_inscripto">Responsable Inscripto</option>
+                      <option value="monotributo">Monotributo</option>
+                      <option value="exento">Exento</option>
+                    </select>
+                  </div>
+
                   <div className="pt-2">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Tipo de Cliente</p>
                     <div className="grid grid-cols-2 gap-3">
