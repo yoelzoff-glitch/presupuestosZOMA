@@ -129,7 +129,7 @@ export default function ConfigFiscalPage() {
         cuit: config.cuit,
         tipo_contribuyente: config.tipo_contribuyente,
         punto_venta: parseInt(config.punto_venta) || 0,
-        cert_content: config.cert_content,
+        cert_content: config.cert_content.split('===WSAA_TICKET===')[0].trim(),
         key_content: config.key_content,
         is_sandbox: config.is_sandbox,
         updated_at: new Date()

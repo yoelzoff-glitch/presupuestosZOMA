@@ -98,7 +98,19 @@ export async function POST(request: Request) {
     }
 
     const now = Date.now()
-    const isTicketValid = cachedTicket && cachedTicket.expiresAt && cachedTicket.expiresAt > now + 60000 // valid for at least 1 min
+    const isTicketValid = cachedTicket && 
+      cachedTicket.expiresAt && 
+      cachedTicket.expiresAt > now + 60000 && 
+      cachedTicket.production === !config.is_sandbox
+
+    if (!isTicketValid) {
+      try {
+        const ticketDir = path.join(os.tmpdir(), 'arca-tickets-stable')
+        if (fs.existsSync(ticketDir)) {
+          fs.rmSync(ticketDir, { recursive: true, force: true })
+        }
+      } catch (e) {}
+    }
 
     const arcaOptions: any = {
       key: cleanKey,
@@ -114,7 +126,7 @@ export async function POST(request: Request) {
       console.log('Using valid WSAA ticket from database cache.')
     } else {
       arcaOptions.ticketPath = path.join(os.tmpdir(), 'arca-tickets-stable')
-      console.log('No valid WSAA ticket in database. Using disk automatic management.')
+      console.log('No valid WSAA ticket in database. Fetching fresh WSAA ticket.')
     }
 
     const arca = new Arca(arcaOptions)
@@ -205,7 +217,7 @@ export async function POST(request: Request) {
     // 6. Preparar datos del voucher
     const voucherData: any = {
       CantReg: 1,
-      PtoVta: config.punto_venta || 2,
+      PtoVta: Number(config.punto_venta) || 2,
       CbteTipo: cbteTipo,
       Concepto: businessType === 'services' ? 2 : 1, // 1: Productos, 2: Servicios
       DocTipo: docTipo,
@@ -262,7 +274,7 @@ export async function POST(request: Request) {
     if (esCorrectivo && budget.afip_comprobante_numero) {
       voucherData.CbtesAsoc = [{
         Tipo: budget.afip_comprobante_tipo || (esRI ? (client?.client_type === 'distribuidor' || esCuitValido ? 1 : 6) : 11),
-        PtoVta: config.punto_venta || 2,
+        PtoVta: Number(config.punto_venta) || 2,
         Nro: budget.afip_comprobante_numero
       }]
     }
@@ -356,6 +368,7 @@ export async function POST(request: Request) {
                 header: ticketData.header,
                 credentials: ticketData.credentials
               },
+              production: !config.is_sandbox,
               expiresAt
             }
             const updatedCertContent = `${actualCert}\n===WSAA_TICKET===\n${JSON.stringify(payload)}`

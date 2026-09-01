@@ -50,7 +50,19 @@ export async function POST(request: Request) {
     }
 
     const now = Date.now()
-    const isTicketValid = cachedTicket && cachedTicket.expiresAt && cachedTicket.expiresAt > now + 60000
+    const isTicketValid = cachedTicket && 
+      cachedTicket.expiresAt && 
+      cachedTicket.expiresAt > now + 60000 &&
+      cachedTicket.production === !config.is_sandbox
+
+    if (!isTicketValid) {
+      try {
+        const ticketDir = path.join(os.tmpdir(), 'arca-tickets-stable')
+        if (fs.existsSync(ticketDir)) {
+          fs.rmSync(ticketDir, { recursive: true, force: true })
+        }
+      } catch (e) {}
+    }
 
     // 2. Crear archivos temporales
     fs.writeFileSync(certPath, actualCert)
@@ -95,6 +107,7 @@ export async function POST(request: Request) {
                 header: ticketData.header,
                 credentials: ticketData.credentials
               },
+              production: !config.is_sandbox,
               expiresAt
             }
             const updatedCertContent = `${actualCert}\n===WSAA_TICKET===\n${JSON.stringify(payload)}`
