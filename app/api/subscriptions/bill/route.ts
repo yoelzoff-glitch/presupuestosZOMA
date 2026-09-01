@@ -8,22 +8,30 @@ export async function POST(request: NextRequest) {
 
   const { companyId } = auth.user
   const supabase = createSupabaseAdminClient()
-  
+
   let newBudgetId: string | null = null
   let newInvoiceId: string | null = null
 
   try {
-    const { 
-      subscription_id, 
-      custom_amount, 
-      service_desde, 
-      service_hasta, 
+    const {
+      subscription_id,
+      environment,
+      custom_amount,
+      service_desde,
+      service_hasta,
       service_vto,
       cbteTipoOverride
     } = await request.json().catch(() => ({}))
 
     if (!subscription_id) {
       return NextResponse.json({ success: false, error: 'Falta subscription_id' }, { status: 400 })
+    }
+
+    if (!environment || !['homo', 'prod'].includes(environment)) {
+      return NextResponse.json({
+        success: false,
+        error: 'El parámetro environment ("homo" o "prod") es obligatorio para facturar el abono.'
+      }, { status: 400 })
     }
 
     // 1. Obtener los datos del abono validando pertenencia a la empresa autenticada
@@ -156,6 +164,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         budget_id: budget.id,
+        environment,
         cbteTipoOverride: cbteTipoOverride || null,
         customAmount: totalAmount,
         serviceDates: {
@@ -174,7 +183,7 @@ export async function POST(request: NextRequest) {
 
     // 9. Actualizar last_billed_month en abono para evitar dobles cobros
     const currentMonthLabel = (service_desde || new Date().toISOString()).slice(0, 7)
-    
+
     await supabase
       .from('subscriptions')
       .update({

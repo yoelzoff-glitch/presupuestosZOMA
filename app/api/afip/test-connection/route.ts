@@ -16,11 +16,12 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const requestedEnv: 'homo' | 'prod' = body.environment === 'prod' ? 'prod' : 'homo'
 
-    // 2. Cargar exclusivamente las credenciales del entorno solicitado
+    // 2. Cargar credenciales del entorno solicitado para validación de conexión
     const { arca, credentials, isProduction } = await createArcaClient(
       supabaseAdmin,
       companyId,
-      requestedEnv
+      requestedEnv,
+      { skipVerifiedCheck: true }
     )
 
     const ptoVtaBuscado = credentials.puntoVenta
@@ -81,13 +82,21 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    // 5. Actualizar verified_at en arca_credentials
+    // 5. Actualizar verified_at en arca_credentials y comprobar error de Supabase
     const nowIso = new Date().toISOString()
-    await supabaseAdmin
+    const { error: updateErr } = await supabaseAdmin
       .from('arca_credentials')
       .update({ verified_at: nowIso, updated_at: nowIso })
       .eq('company_id', companyId)
       .eq('environment', requestedEnv)
+
+    if (updateErr) {
+      return NextResponse.json({
+        success: false,
+        environment: requestedEnv,
+        error: `Conexión con ARCA exitosa, pero no se pudo registrar la validación en la base de datos: ${updateErr.message}`
+      }, { status: 500 })
+    }
 
     return NextResponse.json({
       success: true,
@@ -95,6 +104,7 @@ export async function POST(request: Request) {
       cuit: credentials.cuit,
       punto_venta: ptoVtaBuscado,
       punto_venta_validado: true,
+      bloqueado: puntoEncontrado.bloqueado,
       certificate_fingerprint: credentials.certificateFingerprint,
       verified_at: nowIso,
       message: `Credenciales y punto de venta validados con éxito en ARCA ${isProduction ? 'Producción' : 'Homologación'}.`

@@ -20,19 +20,19 @@ export default function VerFacturaPage() {
       const today = new Date()
       const year = today.getFullYear()
       const month = today.getMonth()
-      
+
       const startOfMonth = new Date(year, month, 1)
       const endOfMonth = new Date(year, month + 1, 0)
       const dueDay = new Date(today)
       dueDay.setDate(today.getDate() + 10)
-      
+
       const formatDate = (date: Date) => {
          const y = date.getFullYear()
          const m = String(date.getMonth() + 1).padStart(2, '0')
          const d = String(date.getDate()).padStart(2, '0')
          return `${y}-${m}-${d}`
       }
-      
+
       return {
          desde: formatDate(startOfMonth),
          hasta: formatDate(endOfMonth),
@@ -118,14 +118,15 @@ export default function VerFacturaPage() {
       setLoading(false)
    }
 
-   async function emitirFactura() {
+   async function emitirFactura(env: 'homo' | 'prod' = 'homo') {
       try {
          setEmitiendo(true)
          const response = await fetch('/api/afip/create-invoice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                budget_id: budget.id,
+               environment: env,
                serviceDates: budget.companies?.business_type === 'services' ? {
                   FchServDesde: serviceDates.desde,
                   FchServHasta: serviceDates.hasta,
@@ -245,12 +246,12 @@ export default function VerFacturaPage() {
             </div>
             <div className="flex gap-2">
                {esBorrador && (
-                  <button 
-                     onClick={emitirFactura} 
+                  <button
+                     onClick={() => emitirFactura('homo')}
                      disabled={emitiendo}
                      className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-black text-white hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 disabled:opacity-50"
                   >
-                     {emitiendo ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} 
+                     {emitiendo ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                      Emitir Factura
                   </button>
                )}
@@ -272,7 +273,7 @@ export default function VerFacturaPage() {
                      <p className="text-[11px] font-medium text-slate-500">Configurá las fechas requeridas por AFIP para la prestación de servicios y vencimiento de pago.</p>
                   </div>
                </div>
-               
+
                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-1.5">
                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Servicio Desde</label>
@@ -312,7 +313,7 @@ export default function VerFacturaPage() {
 
          {/* Factura Layout */}
          <div className="mx-auto max-w-4xl border border-slate-300 bg-white p-10 pt-14 shadow-2xl print:shadow-none print:border-none print:p-0 print:pt-10 rounded-[2rem] print:rounded-none overflow-hidden relative">
-            
+
             {/* Marca de agua / Decoración */}
             <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none print:hidden">
                <FileText size={200} />
@@ -382,7 +383,7 @@ export default function VerFacturaPage() {
                      <p>
                         <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Período Facturado Desde:</span>
                         <span className="font-black text-slate-900">
-                           {esBorrador 
+                           {esBorrador
                               ? formatDateString(serviceDates.desde)
                               : formatDateString(budget.afip_servicio_desde)}
                         </span>
@@ -390,7 +391,7 @@ export default function VerFacturaPage() {
                      <p>
                         <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Hasta:</span>
                         <span className="font-black text-slate-900">
-                           {esBorrador 
+                           {esBorrador
                               ? formatDateString(serviceDates.hasta)
                               : formatDateString(budget.afip_servicio_hasta)}
                         </span>
@@ -398,7 +399,7 @@ export default function VerFacturaPage() {
                      <p>
                         <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Vto. para el Pago:</span>
                         <span className="font-black text-slate-900">
-                           {esBorrador 
+                           {esBorrador
                               ? formatDateString(serviceDates.vto)
                               : formatDateString(budget.afip_servicio_vto)}
                         </span>

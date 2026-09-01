@@ -73,12 +73,17 @@ function normalizeDateStr(d: string): string {
 
 export const CreateInvoiceRequestSchema = z.object({
   budget_id: z.string().uuid({ message: 'El ID del presupuesto debe ser un UUID válido.' }),
-  environment: z.enum(['homo', 'prod']).optional(),
+  environment: z.enum(['homo', 'prod'], {
+    error: 'El parámetro environment es obligatorio y debe ser "homo" o "prod".'
+  }),
   cbteTipoOverride: z.number().int().refine(val => (ALLOWED_CBTE_TIPOS as readonly number[]).includes(val), {
     message: 'Tipo de comprobante no permitido. Solo se permiten Facturas (1, 6, 11), Notas de Débito (2, 7, 12) y Notas de Crédito (3, 8, 13).'
   }).optional(),
   isCreditNote: z.boolean().optional(),
   isDebitNote: z.boolean().optional(),
+  is_total_cancellation: z.boolean().optional().default(true),
+  invoice_original_id: z.string().uuid().optional(),
+  correction_request_id: z.string().uuid({ message: 'El correction_request_id debe ser un UUID válido.' }).optional(),
   customAmount: z.number().positive({ message: 'El monto debe ser mayor a 0.' }).optional(),
   addIva: z.boolean().optional(),
   serviceDates: z.object({
@@ -95,6 +100,14 @@ export const CreateInvoiceRequestSchema = z.object({
   }).optional()
 }).refine(data => !(data.isCreditNote && data.isDebitNote), {
   message: 'Un comprobante no puede ser Nota de Crédito y Nota de Débito simultáneamente.'
+}).refine(data => {
+  if ((data.isCreditNote || data.isDebitNote) && !data.correction_request_id) {
+    return false
+  }
+  return true
+}, {
+  message: 'correction_request_id es obligatorio para emitir Notas de Crédito o Débito.',
+  path: ['correction_request_id']
 })
 
 export const UpdateFiscalConfigSchema = z.object({

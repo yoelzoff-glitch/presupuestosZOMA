@@ -53,7 +53,7 @@ export async function getArcaCredentialsMetadata(
       if (legacy && legacy.is_sandbox) {
         const hasCert = Boolean(legacy.cert_content && legacy.cert_content.includes('BEGIN CERTIFICATE') && !legacy.cert_content.includes('CERTIFICADO CONFIGURADO'))
         const hasKey = Boolean(legacy.key_content && (legacy.key_content.includes('BEGIN PRIVATE KEY') || legacy.key_content.includes('BEGIN RSA PRIVATE KEY')) && !legacy.key_content.includes('CLAVE PRIVADA CONFIGURADA'))
-        
+
         return {
           configured: hasCert && hasKey && Boolean(legacy.cuit),
           environment: 'homo',
@@ -223,6 +223,7 @@ export async function saveArcaCredentials(
       certificate_payload: certPayload,
       private_key_payload: keyPayload,
       certificate_fingerprint: fingerprint,
+      verified_at: null,
       updated_at: new Date().toISOString()
     }, { onConflict: 'company_id, environment' })
 

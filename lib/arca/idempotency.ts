@@ -22,23 +22,64 @@ export interface InvoiceAttemptRecord {
   updated_at: string
 }
 
-// In-memory mutex map para serializar emisiones concurrentes hacia el mismo punto de venta y comprobante
-const activeEmissionLocks = new Set<string>()
+// In-memory mutex map local como optimización secundaria en el mismo proceso Node
+const localEmissionLocks = new Set<string>()
 
 export function getEmissionLockKey(companyId: string, env: string, ptoVta: number, cbteTipo: number): string {
   return `${companyId}:${env}:${ptoVta}:${cbteTipo}`
 }
 
-export function acquireEmissionLock(key: string): boolean {
-  if (activeEmissionLocks.has(key)) {
+/**
+ * Adquiere un lock de emisión distribuido en PostgreSQL (tabla public.arca_emission_locks)
+ */
+export async function acquireEmissionLockDistributed(
+  supabaseAdmin: SupabaseClient,
+  lockKey: string,
+  lockToken: string,
+  leaseSeconds = 120
+): Promise<boolean> {
+  // 1. Verificar lock local en memoria
+  if (localEmissionLocks.has(lockKey)) {
     return false
   }
-  activeEmissionLocks.add(key)
-  return true
+
+  // 2. Adquirir lock distribuido vía RPC atómica
+  const { data, error } = await supabaseAdmin.rpc('claim_arca_emission_lock', {
+    p_lock_key: lockKey,
+    p_lock_token: lockToken,
+    p_lease_seconds: leaseSeconds
+  })
+
+  if (error) {
+    throw new Error(`Error de infraestructura al adquirir lock de emisión: ${error.message}`)
+  }
+
+  const acquired = Boolean(data)
+  if (acquired) {
+    localEmissionLocks.add(lockKey)
+  }
+
+  return acquired
 }
 
-export function releaseEmissionLock(key: string): void {
-  activeEmissionLocks.delete(key)
+/**
+ * Libera el lock de emisión distribuido en PostgreSQL si el token coincide
+ */
+export async function releaseEmissionLockDistributed(
+  supabaseAdmin: SupabaseClient,
+  lockKey: string,
+  lockToken: string
+): Promise<void> {
+  localEmissionLocks.delete(lockKey)
+
+  try {
+    await supabaseAdmin.rpc('release_arca_emission_lock', {
+      p_lock_key: lockKey,
+      p_lock_token: lockToken
+    })
+  } catch {
+    // Ignorar si ya expiró el lease
+  }
 }
 
 /**
@@ -49,13 +90,15 @@ export function buildIdempotencyKey(params: {
   budgetId: string
   environment: 'homo' | 'prod'
   operationType: 'invoice' | 'credit_note' | 'debit_note'
-  correctionId?: string
+  correctionRequestId?: string
+  invoiceOriginalId?: string
 }): string {
-  const { companyId, budgetId, environment, operationType, correctionId } = params
+  const { companyId, budgetId, environment, operationType, correctionRequestId, invoiceOriginalId } = params
   if (operationType === 'invoice') {
     return `${companyId}:${budgetId}:${environment}:invoice`
   }
-  return `${companyId}:${budgetId}:${environment}:${operationType}:${correctionId || 'default'}`
+  const baseTarget = invoiceOriginalId || budgetId
+  return `${companyId}:${baseTarget}:${environment}:${operationType}:${correctionRequestId || 'default'}`
 }
 
 export type ClaimResult =
@@ -65,7 +108,7 @@ export type ClaimResult =
   | { type: 'claimed'; attempt: InvoiceAttemptRecord }
 
 /**
- * Reclama de forma atómica el intento de emisión
+ * Reclama de forma atómica el intento de emisión en PostgreSQL
  */
 export async function claimInvoiceAttempt(
   supabaseAdmin: SupabaseClient,
@@ -82,88 +125,45 @@ export async function claimInvoiceAttempt(
 ): Promise<ClaimResult> {
   const { companyId, budgetId, environment, operationType, idempotencyKey, puntoVenta, comprobanteTipo, requestPayload } = params
 
-  // 1. Consultar intento existente
-  const { data: existing, error: selectErr } = await supabaseAdmin
-    .from('arca_invoice_attempts')
-    .select('*')
-    .eq('idempotency_key', idempotencyKey)
-    .maybeSingle()
+  const { data, error } = await supabaseAdmin.rpc('claim_arca_invoice_attempt', {
+    p_company_id: companyId,
+    p_budget_id: budgetId,
+    p_environment: environment,
+    p_operation_type: operationType,
+    p_idempotency_key: idempotencyKey,
+    p_punto_venta: puntoVenta,
+    p_comprobante_tipo: comprobanteTipo,
+    p_request_payload: requestPayload
+  })
 
-  if (selectErr) {
-    throw new Error(`Error al consultar intentos de emisión: ${selectErr.message}`)
+  if (error) {
+    throw new Error(`Error al reclamar intento de emisión atómico: ${error.message}`)
   }
 
-  if (existing) {
-    const attempt = existing as InvoiceAttemptRecord
-
-    if (attempt.status === 'persisted') {
-      return { type: 'persisted', attempt }
-    }
-
-    if (attempt.status === 'authorized_pending_persistence' || attempt.status === 'reconciliation_required') {
-      return { type: 'needs_reconciliation', attempt }
-    }
-
-    if (attempt.status === 'processing') {
-      const updatedAtMs = new Date(attempt.updated_at).getTime()
-      const isRecent = Date.now() - updatedAtMs < 30000 // 30 segundos
-      if (isRecent) {
-        return { type: 'conflict_processing', attempt }
-      }
-    }
-
-    // Si había fallado previamente (rejected) o processing expiró, reactivamos intento
-    const { data: updated, error: updateErr } = await supabaseAdmin
-      .from('arca_invoice_attempts')
-      .update({
-        status: 'processing',
-        punto_venta: puntoVenta,
-        comprobante_tipo: comprobanteTipo,
-        request_payload: requestPayload,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', attempt.id)
-      .select()
-      .single()
-
-    if (updateErr) throw new Error(`Error actualizando intento: ${updateErr.message}`)
-    return { type: 'claimed', attempt: updated as InvoiceAttemptRecord }
+  if (!data || !data.type || !data.attempt) {
+    throw new Error('Respuesta inválida al reclamar intento de emisión')
   }
 
-  // 2. Insertar nuevo intento en estado processing
-  const { data: inserted, error: insertErr } = await supabaseAdmin
-    .from('arca_invoice_attempts')
-    .insert({
-      company_id: companyId,
-      budget_id: budgetId,
-      environment,
-      operation_type: operationType,
-      idempotency_key: idempotencyKey,
-      status: 'processing',
-      punto_venta: puntoVenta,
-      comprobante_tipo: comprobanteTipo,
-      request_payload: requestPayload,
-      updated_at: new Date().toISOString()
-    })
-    .select()
-    .single()
-
-  if (insertErr) {
-    throw new Error(`Error creando intento de emisión: ${insertErr.message}`)
+  return {
+    type: data.type,
+    attempt: data.attempt as InvoiceAttemptRecord
   }
-
-  return { type: 'claimed', attempt: inserted as InvoiceAttemptRecord }
 }
 
+export type ReconciliationResult =
+  | { status: 'authorized'; authorized: true; cae: string; caeExpiresAt?: string; rawResponse?: unknown }
+  | { status: 'not_found'; authorized: false }
+  | { status: 'indeterminate'; authorized: false; error: string }
+
 /**
- * Reconcilia un comprobante consultando ARCA para verificar si ya fue emitido
+ * Reconcilia un comprobante consultando ARCA para verificar si ya fue emitido de forma segura y tri-estado
  */
 export async function reconcileVoucherWithArca(
   arca: Arca,
   comprobanteNumero: number,
   puntoVenta: number,
   comprobanteTipo: number
-): Promise<{ authorized: boolean; cae?: string; caeExpiresAt?: string; rawResponse?: unknown }> {
+): Promise<ReconciliationResult> {
   try {
     const voucherInfo = await arca.electronicBillingService.getVoucherInfo(
       comprobanteNumero,
@@ -173,15 +173,35 @@ export async function reconcileVoucherWithArca(
 
     if (voucherInfo && (voucherInfo.resultado === 'A' || voucherInfo.codAutorizacion)) {
       return {
+        status: 'authorized',
         authorized: true,
-        cae: voucherInfo.codAutorizacion,
+        cae: String(voucherInfo.codAutorizacion || ''),
         caeExpiresAt: voucherInfo.fchVto,
         rawResponse: voucherInfo
       }
     }
-  } catch {
-    // Si no se encuentra en ARCA o falla la consulta
-  }
 
-  return { authorized: false }
+    // Si ARCA respondió pero no tiene CAE o indica que no existe comprobante
+    return {
+      status: 'not_found',
+      authorized: false
+    }
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+
+    // Si ARCA devuelve explícitamente código de que no existe comprobante registrado
+    if (errMsg.includes('602') || errMsg.toLowerCase().includes('no existe') || errMsg.toLowerCase().includes('no encontrado')) {
+      return {
+        status: 'not_found',
+        authorized: false
+      }
+    }
+
+    // Ante errores de red, timeout o fallo de servicio, es INDETERMINADO
+    return {
+      status: 'indeterminate',
+      authorized: false,
+      error: errMsg
+    }
+  }
 }

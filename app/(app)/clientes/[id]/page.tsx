@@ -35,6 +35,7 @@ export default function EditarCliente() {
   const [phone, setPhone] = useState('')
   const [active, setActive] = useState<ClientStatus>(true)
   const [clientType, setClientType] = useState<'consumidor_final' | 'distribuidor'>('consumidor_final')
+  const [condicionIva, setCondicionIva] = useState<'consumidor_final' | 'responsable_inscripto' | 'monotributo' | 'exento'>('consumidor_final')
 
   const [loading, setLoading] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
@@ -54,7 +55,7 @@ export default function EditarCliente() {
 
     const { data, error } = await supabase
       .from('clients')
-      .select('id, cuit, name, address, active, email, phone, seller_id, client_type')
+      .select('id, cuit, name, address, active, email, phone, seller_id, client_type, condicion_iva')
       .eq('id', id)
       .single()
 
@@ -73,6 +74,7 @@ export default function EditarCliente() {
       setActive(data.active !== false)
       setSelectedSellerId(data.seller_id || '')
       setClientType((data.client_type as any) || 'consumidor_final')
+      setCondicionIva((data.condicion_iva as any) || 'consumidor_final')
     }
 
     // Load sellers and plan info
@@ -83,7 +85,7 @@ export default function EditarCliente() {
         .select('company_id, company:companies(plan_type)')
         .eq('id', userData.user.id)
         .single()
-      
+
       if (profile) {
         setPlanType((profile.company as any)?.plan_type || 'base')
         const { data: sellersData } = await supabase
@@ -116,6 +118,7 @@ export default function EditarCliente() {
         phone: phone.trim() || null,
         seller_id: selectedSellerId || null,
         client_type: clientType,
+        condicion_iva: condicionIva
       })
       .eq('id', id)
 
@@ -172,7 +175,7 @@ export default function EditarCliente() {
     <div className="mx-auto max-w-4xl space-y-6">
       <section className="relative overflow-hidden rounded-[2.5rem] bg-slate-950 p-8 text-white shadow-xl">
         <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-blue-500/20 blur-[100px] -mr-32 -mt-32" />
-        
+
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <Link
@@ -357,14 +360,30 @@ export default function EditarCliente() {
               </div>
 
               <div className="pt-2">
+                <label className="mb-2.5 block text-sm font-black text-slate-700">
+                  Condición Fiscal ARCA
+                </label>
+                <select
+                  value={condicionIva}
+                  onChange={(e: any) => setCondicionIva(e.target.value)}
+                  className="w-full max-w-md rounded-2xl border-2 border-slate-50 bg-slate-50/50 py-3.5 px-4 text-sm font-bold text-slate-700 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
+                >
+                  <option value="consumidor_final">Consumidor Final</option>
+                  <option value="responsable_inscripto">Responsable Inscripto</option>
+                  <option value="monotributo">Monotributo</option>
+                  <option value="exento">Exento</option>
+                </select>
+              </div>
+
+              <div className="pt-2">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Tipo de Cliente</p>
                 <div className="grid grid-cols-2 gap-3 max-w-md">
                   <button
                     type="button"
                     onClick={() => setClientType('consumidor_final')}
                     className={`py-4 px-6 rounded-2xl text-xs font-black transition border-2 ${
-                      clientType === 'consumidor_final' 
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20' 
+                      clientType === 'consumidor_final'
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20'
                         : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
                     }`}
                   >
@@ -374,8 +393,8 @@ export default function EditarCliente() {
                     type="button"
                     onClick={() => setClientType('distribuidor')}
                     className={`py-4 px-6 rounded-2xl text-xs font-black transition border-2 ${
-                      clientType === 'distribuidor' 
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20' 
+                      clientType === 'distribuidor'
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20'
                         : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
                     }`}
                   >
@@ -393,15 +412,15 @@ export default function EditarCliente() {
                     <p className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Vendedor Asignado</p>
                     <p className="text-xs font-bold text-slate-500">Cambiar el vendedor responsable de este cliente.</p>
                   </div>
-                  
+
                   <div className="relative">
-                    <select 
-                      value={selectedSellerId} 
+                    <select
+                      value={selectedSellerId}
                       disabled={planType === 'base'}
                       onChange={(e) => setSelectedSellerId(e.target.value)}
                       className={`w-full sm:w-64 rounded-2xl border-2 bg-white px-5 py-3.5 text-sm font-black text-slate-700 shadow-sm outline-none transition ${
-                        planType === 'base' 
-                          ? 'border-slate-100 opacity-60 cursor-not-allowed' 
+                        planType === 'base'
+                          ? 'border-slate-100 opacity-60 cursor-not-allowed'
                           : 'border-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
                       }`}
                     >
@@ -428,7 +447,7 @@ export default function EditarCliente() {
                 </h2>
 
                 <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-slate-500">
-                  Al desactivar un cliente, este ya no podrá ser seleccionado en nuevos pedidos o presupuestos, 
+                  Al desactivar un cliente, este ya no podrá ser seleccionado en nuevos pedidos o presupuestos,
                   pero sus datos históricos permanecerán intactos.
                 </p>
               </div>

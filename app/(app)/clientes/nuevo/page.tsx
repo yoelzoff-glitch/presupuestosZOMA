@@ -28,7 +28,7 @@ export default function NuevoCliente() {
   const [selectedSellerId, setSelectedSellerId] = useState<string>('')
   const [clientType, setClientType] = useState<'consumidor_final' | 'distribuidor'>('consumidor_final')
   const [condicionIva, setCondicionIva] = useState<'consumidor_final' | 'responsable_inscripto' | 'monotributo' | 'exento'>('consumidor_final')
-  
+
   const [sellers, setSellers] = useState<SellerProfile[]>([])
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -47,9 +47,9 @@ export default function NuevoCliente() {
         .select('company_id, company:companies(plan_type)')
         .eq('id', userData.user.id)
         .single()
-      
+
       if (!profile?.company_id) return
-      
+
       setCompanyId(profile.company_id)
       setPlanType((profile.company as any)?.plan_type || 'base')
 
@@ -114,9 +114,28 @@ export default function NuevoCliente() {
         // Detección inteligente de tipo de cliente
         const tipoStr = String(normalizedRow.tipo || normalizedRow.type || normalizedRow.categoria || normalizedRow.clasificacion || '').toLowerCase()
         let detectedType: 'consumidor_final' | 'distribuidor' = 'consumidor_final'
-        
+
         if (tipoStr.includes('dist') || tipoStr.includes('mayo') || tipoStr.includes('revend')) {
           detectedType = 'distribuidor'
+        }
+
+        // Detección inteligente de condición IVA ARCA
+        const condIvaStr = String(
+          normalizedRow.condicioniva ||
+          normalizedRow.condicionfiscal ||
+          normalizedRow.iva ||
+          normalizedRow.situacioniva ||
+          normalizedRow.taxcondition ||
+          ''
+        ).toLowerCase().trim()
+
+        let detectedCondicionIva: 'consumidor_final' | 'responsable_inscripto' | 'monotributo' | 'exento' = 'consumidor_final'
+        if (condIvaStr.includes('inscripto') || condIvaStr === 'ri') {
+          detectedCondicionIva = 'responsable_inscripto'
+        } else if (condIvaStr.includes('mono')) {
+          detectedCondicionIva = 'monotributo'
+        } else if (condIvaStr.includes('exent')) {
+          detectedCondicionIva = 'exento'
         }
 
         return {
@@ -127,7 +146,8 @@ export default function NuevoCliente() {
           email: String(normalizedRow.email || normalizedRow.mail || normalizedRow.correo || normalizedRow['e-mail'] || ''),
           phone: String(normalizedRow.telefono || normalizedRow.phone || normalizedRow.celular || normalizedRow.whatsapp || normalizedRow.tel || ''),
           seller_id: selectedSellerId || null,
-          client_type: detectedType
+          client_type: detectedType,
+          condicion_iva: detectedCondicionIva
         }
       }).filter(Boolean) as any[]
 
@@ -165,13 +185,13 @@ export default function NuevoCliente() {
                 <p className="text-xs font-bold text-slate-500">¿A quién le pertenece este cliente? (Opcional)</p>
              </div>
               <div className="relative group">
-                <select 
-                  value={selectedSellerId} 
+                <select
+                  value={selectedSellerId}
                   disabled={planType === 'base'}
                   onChange={(e) => setSelectedSellerId(e.target.value)}
                   className={`w-full sm:w-64 rounded-2xl border-2 bg-white px-5 py-3.5 text-sm font-black text-slate-700 shadow-sm outline-none transition ${
-                    planType === 'base' 
-                      ? 'border-slate-100 opacity-60 cursor-not-allowed' 
+                    planType === 'base'
+                      ? 'border-slate-100 opacity-60 cursor-not-allowed'
                       : 'border-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
                   }`}
                 >
@@ -191,7 +211,7 @@ export default function NuevoCliente() {
              {/* Formulario Manual */}
              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="flex items-center gap-3 mb-2"><Building2 className="text-blue-600" size={20} /><h3 className="text-lg font-black text-slate-900">Carga Manual</h3></div>
-                
+
                 {errorMsg && <div className="p-4 bg-red-50 text-red-700 text-xs font-black rounded-2xl border border-red-100">{errorMsg}</div>}
                 {successMsg && <div className="p-4 bg-emerald-50 text-emerald-700 text-xs font-black rounded-2xl border border-emerald-100">{successMsg}</div>}
 
@@ -201,7 +221,7 @@ export default function NuevoCliente() {
                   <input value={email} type="email" onChange={(e) => setEmail(e.target.value)} placeholder="Email de contacto" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition" />
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono / WhatsApp" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition" />
                   <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Dirección completa" className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-5 py-4 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition" />
-                  
+
                   <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Condición Fiscal ARCA</p>
                     <select
@@ -223,8 +243,8 @@ export default function NuevoCliente() {
                         type="button"
                         onClick={() => setClientType('consumidor_final')}
                         className={`py-3 px-4 rounded-xl text-xs font-black transition border-2 ${
-                          clientType === 'consumidor_final' 
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                          clientType === 'consumidor_final'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20'
                             : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
                         }`}
                       >
@@ -234,8 +254,8 @@ export default function NuevoCliente() {
                         type="button"
                         onClick={() => setClientType('distribuidor')}
                         className={`py-3 px-4 rounded-xl text-xs font-black transition border-2 ${
-                          clientType === 'distribuidor' 
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                          clientType === 'distribuidor'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20'
                             : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
                         }`}
                       >

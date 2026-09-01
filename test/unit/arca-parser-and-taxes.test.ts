@@ -33,7 +33,7 @@ describe('Unit Tests: ARCA Parser, Tax Calculator & Idempotency', () => {
     }
 
     const listaPuntos = mockSdkResponse.resultGet?.ptoVenta ?? []
-    
+
     // Punto 5 está bloqueado
     const pto5 = listaPuntos.find(p => p.nro === 5)
     expect(pto5).toBeDefined()
@@ -50,6 +50,7 @@ describe('Unit Tests: ARCA Parser, Tax Calculator & Idempotency', () => {
     invalidTypes.forEach(tipo => {
       const result = CreateInvoiceRequestSchema.safeParse({
         budget_id: '550e8400-e29b-41d4-a716-446655440000',
+        environment: 'homo',
         cbteTipoOverride: tipo
       })
       expect(result.success).toBe(false)
@@ -59,6 +60,7 @@ describe('Unit Tests: ARCA Parser, Tax Calculator & Idempotency', () => {
     ALLOWED_CBTE_TIPOS.forEach(tipo => {
       const result = CreateInvoiceRequestSchema.safeParse({
         budget_id: '550e8400-e29b-41d4-a716-446655440000',
+        environment: 'homo',
         cbteTipoOverride: tipo
       })
       expect(result.success).toBe(true)

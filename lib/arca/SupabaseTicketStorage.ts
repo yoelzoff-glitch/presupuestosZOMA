@@ -2,6 +2,7 @@ import { ITicketStoragePort } from '@arcasdk/core/lib/infrastructure/outbound/po
 import { AccessTicket } from '@arcasdk/core/lib/domain/entities/access-ticket.entity'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { encryptText, decryptText, EncryptedPayload } from './encryption'
+import crypto from 'crypto'
 
 export interface SupabaseTicketStorageConfig {
   supabaseAdmin: SupabaseClient
@@ -10,14 +11,12 @@ export interface SupabaseTicketStorageConfig {
   environment: 'homo' | 'prod'
 }
 
-// Mapa de bloqueos en memoria por instancia para evitar solicitudes concurrentes simultáneas al WSAA
-const activeWsaaRequests = new Map<string, Promise<AccessTicket | null>>()
-
 export class SupabaseTicketStorage implements ITicketStoragePort {
   private supabaseAdmin: SupabaseClient
   private companyId: string
   private cuit: string
   private environment: 'homo' | 'prod'
+  private activeLockTokens = new Map<string, string>()
 
   constructor(config: SupabaseTicketStorageConfig) {
     this.supabaseAdmin = config.supabaseAdmin
@@ -31,7 +30,53 @@ export class SupabaseTicketStorage implements ITicketStoragePort {
   }
 
   /**
+   * Intenta adquirir el lock distribuido en PostgreSQL para solicitar ticket WSAA
+   */
+  async acquireWsaaLock(serviceName: string, leaseSeconds = 60): Promise<{ acquired: boolean; token: string }> {
+    const lockKey = this.getLockKey(serviceName)
+    const token = crypto.randomUUID()
+
+    const { data, error } = await this.supabaseAdmin.rpc('claim_arca_wsaa_lock', {
+      p_lock_key: lockKey,
+      p_lock_token: token,
+      p_lease_seconds: leaseSeconds
+    })
+
+    if (error) {
+      throw new Error(`Error al adquirir lock distribuido WSAA: ${error.message}`)
+    }
+
+    const acquired = Boolean(data)
+    if (acquired) {
+      this.activeLockTokens.set(serviceName, token)
+    }
+
+    return { acquired, token }
+  }
+
+  /**
+   * Libera el lock distribuido WSAA
+   */
+  async releaseWsaaLock(serviceName: string, token?: string): Promise<void> {
+    const lockKey = this.getLockKey(serviceName)
+    const lockToken = token || this.activeLockTokens.get(serviceName)
+
+    if (!lockToken) return
+
+    this.activeLockTokens.delete(serviceName)
+    try {
+      await this.supabaseAdmin.rpc('release_arca_wsaa_lock', {
+        p_lock_key: lockKey,
+        p_lock_token: lockToken
+      })
+    } catch {
+      // Ignorar fallo de release si ya expiró
+    }
+  }
+
+  /**
    * Guarda el ticket de acceso WSAA cifrado con AES-256-GCM en la tabla arca_wsaa_tickets
+   * y libera cualquier lock activo para este servicio.
    */
   async save(ticket: AccessTicket, serviceName: string): Promise<void> {
     const ticketData = {
@@ -58,53 +103,72 @@ export class SupabaseTicketStorage implements ITicketStoragePort {
     if (error) {
       throw new Error(`Error crítico al persistir ticket WSAA en Supabase: ${error.message}`)
     }
+
+    // Liberar lock tras persistir
+    await this.releaseWsaaLock(serviceName)
   }
 
   /**
    * Obtiene un ticket WSAA válido para el servicio.
    * Exige al menos 5 minutos (300.000 ms) de vigencia restante.
+   * Diferencia explícitamente:
+   * - Ticket no encontrado (devuelve null).
+   * - Error de base de datos Supabase (lanza excepción).
+   * - Error de descifrado (lanza excepción).
    */
   async get(serviceName: string): Promise<AccessTicket | null> {
+    const { data, error } = await this.supabaseAdmin
+      .from('arca_wsaa_tickets')
+      .select('encrypted_payload, expires_at')
+      .eq('company_id', this.companyId)
+      .eq('cuit', this.cuit)
+      .eq('environment', this.environment)
+      .eq('service', serviceName)
+      .maybeSingle()
+
+    if (error) {
+      throw new Error(`Error de base de datos al consultar ticket WSAA: ${error.message}`)
+    }
+
+    if (!data || !data.encrypted_payload) {
+      return null
+    }
+
+    // Verificar vigencia temporal en DB antes de descifrar
+    const expiresAt = new Date(data.expires_at).getTime()
+    const now = Date.now()
+    const fiveMinutesMs = 5 * 60 * 1000
+
+    if (expiresAt - now < fiveMinutesMs) {
+      return null
+    }
+
+    const payload = data.encrypted_payload as EncryptedPayload
+    let decryptedJson: string | null = null
     try {
-      const { data, error } = await this.supabaseAdmin
-        .from('arca_wsaa_tickets')
-        .select('encrypted_payload, expires_at')
-        .eq('company_id', this.companyId)
-        .eq('cuit', this.cuit)
-        .eq('environment', this.environment)
-        .eq('service', serviceName)
-        .maybeSingle()
+      decryptedJson = decryptText(payload)
+    } catch (decryptErr: unknown) {
+      throw new Error(`Error al descifrar ticket WSAA existente: ${decryptErr instanceof Error ? decryptErr.message : 'Falla de integridad criptográfica'}`)
+    }
 
-      if (error || !data || !data.encrypted_payload) {
-        return null
+    if (!decryptedJson) {
+      throw new Error('El contenido del ticket WSAA descifrado está vacío')
+    }
+
+    let ticketData: { header?: unknown; credentials?: { token?: string; sign?: string } }
+    try {
+      ticketData = JSON.parse(decryptedJson)
+    } catch (parseErr: unknown) {
+      throw new Error(`Formato JSON inválido en ticket WSAA: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`)
+    }
+
+    if (ticketData?.header && ticketData?.credentials) {
+      const ticket = AccessTicket.create(ticketData as Parameters<typeof AccessTicket.create>[0])
+
+      // Validar entidad con regla estricta de 5 minutos
+      if (ticket.isValid() && ticket.getTimeUntilExpiration() > fiveMinutesMs) {
+        return ticket
       }
-
-      // Verificar vigencia temporal en DB antes de descifrar
-      const expiresAt = new Date(data.expires_at).getTime()
-      const now = Date.now()
-      const fiveMinutesMs = 5 * 60 * 1000
-
-      if (expiresAt - now < fiveMinutesMs) {
-        return null
-      }
-
-      const payload = data.encrypted_payload as EncryptedPayload
-      const decryptedJson = decryptText(payload)
-      if (!decryptedJson) {
-        return null
-      }
-
-      const ticketData = JSON.parse(decryptedJson)
-      if (ticketData?.header && ticketData?.credentials) {
-        const ticket = AccessTicket.create(ticketData)
-        
-        // Validar entidad con regla estricta de 5 minutos
-        if (ticket.isValid() && ticket.getTimeUntilExpiration() > fiveMinutesMs) {
-          return ticket
-        }
-      }
-    } catch {
-      // Si falla lectura o descifrado, retornar null para que el SDK solicite uno nuevo
     }
 
     return null
@@ -123,34 +187,7 @@ export class SupabaseTicketStorage implements ITicketStoragePort {
       .eq('service', serviceName)
 
     if (error) {
-      console.warn(`Error al eliminar ticket WSAA: ${error.message}`)
+      throw new Error(`Error al eliminar ticket WSAA: ${error.message}`)
     }
-  }
-
-  /**
-   * Wrapper para ejecutar llamadas concurrentes de obtención/solicitud de ticket
-   */
-  async acquireWithLock(serviceName: string, requestFn: () => Promise<AccessTicket>): Promise<AccessTicket> {
-    const existing = await this.get(serviceName)
-    if (existing) return existing
-
-    const lockKey = this.getLockKey(serviceName)
-    if (activeWsaaRequests.has(lockKey)) {
-      const ticket = await activeWsaaRequests.get(lockKey)
-      if (ticket) return ticket
-    }
-
-    const requestPromise = (async () => {
-      try {
-        const newTicket = await requestFn()
-        await this.save(newTicket, serviceName)
-        return newTicket
-      } finally {
-        activeWsaaRequests.delete(lockKey)
-      }
-    })()
-
-    activeWsaaRequests.set(lockKey, requestPromise)
-    return requestPromise
   }
 }

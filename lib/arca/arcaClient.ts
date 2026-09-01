@@ -13,7 +13,7 @@ export interface InitializedArcaContext {
 /**
  * Inicializa de forma segura una instancia del SDK de ARCA con las credenciales
  * específicas para el entorno solicitado (homo o prod).
- * 
+ *
  * Reglas de seguridad estrictas:
  * - PROHIBIDO reutilizar automáticamente certificados de HOMO en PROD.
  * - PROHIBIDO hacer fallback de PROD hacia HOMO.
@@ -22,7 +22,8 @@ export interface InitializedArcaContext {
 export async function createArcaClient(
   supabaseAdmin: SupabaseClient,
   companyId: string,
-  environment: 'homo' | 'prod'
+  environment: 'homo' | 'prod',
+  options?: { skipVerifiedCheck?: boolean }
 ): Promise<InitializedArcaContext> {
   const credentials = await getDecryptedArcaCredentials(supabaseAdmin, companyId, environment)
 
@@ -44,6 +45,13 @@ export async function createArcaClient(
 
   if (!credentials.puntoVenta || credentials.puntoVenta <= 0) {
     throw new Error(`Punto de Venta inválido para ${environment.toUpperCase()}: debe ser un número entero mayor a 0.`)
+  }
+
+  // REGLA P0.1: Bloquear Producción no validada previamente con Probar Conexión
+  if (environment === 'prod' && !credentials.verifiedAt && !options?.skipVerifiedCheck) {
+    const unverifiedErr = new Error('Las credenciales de Producción deben validarse antes de emitir.')
+    ;(unverifiedErr as unknown as Record<string, unknown>).status = 409
+    throw unverifiedErr
   }
 
   const isProduction = environment === 'prod'

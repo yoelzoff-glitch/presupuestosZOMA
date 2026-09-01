@@ -77,7 +77,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     customHasta = fechaHastaCustom
   ) {
     setCargando(true)
-    
+
     let query = supabase
       .from('invoices')
       .select(`
@@ -131,7 +131,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     try {
       let fechaHasta = new Date().toISOString().split('T')[0]
       let fechaDesde = ''
-      
+
       const hoy = new Date()
       if (filtroTiempo === 'month') {
         hoy.setDate(1)
@@ -198,7 +198,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     setProcesandoId(id)
     try {
       console.log('Solicitando eliminación permanente del borrador:', id)
-      
+
       const response = await fetch('/api/invoices/delete-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -221,9 +221,10 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
   }
 
   async function legalizarFactura(
-    id: string, 
-    cbteTipoOverride?: number, 
-    addIva?: boolean, 
+    id: string,
+    cbteTipoOverride?: number,
+    addIva?: boolean,
+    environment: 'homo' | 'prod' = 'homo',
     serviceDates?: { FchServDesde: string; FchServHasta: string; FchVtoPago: string }
   ) {
     setProcesandoId(id)
@@ -231,8 +232,9 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
       const response = await fetch('/api/afip/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           budget_id: id,
+          environment,
           cbteTipoOverride,
           addIva,
           serviceDates
@@ -241,7 +243,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
 
       const data = await response.json()
       if (data.success) {
-        toast.success('¡Factura legalizada con éxito!')
+        toast.success(`¡Factura autorizada con éxito en ARCA (${data.is_production ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'})!`)
         cargarFacturas()
       } else {
         throw new Error(data.error)
@@ -326,8 +328,8 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                 />
               </div>
               <div className="flex gap-2">
-              <button 
-                onClick={() => cargarFacturas()} 
+              <button
+                onClick={() => cargarFacturas()}
                 className="p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition"
                 title="Actualizar lista"
               >
@@ -458,13 +460,13 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                         </Link>
                       )}
                       <div className="relative">
-                        <button 
+                        <button
                           onClick={() => setMenuAbierto(menuAbierto === f.id ? null : f.id)}
                           className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
                         >
                           <MoreVertical size={16} />
                         </button>
- 
+
                         {menuAbierto === f.id && (
                           <>
                             <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(null)} />
@@ -476,7 +478,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                               >
                                 <Eye size={14} /> Previsualizar
                               </Link>
-                              
+
                               {f.status === 'draft' && (
                                 <button
                                   onClick={() => eliminarBorrador(f.id)}
@@ -486,7 +488,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                                   <Trash2 size={14} /> Eliminar Borrador
                                 </button>
                               )}
- 
+
                               {f.status === 'emitted' && (
                                 <>
                                   <button
@@ -567,9 +569,9 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
       <InvoicePreviewModal
         isOpen={modalPreview.isOpen}
         onClose={() => setModalPreview({ ...modalPreview, isOpen: false })}
-        onConfirm={(tipo, addIva, serviceDates) => {
+        onConfirm={(tipo, addIva, env, serviceDates) => {
           setModalPreview({ ...modalPreview, isOpen: false })
-          legalizarFactura(modalPreview.budgetId!, tipo, addIva, serviceDates)
+          legalizarFactura(modalPreview.budgetId!, tipo, addIva, env, serviceDates)
         }}
         budgetId={modalPreview.budgetId || ''}
         clientName={modalPreview.clientName}
@@ -580,12 +582,12 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
       {modalConfirmacion.isOpen && modalConfirmacion.factura && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative overflow-hidden animate-scaleUp">
-            
+
             {/* Header / Icon */}
             <div className="flex items-center gap-4 mb-6">
               <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                modalConfirmacion.tipo === 'credito' 
-                  ? 'bg-rose-50 text-rose-600 border border-rose-100' 
+                modalConfirmacion.tipo === 'credito'
+                  ? 'bg-rose-50 text-rose-600 border border-rose-100'
                   : 'bg-blue-50 text-blue-600 border border-blue-105'
               }`}>
                 {modalConfirmacion.tipo === 'credito' ? <FileMinus size={22} /> : <FilePlus size={22} />}
@@ -603,7 +605,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
             {/* Warning Message */}
             <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 mb-6 text-xs text-slate-650 leading-relaxed font-semibold">
               <p>
-                Estás por emitir un comprobante oficial de corrección ante la AFIP por la Factura 
+                Estás por emitir un comprobante oficial de corrección ante la AFIP por la Factura
                 <span className="font-black text-slate-900"> N° {String(modalConfirmacion.factura.afip_comprobante_numero).padStart(8, '0')}</span>.
               </p>
               <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-200/60 pt-3 text-[10px] font-black uppercase tracking-wider text-slate-450">
@@ -684,9 +686,10 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                 onClick={async () => {
                   const num = String(modalConfirmacion.factura?.afip_comprobante_numero).padStart(8, '0');
                   const tipo = modalConfirmacion.tipo === 'credito' ? 'Nota de Crédito' : 'Nota de Débito';
-                  const facturaId = modalConfirmacion.factura?.id;
+                  const facturaOriginalId = modalConfirmacion.factura?.id;
                   const isCredito = modalConfirmacion.tipo === 'credito';
-                  
+                  const correctionRequestId = crypto.randomUUID();
+
                   // Validaciones extras en frontend
                   if (esCorreccionParcial) {
                     const parsedMonto = parseFloat(montoPersonalizado);
@@ -701,9 +704,9 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                   }
 
                   const customAmt = esCorreccionParcial && montoPersonalizado ? parseFloat(montoPersonalizado) : undefined;
-                  
+
                   setModalConfirmacion({ isOpen: false, tipo: null, factura: null });
-                  
+
                   // Ejecutar la autorización real llamando al backend oficial
                   toast.promise(
                     (async () => {
@@ -712,18 +715,22 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           budget_id: modalConfirmacion.factura?.budget_id,
+                          environment: 'homo', // Por defecto en listado se envía homo o el entorno configurado
                           isCreditNote: isCredito,
                           isDebitNote: !isCredito,
+                          is_total_cancellation: !esCorreccionParcial,
+                          invoice_original_id: facturaOriginalId,
+                          correction_request_id: correctionRequestId,
                           customAmount: customAmt
                         })
                       });
-                      
+
                       const result = await response.json();
                       if (!response.ok) throw new Error(result.error || 'Error al conectar con AFIP (ARCA)');
-                      
+
                       // Recargar la lista completa de facturas desde la base de datos
                       await cargarFacturas();
-                      
+
                       return result;
                     })(),
                     {
