@@ -66,46 +66,25 @@ export default function ConfigFiscalPage() {
 
   useEffect(() => {
     async function loadConfig() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        // Obtenemos el profile para saber el company_id y validar el plan
-        const { data: profile } = await supabase
-          .from('users_profiles')
-          .select('company_id, role, company:companies(plan_type)')
-          .eq('id', user.id)
-          .single()
-
-        if (profile) {
-          setUserRole(profile.role)
+      try {
+        const response = await fetch('/api/afip/config')
+        const data = await response.json()
+        if (response.ok) {
+          setConfig({
+            cuit: data.cuit || '',
+            tipo_contribuyente: data.tipo_contribuyente || 'monotributo',
+            punto_venta: data.punto_venta ? data.punto_venta.toString() : '',
+            cert_content: data.certificate_configured ? '•••••••• CERTIFICADO CONFIGURADO ••••••••' : '',
+            key_content: data.key_configured ? '•••••••• CLAVE PRIVADA CONFIGURADA ••••••••' : '',
+            is_sandbox: data.is_sandbox ?? true
+          })
+          setIsEditingCreds(!data.certificate_configured || !data.key_configured)
         }
-
-        if (profile?.company_id) {
-          const { data: afipConfig } = await supabase
-            .from('afip_configs')
-            .select('*')
-            .eq('company_id', profile.company_id)
-            .single()
-          
-          if (afipConfig) {
-            setConfig({
-              cuit: afipConfig.cuit || '',
-              tipo_contribuyente: afipConfig.tipo_contribuyente || 'monotributo',
-              punto_venta: afipConfig.punto_venta?.toString() || '',
-              cert_content: afipConfig.cert_content || '',
-              key_content: afipConfig.key_content || '',
-              is_sandbox: afipConfig.is_sandbox ?? true
-            })
-            if (afipConfig.cert_content && afipConfig.key_content) {
-              setIsEditingCreds(false)
-            } else {
-              setIsEditingCreds(true)
-            }
-          } else {
-            setIsEditingCreds(true)
-          }
-        }
+      } catch (err) {
+        console.error('Error cargando configuración fiscal:', err)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     loadConfig()
   }, [])
@@ -113,32 +92,32 @@ export default function ConfigFiscalPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: profile } = await supabase
-        .from('users_profiles')
-        .select('company_id')
-        .eq('id', user?.id)
-        .single()
-
-      if (!profile?.company_id) throw new Error('No se encontró la empresa')
-
-      const payload = {
-        company_id: profile.company_id,
-        cuit: config.cuit,
-        tipo_contribuyente: config.tipo_contribuyente,
-        punto_venta: parseInt(config.punto_venta) || 0,
-        cert_content: config.cert_content.split('===WSAA_TICKET')[0].trim(),
-        key_content: config.key_content.split('===WSAA_TICKET')[0].trim(),
-        is_sandbox: config.is_sandbox,
-        updated_at: new Date()
+      const puntoVentaNum = parseInt(config.punto_venta)
+      if (isNaN(puntoVentaNum) || puntoVentaNum <= 0) {
+        throw new Error('El Punto de Venta debe ser un número mayor a 0.')
       }
 
-      const { error } = await supabase
-        .from('afip_configs')
-        .upsert(payload, { onConflict: 'company_id' })
+      const payload = {
+        cuit: config.cuit,
+        tipo_contribuyente: config.tipo_contribuyente,
+        punto_venta: puntoVentaNum,
+        cert_content: config.cert_content,
+        key_content: config.key_content,
+        is_sandbox: config.is_sandbox
+      }
 
-      if (error) throw error
-      toast.success('Configuración fiscal guardada correctamente')
+      const response = await fetch('/api/afip/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Error al guardar la configuración')
+      }
+
+      toast.success('Configuración fiscal guardada con éxito')
       setIsEditingCreds(false)
     } catch (error: any) {
       toast.error('Error al guardar: ' + error.message)

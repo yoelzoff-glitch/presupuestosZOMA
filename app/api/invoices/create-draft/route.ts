@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
+import { requireCompanyUser } from '@/lib/auth/requireCompanyUser'
 import { createSupabaseAdminClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireCompanyUser({ allowedRoles: ['admin', 'super_admin', 'vendedor'] })
+    if (!auth.success) return auth.response
+
+    const { companyId } = auth.user
     const supabase = createSupabaseAdminClient()
-    const { budget_id, cbteTipo, addIva } = await request.json()
+    const { budget_id, cbteTipo, addIva } = await request.json().catch(() => ({}))
 
     if (!budget_id) {
-      return NextResponse.json({ success: false, error: 'Budget ID is required' }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'Budget ID es requerido' }, { status: 400 })
     }
 
     // 1. Obtener datos del presupuesto y sus ítems
@@ -21,7 +26,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Presupuesto no encontrado' }, { status: 404 })
     }
 
-    // NUEVO: Chequear si ya existe una factura para este presupuesto
+    if (budget.company_id !== companyId) {
+      return NextResponse.json({ success: false, error: 'No tiene permiso para modificar este presupuesto' }, { status: 403 })
+    }
+
+    // Chequear si ya existe una factura para este presupuesto
     const { data: existingInvoice } = await supabase
       .from('invoices')
       .select('id')
@@ -57,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     // 3. Crear los ítems de la factura (Snapshot)
-    const itemsToInsert = budget.budget_items.map((item: any) => ({
+    const itemsToInsert = (budget.budget_items || []).map((item: any) => ({
       invoice_id: invoice.id,
       product_id: item.product_id,
       product_name: item.product_name,
@@ -67,13 +76,15 @@ export async function POST(request: Request) {
       total: addIva ? parseFloat((item.total * 1.21).toFixed(2)) : item.total
     }))
 
-    const { error: itemsError } = await supabase
-      .from('invoice_items')
-      .insert(itemsToInsert)
+    if (itemsToInsert.length > 0) {
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .insert(itemsToInsert)
 
-    if (itemsError) {
-      console.error('Error creating invoice items:', itemsError)
-      return NextResponse.json({ success: false, error: 'Error al copiar ítems a la factura' }, { status: 500 })
+      if (itemsError) {
+        console.error('Error creating invoice items:', itemsError)
+        return NextResponse.json({ success: false, error: 'Error al copiar ítems a la factura' }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ 

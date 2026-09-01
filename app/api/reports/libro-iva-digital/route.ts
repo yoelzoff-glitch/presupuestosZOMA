@@ -1,31 +1,45 @@
 import { NextResponse } from 'next/server'
+import { requireCompanyUser } from '@/lib/auth/requireCompanyUser'
 import { createSupabaseAdminClient } from '@/lib/supabase/server'
 
-// Rellenar texto con espacios a la derecha
 function padSpaces(text: string, length: number): string {
-  const clean = (text || '').substring(0, length);
-  return clean.padEnd(length, ' ');
+  const clean = (text || '').substring(0, length)
+  return clean.padEnd(length, ' ')
 }
 
-// Rellenar número con ceros a la izquierda
 function padZeros(value: number | string, length: number): string {
-  const clean = String(value || '').replace(/[.-]/g, '');
-  return clean.substring(0, length).padStart(length, '0');
+  const clean = String(value || '').replace(/[.-]/g, '')
+  return clean.substring(0, length).padStart(length, '0')
 }
 
-// Formatear montos para AFIP (multiplicados por 100, sin puntos ni comas, 15 de longitud)
 function formatAfipAmount(amount: number): string {
-  const rounded = Math.round(amount * 100);
-  const positiveVal = Math.abs(rounded);
-  return padZeros(positiveVal, 15);
+  const rounded = Math.round(amount * 100)
+  const positiveVal = Math.abs(rounded)
+  return padZeros(positiveVal, 15)
 }
 
 export async function POST(request: Request) {
   try {
-    const { company_id, fecha_desde, fecha_hasta } = await request.json()
-    if (!company_id) return NextResponse.json({ error: 'Falta company_id' }, { status: 400 })
+    const auth = await requireCompanyUser({ allowedRoles: ['admin', 'super_admin', 'contador'] })
+    if (!auth.success) return auth.response
+
+    const { companyId } = auth.user
+    const { fecha_desde, fecha_hasta } = await request.json().catch(() => ({}))
+    
+    if (!fecha_desde || !fecha_hasta) {
+      return NextResponse.json({ error: 'Rango de fechas requerido (fecha_desde y fecha_hasta)' }, { status: 400 })
+    }
 
     const supabaseAdmin = createSupabaseAdminClient()
+
+    // Obtener punto de venta configurado
+    const { data: afipConfig } = await supabaseAdmin
+      .from('afip_configs')
+      .select('punto_venta')
+      .eq('company_id', companyId)
+      .maybeSingle()
+
+    const defaultPtoVta = afipConfig?.punto_venta || 4
 
     // 1. Obtener facturas del período
     const { data: invoices, error } = await supabaseAdmin
@@ -34,7 +48,7 @@ export async function POST(request: Request) {
         *,
         client:clients ( name, cuit )
       `)
-      .eq('company_id', company_id)
+      .eq('company_id', companyId)
       .neq('status', 'draft') // Ignorar borradores
       .gte('invoice_date', fecha_desde)
       .lte('invoice_date', fecha_hasta)
@@ -47,10 +61,10 @@ export async function POST(request: Request) {
 
     if (invoices && invoices.length > 0) {
       for (const f of invoices) {
-        const fecha = f.invoice_date.replace(/-/g, '') // AAAAMMDD
+        const fecha = (f.invoice_date || '').replace(/-/g, '') // AAAAMMDD
         const tipoComp = padZeros(f.afip_comprobante_tipo || 11, 3)
-        const ptoVta = padZeros(2, 5) // Punto de venta 00002
-        const nroComp = padZeros(f.afip_comprobante_numero || f.invoice_number, 20)
+        const ptoVta = padZeros(defaultPtoVta, 5)
+        const nroComp = padZeros(f.afip_comprobante_numero || f.invoice_number || 1, 20)
         
         const cuit = f.client?.cuit?.replace(/-/g, '') || ''
         const esCuit = cuit.length === 11
@@ -59,7 +73,6 @@ export async function POST(request: Request) {
         const clientName = padSpaces(f.client?.name || 'CONSUMIDOR FINAL', 30)
 
         const total = Number(f.total_amount)
-        const esNC = f.status === 'cancelled' || [3, 8, 13].includes(f.afip_comprobante_tipo)
 
         // Determinación de IVA según tipo de comprobante
         const esInscripto = [1, 6, 3, 8, 2, 7].includes(f.afip_comprobante_tipo || 0)
@@ -67,9 +80,7 @@ export async function POST(request: Request) {
         const iva = esInscripto ? total - neto : 0
         const cantAlicuotas = esInscripto ? '1' : '0'
 
-        // ==============================
-        // GENERAR CABECERA (444 chars)
-        // ==============================
+        // Cabecera (444 caracteres)
         let cabecera = ''
         cabecera += fecha                                    // 1-8: Fecha Comprobante
         cabecera += tipoComp                                 // 9-11: Tipo Comprobante
@@ -95,13 +106,10 @@ export async function POST(request: Request) {
         cabecera += formatAfipAmount(0)                      // 250-264: Otros Tributos
         cabecera += '00000000'                               // 265-272: Fecha Vencimiento Pago
         
-        // Completar longitud exacta de 444 con espacios
         cabecera = cabecera.padEnd(444, ' ') + '\r\n'
         lineasCabecera += cabecera
 
-        // ==============================
-        // GENERAR ALÍCUOTAS (62 chars)
-        // ==============================
+        // Alícuotas (62 caracteres)
         if (esInscripto) {
           let alicuota = ''
           alicuota += tipoComp                               // 1-3: Tipo Comprobante

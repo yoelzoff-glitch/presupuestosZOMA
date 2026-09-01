@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseAdminClient, getServerUserContext } from '@/lib/supabase/server'
+import { requireCompanyUser } from '@/lib/auth/requireCompanyUser'
+import { createSupabaseAdminClient } from '@/lib/supabase/server'
 import { Arca } from '@arcasdk/core'
-import { SupabaseTicketStorage } from '@/lib/afip/supabase-ticket-storage'
+import { SupabaseTicketStorage } from '@/lib/arca/SupabaseTicketStorage'
+import { CreateInvoiceRequestSchema } from '@/lib/arca/validations'
+import { calculateInvoiceTaxes } from '@/lib/arca/taxCalculator'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -12,40 +15,30 @@ export async function POST(request: Request) {
   const keyPath = path.join(tempDir, `key_inv_${Date.now()}.key`)
 
   try {
+    // 1. Autenticación y Autorización por sesión SSR / Cookies
+    const auth = await requireCompanyUser({ allowedRoles: ['admin', 'super_admin'] })
+    if (!auth.success) return auth.response
+
+    const { companyId } = auth.user
     const supabaseAdmin = createSupabaseAdminClient()
 
-    // 1. Autenticación robusta de sesión (Cookies SSR / Bearer token)
-    let companyId: string | null = null
+    const rawBody = await request.json().catch(() => ({}))
+    const validation = CreateInvoiceRequestSchema.safeParse(rawBody)
 
-    // Intento 1: Sesión por Cookies (SSR Next.js)
-    const userContext = await getServerUserContext()
-    if (userContext?.idEmpresa) {
-      companyId = userContext.idEmpresa
+    if (!validation.success) {
+      const errorMsg = validation.error.issues.map(i => i.message).join(', ')
+      return NextResponse.json({ success: false, error: errorMsg }, { status: 400 })
     }
 
-    // Intento 2: Header Authorization Bearer
-    if (!companyId) {
-      const authHeader = request.headers.get('Authorization')
-      if (authHeader) {
-        const token = authHeader.replace('Bearer ', '').trim()
-        const { data: { user } } = await supabaseAdmin.auth.getUser(token)
-        if (user) {
-          const { data: profile } = await supabaseAdmin
-            .from('users_profiles')
-            .select('company_id')
-            .eq('id', user.id)
-            .single()
-          companyId = profile?.company_id || null
-        }
-      }
-    }
-
-    if (!companyId) {
-      return NextResponse.json({ error: 'No autorizado. Inicie sesión para facturar.' }, { status: 401 })
-    }
-
-    const { budget_id, cbteTipoOverride, isCreditNote, isDebitNote, customAmount, addIva, serviceDates } = await request.json().catch(() => ({}))
-    if (!budget_id) return NextResponse.json({ error: 'Falta budget_id' }, { status: 400 })
+    const { 
+      budget_id, 
+      cbteTipoOverride, 
+      isCreditNote, 
+      isDebitNote, 
+      customAmount, 
+      addIva, 
+      serviceDates 
+    } = validation.data
 
     const esCorrectivo = isCreditNote || isDebitNote
 
@@ -56,10 +49,12 @@ export async function POST(request: Request) {
       .eq('id', budget_id)
       .single()
 
-    if (bError || !budget) throw new Error('Presupuesto no encontrado')
+    if (bError || !budget) {
+      return NextResponse.json({ success: false, error: 'Presupuesto no encontrado' }, { status: 404 })
+    }
 
     if (budget.company_id !== companyId) {
-      return NextResponse.json({ error: 'No tiene permiso para facturar este presupuesto' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'No tiene permiso para facturar este presupuesto' }, { status: 403 })
     }
 
     // Obtener tipo de negocio de la empresa
@@ -107,14 +102,16 @@ export async function POST(request: Request) {
       .eq('company_id', budget.company_id)
       .single()
 
-    if (cError || !config) throw new Error('Configuración fiscal no encontrada para esta empresa')
+    if (cError || !config) {
+      return NextResponse.json({ success: false, error: 'Configuración fiscal no encontrada para esta empresa' }, { status: 404 })
+    }
     if (!config.cert_content || !config.key_content || !config.cuit) {
-      throw new Error('Certificados o CUIT no configurados en la sección fiscal')
+      return NextResponse.json({ success: false, error: 'Certificados o CUIT no configurados en la sección fiscal' }, { status: 400 })
     }
 
     const ptoVta = Number(config.punto_venta)
     if (!ptoVta || ptoVta <= 0) {
-      throw new Error('Debe configurar un Punto de Venta válido mayor a 0 en Configuración Fiscal')
+      return NextResponse.json({ success: false, error: 'Debe configurar un Punto de Venta válido mayor a 0 en Configuración Fiscal' }, { status: 400 })
     }
 
     // 4. Inicializar ARCA con almacenamiento persistente de tickets (L1 Disco + L2 Supabase)
@@ -147,7 +144,7 @@ export async function POST(request: Request) {
     const cuitLimpio = client?.cuit?.replace(/-/g, '').trim() || ''
     const esCuitValido = cuitLimpio.length === 11
     const esDniValido = cuitLimpio.length >= 7 && cuitLimpio.length <= 8
-    let montoTotal = customAmount 
+    const montoBase = customAmount 
       ? Number(customAmount) 
       : (existingDraft ? Number(existingDraft.total_amount) : Number(budget.total_amount))
 
@@ -159,7 +156,6 @@ export async function POST(request: Request) {
     let docNro = 0
     let condicionIvaReceptor = 5 // Consumidor Final
 
-    // Mapear condición IVA del cliente si está presente en DB
     const clientCondIva = (client?.tax_condition || client?.condicion_iva || '').toLowerCase()
     if (clientCondIva === 'responsable_inscripto' || clientCondIva === 'ri') {
       condicionIvaReceptor = 1
@@ -177,19 +173,17 @@ export async function POST(request: Request) {
         cbteTipo = 1 // Factura A
         docTipo = 80 // CUIT
         docNro = parseInt(cuitLimpio)
-        condicionIvaReceptor = 1 // Responsable Inscripto
+        condicionIvaReceptor = 1
       } else {
         cbteTipo = 6 // Factura B
         docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
         docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
         if (condicionIvaReceptor === 5 && esCuitValido) {
-          // Si tiene CUIT pero es Factura B, es Consumidor Final o Monotributo
           condicionIvaReceptor = clientCondIva === 'monotributo' ? 6 : 5
         }
       }
     } else {
-      // Monotributista (Factura C)
-      cbteTipo = 11
+      cbteTipo = 11 // Factura C
       docTipo = esCuitValido ? 80 : (esDniValido ? 96 : 99)
       docNro = cuitLimpio.length >= 7 ? parseInt(cuitLimpio) : 0
       if (!clientCondIva) {
@@ -197,7 +191,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Aplicar Override si fue especificado por el usuario
     if (cbteTipoOverride) {
       if (esRI && cbteTipoOverride === 11) throw new Error('Un Responsable Inscripto no puede emitir Factura C')
       if (!esRI && cbteTipoOverride !== 11) throw new Error('Un Monotributista solo puede emitir Factura C')
@@ -217,26 +210,27 @@ export async function POST(request: Request) {
 
     // Convertir a comprobante correctivo de AFIP si es Nota de Crédito/Débito
     if (isCreditNote) {
-      if (cbteTipo === 1) cbteTipo = 3   // Nota de Crédito A
-      else if (cbteTipo === 6) cbteTipo = 8   // Nota de Crédito B
-      else if (cbteTipo === 11) cbteTipo = 13 // Nota de Crédito C
+      if (cbteTipo === 1) cbteTipo = 3
+      else if (cbteTipo === 6) cbteTipo = 8
+      else if (cbteTipo === 11) cbteTipo = 13
     } else if (isDebitNote) {
-      if (cbteTipo === 1) cbteTipo = 2   // Nota de Débito A
-      else if (cbteTipo === 6) cbteTipo = 7   // Nota de Débito B
-      else if (cbteTipo === 11) cbteTipo = 12 // Nota de Débito C
+      if (cbteTipo === 1) cbteTipo = 2
+      else if (cbteTipo === 6) cbteTipo = 7
+      else if (cbteTipo === 11) cbteTipo = 12
     }
 
-    // Aplicar cálculo de IVA si corresponde
-    if (addIva && !existingDraft && (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)) {
-      montoTotal = parseFloat((montoTotal * 1.21).toFixed(2))
-    }
+    // Cálculo centralizado de impuestos
+    const taxes = calculateInvoiceTaxes({
+      montoTotal: montoBase,
+      cbteTipo,
+      addIva,
+      hasExistingDraft: Boolean(existingDraft)
+    })
 
-    // Validación final de límite de identificación de Consumidor Final
-    if (cbteTipo !== 1 && cbteTipo !== 3 && cbteTipo !== 2 && montoTotal > LIMITE_IDENTIFICACION && docTipo === 99) {
+    if (cbteTipo !== 1 && cbteTipo !== 3 && cbteTipo !== 2 && taxes.montoTotal > LIMITE_IDENTIFICACION && docTipo === 99) {
        throw new Error(`Para montos mayores a $${LIMITE_IDENTIFICACION.toLocaleString('es-AR')} es obligatorio identificar al cliente con DNI o CUIT`)
     }
 
-    // Fecha en zona horaria oficial de Argentina (YYYYMMDD)
     const fechaArgentina = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date()).replace(/-/g, '')
 
     // 6. Construir objeto Voucher para ARCA WSFE
@@ -244,20 +238,16 @@ export async function POST(request: Request) {
       CantReg: 1,
       PtoVta: ptoVta,
       CbteTipo: cbteTipo,
-      Concepto: businessType === 'services' ? 2 : 1, // 1: Productos, 2: Servicios
+      Concepto: businessType === 'services' ? 2 : 1,
       DocTipo: docTipo,
       DocNro: docNro,
       CbteFch: fechaArgentina,
-      ImpTotal: montoTotal,
-      ImpTotConc: 0,
-      ImpNeto: (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)
-        ? parseFloat((montoTotal / 1.21).toFixed(2)) 
-        : montoTotal,
-      ImpOpEx: 0,
-      ImpIVA: (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7)
-        ? parseFloat((montoTotal - (montoTotal / 1.21)).toFixed(2)) 
-        : 0,
-      ImpTrib: 0,
+      ImpTotal: taxes.montoTotal,
+      ImpTotConc: taxes.impTotConc,
+      ImpNeto: taxes.impNeto,
+      ImpOpEx: taxes.impOpEx,
+      ImpIVA: taxes.impIva,
+      ImpTrib: taxes.impTrib,
       CondicionIVAReceptorId: condicionIvaReceptor,
       MonId: 'PES',
       MonCotiz: 1
@@ -287,15 +277,10 @@ export async function POST(request: Request) {
       voucherData.FchVtoPago = serviceDates?.FchVtoPago?.replace(/-/g, '') || defaultVto
     }
 
-    if (cbteTipo === 1 || cbteTipo === 6 || cbteTipo === 3 || cbteTipo === 8 || cbteTipo === 2 || cbteTipo === 7) {
-      voucherData.Iva = [{
-        Id: 5, // 21%
-        BaseImp: voucherData.ImpNeto,
-        Importe: voucherData.ImpIVA
-      }]
+    if (taxes.ivaArray.length > 0) {
+      voucherData.Iva = taxes.ivaArray
     }
 
-    // Agregar comprobante asociado oficial si es Nota de Crédito/Débito
     if (esCorrectivo && budget.afip_comprobante_numero) {
       voucherData.CbtesAsoc = [{
         Tipo: budget.afip_comprobante_tipo || (esRI ? (client?.client_type === 'distribuidor' || esCuitValido ? 1 : 6) : 11),
@@ -343,7 +328,7 @@ export async function POST(request: Request) {
           client_id: budget.client_id,
           budget_id: budget_id,
           status: 'emitted',
-          total_amount: isCreditNote ? -montoTotal : montoTotal,
+          total_amount: isCreditNote ? -taxes.montoTotal : taxes.montoTotal,
           afip_cae: cae,
           afip_cae_vencimiento: caeFchVto,
           afip_comprobante_numero: cbteNro,
@@ -379,7 +364,7 @@ export async function POST(request: Request) {
           .from('invoices')
           .update({
             status: 'emitted',
-            total_amount: montoTotal,
+            total_amount: taxes.montoTotal,
             afip_cae: cae,
             afip_cae_vencimiento: caeFchVto,
             afip_comprobante_numero: cbteNro,
@@ -401,7 +386,7 @@ export async function POST(request: Request) {
             client_id: budget.client_id,
             budget_id: budget_id,
             status: 'emitted',
-            total_amount: montoTotal,
+            total_amount: taxes.montoTotal,
             afip_cae: cae,
             afip_cae_vencimiento: caeFchVto,
             afip_comprobante_numero: cbteNro,

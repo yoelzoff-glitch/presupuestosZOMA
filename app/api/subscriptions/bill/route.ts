@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCompanyUser } from '@/lib/auth/requireCompanyUser'
 import { createSupabaseAdminClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
+  const auth = await requireCompanyUser({ allowedRoles: ['admin', 'super_admin'] })
+  if (!auth.success) return auth.response
+
+  const { companyId } = auth.user
   const supabase = createSupabaseAdminClient()
   
   let newBudgetId: string | null = null
@@ -15,21 +20,22 @@ export async function POST(request: NextRequest) {
       service_hasta, 
       service_vto,
       cbteTipoOverride
-    } = await request.json()
+    } = await request.json().catch(() => ({}))
 
     if (!subscription_id) {
       return NextResponse.json({ success: false, error: 'Falta subscription_id' }, { status: 400 })
     }
 
-    // 1. Obtener los datos del abono
+    // 1. Obtener los datos del abono validando pertenencia a la empresa autenticada
     const { data: sub, error: subError } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('id', subscription_id)
+      .eq('company_id', companyId)
       .single()
 
     if (subError || !sub) {
-      throw new Error('Abono no encontrado en el sistema')
+      throw new Error('Abono no encontrado en el sistema o no pertenece a su empresa')
     }
 
     // 2. Escalar ítems si hay un monto personalizado
@@ -44,11 +50,11 @@ export async function POST(request: NextRequest) {
       }))
     }
 
-    // 3. Generar número de presupuesto secuencial (Servidor)
+    // 3. Generar número de presupuesto secuencial
     const { data: lastBudgetData, error: lastBudgetError } = await supabase
       .from('budgets')
       .select('budget_number')
-      .eq('company_id', sub.company_id)
+      .eq('company_id', companyId)
       .order('budget_number', { ascending: false })
       .limit(1)
 
@@ -60,11 +66,11 @@ export async function POST(request: NextRequest) {
       ? Number(lastBudgetData[0].budget_number) + 1
       : 1950
 
-    // 4. Crear registro en la tabla budgets (aprobado directamente para facturar)
+    // 4. Crear registro en la tabla budgets
     const { data: budget, error: budgetError } = await supabase
       .from('budgets')
       .insert({
-        company_id: sub.company_id,
+        company_id: companyId,
         client_id: sub.client_id,
         budget_number: nextBudgetNumber,
         budget_date: new Date().toISOString().split('T')[0],
@@ -84,7 +90,7 @@ export async function POST(request: NextRequest) {
     // 5. Copiar ítems del abono a budget_items
     const budgetItemsToInsert = itemsToSave.map((item: any) => ({
       budget_id: budget.id,
-      company_id: sub.company_id,
+      company_id: companyId,
       product_id: item.product_id || null,
       product_name: item.product_name,
       product_code: item.product_code || null,
@@ -105,7 +111,7 @@ export async function POST(request: NextRequest) {
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .insert({
-        company_id: sub.company_id,
+        company_id: companyId,
         client_id: sub.client_id,
         budget_id: budget.id,
         total_amount: totalAmount,
@@ -167,19 +173,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 9. Actualizar last_billed_month en abono para evitar dobles cobros
-    const currentMonthLabel = service_desde.slice(0, 7) // Formato 'YYYY-MM'
+    const currentMonthLabel = (service_desde || new Date().toISOString()).slice(0, 7)
     
-    const { error: subUpdateError } = await supabase
+    await supabase
       .from('subscriptions')
       .update({
         last_billed_month: currentMonthLabel,
         updated_at: new Date().toISOString()
       })
       .eq('id', subscription_id)
-
-    if (subUpdateError) {
-      console.error('Error al actualizar período del abono:', subUpdateError)
-    }
 
     return NextResponse.json({
       success: true,
@@ -194,12 +196,11 @@ export async function POST(request: NextRequest) {
 
     // Rollback de base de datos para mantener integridad en caso de fallos AFIP/ARCA
     try {
-      const supabaseAdmin = createSupabaseAdminClient()
       if (newInvoiceId) {
-        await supabaseAdmin.from('invoices').delete().eq('id', newInvoiceId)
+        await supabase.from('invoices').delete().eq('id', newInvoiceId)
       }
       if (newBudgetId) {
-        await supabaseAdmin.from('budgets').delete().eq('id', newBudgetId)
+        await supabase.from('budgets').delete().eq('id', newBudgetId)
       }
     } catch (cleanupError) {
       console.error('Error durante rollback:', cleanupError)
