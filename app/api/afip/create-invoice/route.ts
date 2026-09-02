@@ -12,19 +12,11 @@ import {
   getEmissionLockKey,
   reconcileVoucherWithArca
 } from '@/lib/arca/idempotency'
+import {
+  normalizeArcaDate,
+  getDefaultServiceDates
+} from '@/lib/arca/invoiceRepresentation'
 import crypto from 'crypto'
-
-function normalizeArcaDate(value?: string | null): string | null {
-  if (!value) return null
-
-  const digits = value.replace(/\D/g, '')
-
-  if (!/^\d{8}$/.test(digits)) {
-    throw new Error(`Fecha ARCA inválida: ${value}`)
-  }
-
-  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
-}
 
 export async function POST(request: Request) {
   let lockKey: string | null = null
@@ -131,7 +123,11 @@ export async function POST(request: Request) {
     const businessType = companyObj?.business_type || 'products'
 
     // 4. Validaciones específicas para Notas de Crédito / Débito
-    let originalInvoice: any = null
+    let originalInvoice: {
+      afip_comprobante_tipo?: number
+      afip_punto_venta?: number
+      afip_comprobante_numero?: number
+    } | null = null
     let remainingBalance = 0
 
     if (esCorrectivo) {
@@ -338,6 +334,9 @@ export async function POST(request: Request) {
       invoiceOriginalId: invoice_original_id
     })
 
+    const defaultServices = businessType === 'services' ? getDefaultServiceDates() : undefined
+    const finalServiceDates = serviceDates || defaultServices
+
     const claimResult = await claimInvoiceAttempt(supabaseAdmin, {
       companyId,
       budgetId: budget_id,
@@ -346,7 +345,24 @@ export async function POST(request: Request) {
       idempotencyKey,
       puntoVenta: credentials.puntoVenta,
       comprobanteTipo: cbteTipo,
-      requestPayload: { montoBase, taxes, cbteTipo, docTipo, docNro, is_total_cancellation, correction_request_id, invoice_original_id }
+      requestPayload: {
+        montoBase,
+        montoTotal: taxes.montoTotal,
+        taxes,
+        cbteTipo,
+        docTipo,
+        docNro: String(docNro),
+        condicionIvaReceptor,
+        serviceDates: finalServiceDates,
+        concepto: businessType === 'services' ? 2 : 1,
+        moneda: 'PES',
+        cotizacion: 1,
+        environment,
+        puntoVenta: credentials.puntoVenta,
+        is_total_cancellation,
+        correction_request_id,
+        invoice_original_id
+      }
     })
 
     if (claimResult.type === 'persisted') {
@@ -396,6 +412,11 @@ export async function POST(request: Request) {
       if (reconciliation.status === 'authorized' && reconciliation.cae) {
         const fechaArgentina = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date())
 
+        // Usar datos del snapshot original guardado en attempt.request_payload para no depender de mutaciones
+        const snap = (attempt.request_payload || {}) as Record<string, unknown>
+        const snapDates = (snap.serviceDates as { FchServDesde?: string; FchServHasta?: string; FchVtoPago?: string } | undefined) || finalServiceDates
+        const snapTotal = (typeof snap.montoTotal === 'number' ? snap.montoTotal : undefined) || taxes.montoTotal
+
         await persistInvoiceData(supabaseAdmin, {
           attemptId: attempt.id,
           companyId,
@@ -406,15 +427,15 @@ export async function POST(request: Request) {
           isCreditNote: Boolean(isCreditNote),
           isTotalCancellation: is_total_cancellation,
           invoiceOriginalId: invoice_original_id,
-          totalAmount: taxes.montoTotal,
+          totalAmount: snapTotal,
           cae: reconciliation.cae,
           caeExpiresAt: normalizeArcaDate(reconciliation.caeExpiresAt),
           comprobanteNumero: plannedNumber,
           comprobanteTipo: cbteTipo,
           invoiceDate: fechaArgentina,
-          servicioDesde: serviceDates?.FchServDesde,
-          servicioHasta: serviceDates?.FchServHasta,
-          servicioVto: serviceDates?.FchVtoPago
+          servicioDesde: snapDates?.FchServDesde,
+          servicioHasta: snapDates?.FchServHasta,
+          servicioVto: snapDates?.FchVtoPago
         })
 
         return NextResponse.json({
@@ -476,24 +497,10 @@ export async function POST(request: Request) {
     }
 
     if (businessType === 'services') {
-      const today = new Date()
-      const year = today.getFullYear()
-      const month = today.getMonth()
-
-      const formatDate = (d: Date) => {
-        const y = d.getFullYear()
-        const m = String(d.getMonth() + 1).padStart(2, '0')
-        const day = String(d.getDate()).padStart(2, '0')
-        return `${y}${m}${day}`
-      }
-
-      const defaultDesde = formatDate(new Date(year, month, 1))
-      const defaultHasta = formatDate(new Date(year, month + 1, 0))
-      const defaultVto = formatDate(new Date(year, month, today.getDate() + 10))
-
-      voucherData.FchServDesde = serviceDates?.FchServDesde?.replace(/-/g, '') || defaultDesde
-      voucherData.FchServHasta = serviceDates?.FchServHasta?.replace(/-/g, '') || defaultHasta
-      voucherData.FchVtoPago = serviceDates?.FchVtoPago?.replace(/-/g, '') || defaultVto
+      const defaults = getDefaultServiceDates()
+      voucherData.FchServDesde = serviceDates?.FchServDesde?.replace(/-/g, '') || defaults.FchServDesde.replace(/-/g, '')
+      voucherData.FchServHasta = serviceDates?.FchServHasta?.replace(/-/g, '') || defaults.FchServHasta.replace(/-/g, '')
+      voucherData.FchVtoPago = serviceDates?.FchVtoPago?.replace(/-/g, '') || defaults.FchVtoPago.replace(/-/g, '')
     }
 
     if (taxes.ivaArray.length > 0) {
@@ -512,7 +519,7 @@ export async function POST(request: Request) {
     // 12. Solicitar autorización ante ARCA
     let createResult: unknown
     try {
-      createResult = await arca.electronicBillingService.createVoucher(voucherData as any)
+      createResult = await arca.electronicBillingService.createVoucher(voucherData as never)
     } catch (arcaNetErr: unknown) {
       const netMsg = arcaNetErr instanceof Error ? arcaNetErr.message : String(arcaNetErr)
       await supabaseAdmin
@@ -530,17 +537,27 @@ export async function POST(request: Request) {
       }, { status: 504 })
     }
 
-    const resAny = createResult as any
-    const resDet = resAny.response?.FeDetResp?.FECAEDetResponse?.[0]
-    const resultado = resAny.response?.FeCabResp?.Resultado || resAny.Resultado || resDet?.Resultado
-    const cae = resAny.cae || resAny.CAE || resDet?.CAE
-    const caeFchVto = resAny.caeFchVto || resAny.CAEFchVto || resDet?.CAEFchVto
-    const cbteDesde = resAny.cbteDesde || resAny.CbteDesde || resDet?.CbteDesde || plannedNumber
+    const resAny = (createResult || {}) as Record<string, unknown>
+    const resResponse = (resAny.response || {}) as Record<string, unknown>
+    const resFeCabResp = (resResponse.FeCabResp || {}) as Record<string, unknown>
+    const resFeDetResp = (resResponse.FeDetResp || {}) as Record<string, unknown>
+    const resFECAEDetResponse = (resFeDetResp.FECAEDetResponse || []) as Array<Record<string, unknown>>
+    const resDet = resFECAEDetResponse[0] || {}
+
+    const resultado = String(resFeCabResp.Resultado || resAny.Resultado || resDet.Resultado || '')
+    const cae = (resAny.cae || resAny.CAE || resDet.CAE) as string | undefined
+    const caeFchVto = (resAny.caeFchVto || resAny.CAEFchVto || resDet.CAEFchVto) as string | undefined
+    const cbteDesde = (Number(resAny.cbteDesde || resAny.CbteDesde || resDet.CbteDesde) || plannedNumber) as number
 
     if (resultado !== 'A' || !cae) {
-      const obs = resDet?.Observaciones?.Obs?.[0]?.Msg || resAny.Observaciones?.Obs?.[0]?.Msg
-      const err = resAny.Errors?.Err?.[0]?.Msg || resAny.response?.Errors?.Err?.[0]?.Msg
-      const errMsg = obs || err || `Autorización rechazada por ARCA (Resultado ${resultado})`
+      const detObs = (resDet.Observaciones as Record<string, unknown> | undefined)?.Obs as Array<Record<string, unknown>> | undefined
+      const anyObs = (resAny.Observaciones as Record<string, unknown> | undefined)?.Obs as Array<Record<string, unknown>> | undefined
+      const anyErrors = (resAny.Errors as Record<string, unknown> | undefined)?.Err as Array<Record<string, unknown>> | undefined
+      const respErrors = (resResponse.Errors as Record<string, unknown> | undefined)?.Err as Array<Record<string, unknown>> | undefined
+
+      const obs = detObs?.[0]?.Msg || anyObs?.[0]?.Msg
+      const err = anyErrors?.[0]?.Msg || respErrors?.[0]?.Msg
+      const errMsg = String(obs || err || `Autorización rechazada por ARCA (Resultado ${resultado})`)
 
       await supabaseAdmin
         .from('arca_invoice_attempts')

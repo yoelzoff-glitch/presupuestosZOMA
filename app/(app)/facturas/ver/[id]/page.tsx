@@ -2,52 +2,160 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { notFound, useParams, useSearchParams } from 'next/navigation'
-import { FileText, Printer, Loader2, ArrowLeft, Send, Calendar, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react'
+import { FileText, Printer, Loader2, ArrowLeft, Send, AlertTriangle, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import InvoicePreviewModal from '@/app/components/InvoicePreviewModal'
+import {
+   formatArcaDateForDisplay,
+   getDefaultServiceDates,
+   buildArcaQrPayload,
+   generateArcaQrDataUrl,
+   getCondicionIvaLabel
+} from '@/lib/arca/invoiceRepresentation'
+
+interface InvoiceRow {
+   id: string
+   afip_comprobante_tipo?: number
+   afip_punto_venta?: number
+   arca_environment?: 'homo' | 'prod'
+   status?: 'draft' | 'emitted' | 'cancelled'
+   afip_cae?: string
+   afip_cae_vencimiento?: string
+   afip_comprobante_numero?: number
+   total_amount?: number
+   invoice_date?: string
+   afip_servicio_desde?: string
+   afip_servicio_hasta?: string
+   afip_servicio_vto?: string
+   afip_doc_tipo_receptor?: number
+   afip_doc_nro_receptor?: string
+   afip_condicion_iva_receptor?: number
+   invoice_items?: Array<{ product_code?: string; product_name: string; quantity: number; unit_price: number }>
+}
+
+interface BudgetViewData {
+   id: string
+   company_id?: string
+   budget_date?: string
+   total_amount?: number
+   afip_cae?: string
+   afip_cae_vencimiento?: string
+   afip_comprobante_numero?: number
+   afip_comprobante_tipo?: number
+   afip_punto_venta?: number
+   arca_environment?: 'homo' | 'prod'
+   afip_servicio_desde?: string
+   afip_servicio_hasta?: string
+   afip_servicio_vto?: string
+   clients?: { name?: string; cuit?: string; address?: string; email?: string; condicion_iva?: string; afip_condicion_iva_receptor?: number } | Array<{ name?: string; cuit?: string; address?: string; email?: string; condicion_iva?: string; afip_condicion_iva_receptor?: number }>
+   companies?: { name?: string; cuit?: string; address?: string; logo_url?: string; business_type?: string; legal_name?: string; fiscal_address?: string; iibb_number?: string; activity_start_date?: string }
+   budget_items?: Array<{ product_code?: string; product_name: string; quantity: number; unit_price: number }>
+   invoices?: InvoiceRow[]
+   selected_invoice?: InvoiceRow
+   company_afip_config?: { tipo_contribuyente?: string; punto_venta?: number }
+}
 
 export default function VerFacturaPage() {
    const params = useParams()
    const searchParams = useSearchParams()
    const id = params.id as string
    const invoiceId = searchParams.get('invoice_id')
-   const [budget, setBudget] = useState<any>(null)
+   const [budget, setBudget] = useState<BudgetViewData | null>(null)
    const [loading, setLoading] = useState(true)
    const [emitiendo, setEmitiendo] = useState(false)
    const [modalPreviewOpen, setModalPreviewOpen] = useState(false)
-   const [serviceDates, setServiceDates] = useState({ desde: '', hasta: '', vto: '' })
-
-   const getInitialDates = () => {
-      const today = new Date()
-      const year = today.getFullYear()
-      const month = today.getMonth()
-
-      const startOfMonth = new Date(year, month, 1)
-      const endOfMonth = new Date(year, month + 1, 0)
-      const dueDay = new Date(today)
-      dueDay.setDate(today.getDate() + 10)
-
-      const formatDate = (date: Date) => {
-         const y = date.getFullYear()
-         const m = String(date.getMonth() + 1).padStart(2, '0')
-         const d = String(date.getDate()).padStart(2, '0')
-         return `${y}-${m}-${d}`
-      }
-
-      return {
-         desde: formatDate(startOfMonth),
-         hasta: formatDate(endOfMonth),
-         vto: formatDate(dueDay)
-      }
-   }
+   const [serviceDates] = useState(() => {
+      const d = getDefaultServiceDates()
+      return { desde: d.FchServDesde, hasta: d.FchServHasta, vto: d.FchVtoPago }
+   })
+   const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
    useEffect(() => {
-      if (id) {
-         setServiceDates(getInitialDates())
-         fetchBudget()
+      if (!id) return
+      let isMounted = true
+
+      const timer = setTimeout(async () => {
+         setLoading(true)
+         const { data: budgetData, error: budgetError } = await supabase
+            .from('budgets')
+            .select(`
+           *,
+           clients ( name, cuit, address, email, condicion_iva ),
+           budget_items ( * ),
+           companies ( name, cuit, address, logo_url, business_type, legal_name, fiscal_address, iibb_number, activity_start_date ),
+           invoices ( id, afip_comprobante_tipo, afip_punto_venta, arca_environment, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, afip_servicio_desde, afip_servicio_hasta, afip_servicio_vto, afip_doc_tipo_receptor, afip_doc_nro_receptor, afip_condicion_iva_receptor, invoice_items ( * ) )
+         `)
+            .eq('id', id)
+            .single()
+
+         if (!isMounted) return
+         if (budgetError || !budgetData) {
+            console.error('Error fetching budget for invoice:', budgetError)
+            setLoading(false)
+            return
+         }
+
+         const finalBudget = { ...budgetData }
+         let activeInvoice = null
+
+         if (invoiceId) {
+            const found = budgetData.invoices?.find((i: { id: string }) => i.id === invoiceId)
+            if (found) {
+               activeInvoice = found
+            }
+         } else if (budgetData.invoices && budgetData.invoices.length > 0) {
+            activeInvoice = budgetData.invoices[0]
+         }
+
+         if (activeInvoice) {
+            finalBudget.afip_cae = activeInvoice.afip_cae
+            finalBudget.afip_cae_vencimiento = activeInvoice.afip_cae_vencimiento
+            finalBudget.afip_comprobante_numero = activeInvoice.afip_comprobante_numero
+            finalBudget.afip_comprobante_tipo = activeInvoice.afip_comprobante_tipo
+            finalBudget.afip_punto_venta = activeInvoice.afip_punto_venta || finalBudget.afip_punto_venta
+            finalBudget.arca_environment = activeInvoice.arca_environment || finalBudget.arca_environment
+            finalBudget.total_amount = activeInvoice.total_amount
+            if (activeInvoice.invoice_date) {
+               finalBudget.budget_date = activeInvoice.invoice_date
+            }
+            finalBudget.selected_invoice = activeInvoice
+
+            if (activeInvoice.invoice_items && activeInvoice.invoice_items.length > 0) {
+               finalBudget.budget_items = activeInvoice.invoice_items
+            }
+
+            // Sincronizar fechas de servicio facturadas
+            finalBudget.afip_servicio_desde = activeInvoice.afip_servicio_desde
+            finalBudget.afip_servicio_hasta = activeInvoice.afip_servicio_hasta
+            finalBudget.afip_servicio_vto = activeInvoice.afip_servicio_vto
+         }
+
+         // Fetch company's AFIP configuration
+         const companyId = budgetData.company_id
+         if (companyId) {
+            const { data: afipData } = await supabase
+               .from('afip_configs')
+               .select('tipo_contribuyente, punto_venta')
+               .eq('company_id', companyId)
+               .maybeSingle()
+
+            if (afipData && isMounted) {
+               finalBudget.company_afip_config = afipData
+            }
+         }
+
+         if (isMounted) {
+            setBudget(finalBudget)
+            setLoading(false)
+         }
+      }, 0)
+
+      return () => {
+         isMounted = false
+         clearTimeout(timer)
       }
-   }, [id])
+   }, [id, invoiceId])
 
    async function fetchBudget() {
       setLoading(true)
@@ -57,8 +165,8 @@ export default function VerFacturaPage() {
         *,
         clients ( name, cuit, address, email, condicion_iva ),
         budget_items ( * ),
-        companies ( name, cuit, address, logo_url, business_type ),
-        invoices ( id, afip_comprobante_tipo, afip_punto_venta, arca_environment, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, afip_servicio_desde, afip_servicio_hasta, afip_servicio_vto, invoice_items ( * ) )
+        companies ( name, cuit, address, logo_url, business_type, legal_name, fiscal_address, iibb_number, activity_start_date ),
+        invoices ( id, afip_comprobante_tipo, afip_punto_venta, arca_environment, status, afip_cae, afip_cae_vencimiento, afip_comprobante_numero, total_amount, invoice_date, afip_servicio_desde, afip_servicio_hasta, afip_servicio_vto, afip_doc_tipo_receptor, afip_doc_nro_receptor, afip_condicion_iva_receptor, invoice_items ( * ) )
       `)
          .eq('id', id)
          .single()
@@ -69,11 +177,11 @@ export default function VerFacturaPage() {
          return
       }
 
-      let finalBudget = { ...budgetData }
+      const finalBudget = { ...budgetData }
       let activeInvoice = null
 
       if (invoiceId) {
-         const found = budgetData.invoices?.find((i: any) => i.id === invoiceId)
+         const found = budgetData.invoices?.find((i: { id: string }) => i.id === invoiceId)
          if (found) {
             activeInvoice = found
          }
@@ -122,6 +230,62 @@ export default function VerFacturaPage() {
       setLoading(false)
    }
 
+   // Generar código QR oficial localmente si está emitido en PRODUCCIÓN
+   useEffect(() => {
+      if (!budget) return
+
+      let isMounted = true
+      const timer = setTimeout(async () => {
+         const invoice = budget.selected_invoice || (budget.invoices && budget.invoices.length > 0 ? budget.invoices[0] : null)
+         const arcaEnv = budget.arca_environment || invoice?.arca_environment
+         const isProd = arcaEnv === 'prod' && Boolean(budget.afip_cae) && Boolean(budget.afip_comprobante_numero)
+         const company = budget.companies
+         const client = Array.isArray(budget.clients) ? budget.clients[0] : budget.clients
+
+         if (isProd && company?.cuit) {
+            try {
+               const ptoVta = Number(budget.afip_punto_venta || invoice?.afip_punto_venta || budget?.company_afip_config?.punto_venta || 1)
+               const tipoCmp = Number(budget.afip_comprobante_tipo || invoice?.afip_comprobante_tipo || 11)
+               const docTipo = Number(
+                  invoice?.afip_doc_tipo_receptor != null
+                     ? invoice.afip_doc_tipo_receptor
+                     : (client?.cuit?.replace(/\D/g, '').length === 11 ? 80 : 99)
+               )
+               const docNro = (
+                  invoice?.afip_doc_nro_receptor != null
+                     ? String(invoice.afip_doc_nro_receptor)
+                     : (client?.cuit?.replace(/\D/g, '') || '0')
+               )
+
+               const qrPayload = buildArcaQrPayload({
+                  fecha: budget.budget_date || '',
+                  cuit: company.cuit,
+                  ptoVta,
+                  tipoCmp,
+                  nroCmp: Number(budget.afip_comprobante_numero || 0),
+                  importe: Number(budget.total_amount || 0),
+                  tipoDocRec: docTipo,
+                  nroDocRec: docNro,
+                  codAut: budget.afip_cae || ''
+               })
+
+               const url = await generateArcaQrDataUrl(qrPayload.url)
+               if (isMounted) setQrDataUrl(url)
+            } catch (err) {
+               console.error('Error generando QR oficial:', err)
+               if (isMounted) setQrDataUrl('')
+            }
+         } else {
+            if (isMounted) setQrDataUrl('')
+         }
+      }, 0)
+
+      return () => {
+         isMounted = false
+         clearTimeout(timer)
+      }
+   }, [budget])
+
    async function emitirFacturaConParametros(
       tipoCbte: number,
       addIva: boolean,
@@ -134,7 +298,7 @@ export default function VerFacturaPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-               budget_id: budget.id,
+               budget_id: budget?.id || id,
                environment: env,
                cbteTipoOverride: tipoCbte,
                addIva,
@@ -150,9 +314,10 @@ export default function VerFacturaPage() {
          toast.success(`Factura autorizada con éxito en ${env.toUpperCase()} (CAE: ${result.cae})`)
          setModalPreviewOpen(false)
          fetchBudget()
-      } catch (error: any) {
-         console.error(error)
-         toast.error(error.message || 'Error de conexión con ARCA')
+      } catch (error: unknown) {
+         const err = error as Error
+         console.error(err)
+         toast.error(err.message || 'Error de conexión con ARCA')
       } finally {
          setEmitiendo(false)
       }
@@ -177,7 +342,7 @@ export default function VerFacturaPage() {
    const esProdOficial = !esBorrador && arcaEnv === 'prod'
    const esHomoTesting = !esBorrador && arcaEnv === 'homo'
 
-   const comprobanteTipo = budget.afip_comprobante_tipo || (invoice ? invoice.afip_comprobante_tipo : 11)
+   const comprobanteTipo = Number(budget.afip_comprobante_tipo || (invoice ? invoice.afip_comprobante_tipo : 11) || 11)
    const esComprobanteA = [1, 2, 3, 7, 8].includes(comprobanteTipo)
 
    const afipConfig = budget.company_afip_config
@@ -201,47 +366,33 @@ export default function VerFacturaPage() {
       return 'Factura'
    }
 
-   const formatDateString = (dateStr: string) => {
-      if (!dateStr) return '-'
-      if (dateStr.length === 8 && !dateStr.includes('-')) {
-         const year = dateStr.substring(0, 4)
-         const month = dateStr.substring(4, 6)
-         const day = dateStr.substring(6, 8)
-         return `${day}/${month}/${year}`
-      }
-      if (dateStr.includes('-')) {
-         const parts = dateStr.split('-')
-         if (parts.length === 3) {
-            return `${parts[2]}/${parts[1]}/${parts[0]}`
-         }
-      }
-      return dateStr
-   }
-
    // Punto de venta persistido en la factura o budget
    const realPtoVta = Number(budget.afip_punto_venta || invoice?.afip_punto_venta || budget?.company_afip_config?.punto_venta || 1)
 
-   // QR Oficial generado ÚNICAMENTE si está emitido en PRODUCCIÓN
-   let qrUrl = ''
-   if (esProdOficial && budget.afip_cae && budget.afip_comprobante_numero) {
-      const qrData = {
-         ver: 1,
-         fecha: budget.budget_date,
-         cuit: parseInt(String(company?.cuit || '').replace(/\D/g, ''), 10) || 0,
-         ptoVta: realPtoVta,
-         tipoCmp: comprobanteTipo,
-         nroCmp: budget.afip_comprobante_numero,
-         importe: Math.abs(budget.total_amount),
-         moneda: "PES",
-         ctz: 1,
-         tipoDocRec: 99,
-         nroDocRec: 0,
-         tipoCodAut: "E",
-         codAut: budget.afip_cae
+   // Validación de completitud fiscal del emisor para comprobantes PROD
+   const emisorFiscalIncompleto = esProdOficial && (
+      !(company?.legal_name || company?.name) ||
+      !company?.cuit ||
+      !(company?.fiscal_address || company?.address) ||
+      !company?.activity_start_date
+   )
+
+   function handlePrint() {
+      if (emisorFiscalIncompleto) {
+         toast.error('Datos fiscales del emisor incompletos para comprobante PROD. Complete Razón Social, Domicilio Fiscal, CUIT e Inicio de Actividades en Configuración de Empresa.')
+         return
       }
-      const qrBase64 = typeof window !== 'undefined' ? btoa(JSON.stringify(qrData)) : ''
-      qrUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`
+      window.print()
    }
+
+   const receptorCondicionLabel = getCondicionIvaLabel(
+      invoice?.afip_condicion_iva_receptor != null
+         ? invoice.afip_condicion_iva_receptor
+         : (client?.condicion_iva === 'responsable_inscripto' ? 1 : 5)
+   )
+
+   const receptorDocLabel = (invoice?.afip_doc_tipo_receptor === 80 || client?.cuit?.replace(/\D/g, '').length === 11) ? 'CUIT:' : 'DNI/Doc:'
+   const receptorDocNro = invoice?.afip_doc_nro_receptor || client?.cuit || 'Consumidor Final'
 
    return (
       <div className="min-h-screen bg-slate-100 p-4 md:p-8 print:p-0 print:bg-white font-sans">
@@ -277,11 +428,26 @@ export default function VerFacturaPage() {
                      Emitir Factura
                   </button>
                )}
-               <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 transition shadow-lg shadow-slate-200">
+               <button
+                  onClick={handlePrint}
+                  className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 transition shadow-lg shadow-slate-200"
+               >
                   <Printer size={16} /> Imprimir / Guardar PDF
                </button>
             </div>
          </div>
+
+         {/* Alerta si faltan datos del emisor para imprimir PROD */}
+         {emisorFiscalIncompleto && (
+            <div className="mx-auto mb-6 max-w-4xl rounded-2xl bg-red-50 border-2 border-red-300 p-4 text-xs font-bold text-red-900 flex items-center justify-between shadow-sm print:hidden">
+               <div className="flex items-center gap-2">
+                  <AlertCircle className="text-red-600 shrink-0" size={18} />
+                  <span>
+                     Datos fiscales del emisor incompletos para comprobante PROD: Verifique Razón Social, Domicilio Fiscal, CUIT e Inicio de Actividades en <Link href="/configuracion/empresa" className="underline font-black">Datos de la empresa</Link>.
+                  </span>
+               </div>
+            </div>
+         )}
 
          {/* Banner de Homologación si es comprobante de testing */}
          {esHomoTesting && (
@@ -327,10 +493,10 @@ export default function VerFacturaPage() {
                </div>
 
                <div className="flex-1 p-6 border-r-2 border-slate-900 bg-slate-50/30">
-                  <h2 className="text-2xl font-black uppercase text-slate-900 tracking-tighter">{company?.name || 'ZOMA TEST'}</h2>
+                  <h2 className="text-2xl font-black uppercase text-slate-900 tracking-tighter">{company?.legal_name || company?.name || 'EMPRESA'}</h2>
                   <div className="mt-4 space-y-1 text-xs font-bold text-slate-600">
-                     <p>Razón Social: {company?.name}</p>
-                     <p>Domicilio: {company?.address || 'Calle Falsa 123, Buenos Aires'}</p>
+                     <p>Razón Social: {company?.legal_name || company?.name || '---'}</p>
+                     <p>Domicilio Fiscal: {company?.fiscal_address || company?.address || '---'}</p>
                      <p>Condición frente al IVA: {condicionIvaEmpresa}</p>
                   </div>
                </div>
@@ -356,11 +522,11 @@ export default function VerFacturaPage() {
                   <div className="mt-4 space-y-1 text-sm font-black text-slate-900">
                      <p>Punto de Venta: {String(realPtoVta).padStart(5, '0')}</p>
                      <p>Comp. Nro: {budget.afip_comprobante_numero ? String(budget.afip_comprobante_numero).padStart(8, '0') : '---'}</p>
-                     <p>Fecha: {new Date(budget.budget_date).toLocaleDateString('es-AR')}</p>
-                     <div className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                        <p>CUIT: {company?.cuit || '20-41288612-8'}</p>
-                        <p>Ingresos Brutos: {company?.cuit}</p>
-                        <p>Inicio de Actividades: 01/01/2024</p>
+                     <p>Fecha de Emisión: {formatArcaDateForDisplay(budget.budget_date)}</p>
+                     <div className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest space-y-0.5">
+                        <p>CUIT: {company?.cuit || '---'}</p>
+                        <p>Ingresos Brutos: {company?.iibb_number || company?.cuit || '---'}</p>
+                        <p>Inicio de Actividades: {company?.activity_start_date ? formatArcaDateForDisplay(company.activity_start_date) : '---'}</p>
                      </div>
                   </div>
                </div>
@@ -374,24 +540,24 @@ export default function VerFacturaPage() {
                         <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Período Facturado Desde:</span>
                         <span className="font-black text-slate-900">
                            {esBorrador
-                              ? formatDateString(serviceDates.desde)
-                              : formatDateString(budget.afip_servicio_desde)}
+                              ? formatArcaDateForDisplay(serviceDates.desde)
+                              : formatArcaDateForDisplay(budget.afip_servicio_desde)}
                         </span>
                      </p>
                      <p>
                         <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Hasta:</span>
                         <span className="font-black text-slate-900">
                            {esBorrador
-                              ? formatDateString(serviceDates.hasta)
-                              : formatDateString(budget.afip_servicio_hasta)}
+                              ? formatArcaDateForDisplay(serviceDates.hasta)
+                              : formatArcaDateForDisplay(budget.afip_servicio_hasta)}
                         </span>
                      </p>
                      <p>
                         <span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Vto. para el Pago:</span>
                         <span className="font-black text-slate-900">
                            {esBorrador
-                              ? formatDateString(serviceDates.vto)
-                              : formatDateString(budget.afip_servicio_vto)}
+                              ? formatArcaDateForDisplay(serviceDates.vto)
+                              : formatArcaDateForDisplay(budget.afip_servicio_vto)}
                         </span>
                      </p>
                   </div>
@@ -402,8 +568,8 @@ export default function VerFacturaPage() {
             <div className="mt-4 rounded-none border-2 border-slate-900 p-4 bg-slate-50/10">
                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs font-bold text-slate-800">
                   <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Apellido y Nombre / Razón Social:</span> {client?.name}</p>
-                  <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">CUIT:</span> {client?.cuit || 'Consumidor Final'}</p>
-                  <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Condición IVA:</span> {comprobanteTipo === 1 ? 'Responsable Inscripto' : 'Consumidor Final'}</p>
+                  <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">{receptorDocLabel}</span> {receptorDocNro}</p>
+                  <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Condición IVA:</span> {receptorCondicionLabel}</p>
                   <p><span className="text-slate-400 font-black uppercase mr-2 tracking-tighter">Domicilio:</span> {client?.address || '-'}</p>
                </div>
             </div>
@@ -421,7 +587,7 @@ export default function VerFacturaPage() {
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-bold text-slate-800">
-                     {items.map((item: any, idx: number) => {
+                     {items.map((item: { product_code?: string; product_name: string; quantity: number; unit_price: number }, idx: number) => {
                         const unitPrice = esComprobanteA ? (Number(item.unit_price) / 1.21) : Number(item.unit_price);
                         const rowSubtotal = item.quantity * unitPrice;
                         return (
@@ -447,11 +613,11 @@ export default function VerFacturaPage() {
             <div className="mt-4 flex justify-between items-start">
                <div className="flex gap-6 items-center">
                   <div className="h-28 w-28 border-2 border-slate-900 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm p-1">
-                     {qrUrl ? (
+                     {qrDataUrl ? (
                         <img
-                           src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrUrl)}`}
-                           alt="QR Oficial AFIP"
-                           className="h-24 w-24"
+                           src={qrDataUrl}
+                           alt="QR Oficial ARCA"
+                           className="h-24 w-24 object-contain"
                         />
                      ) : (
                         <div className="flex flex-col items-center justify-center text-center p-1 text-[8px] font-bold text-slate-400">
@@ -470,7 +636,7 @@ export default function VerFacturaPage() {
                         {esBorrador ? 'Borrador sin autorizar' : (esProdOficial ? 'Comprobante Autorizado (PROD)' : 'Autorizado en Testing (HOMO)')}
                      </p>
                      <p>CAE: <span className={`font-black text-base ml-1 tracking-tighter ${esBorrador ? 'text-slate-400' : 'text-indigo-600'}`}>{budget.afip_cae || "00000000000000"}</span></p>
-                     <p>Vencimiento CAE: {budget.afip_cae_vencimiento ? new Date(budget.afip_cae_vencimiento).toLocaleDateString('es-AR') : '--/--/----'}</p>
+                     <p>Vencimiento CAE: {budget.afip_cae_vencimiento ? formatArcaDateForDisplay(budget.afip_cae_vencimiento) : '--/--/----'}</p>
                   </div>
                </div>
 
@@ -480,18 +646,18 @@ export default function VerFacturaPage() {
                         <>
                            <div className="flex justify-between font-bold text-slate-500">
                               <span>Subtotal (Neto):</span>
-                              <span>${(Number(budget.total_amount) / 1.21).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                              <span>${(Number(budget.total_amount || 0) / 1.21).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                            </div>
                            <div className="flex justify-between font-bold text-slate-500">
                               <span>IVA (21%):</span>
-                              <span>${(Number(budget.total_amount) - (Number(budget.total_amount) / 1.21)).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                              <span>${(Number(budget.total_amount || 0) - (Number(budget.total_amount || 0) / 1.21)).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                            </div>
                         </>
                      ) : (
                         <>
                            <div className="flex justify-between font-bold text-slate-500">
                               <span>Subtotal:</span>
-                              <span>${budget.total_amount.toLocaleString('es-AR')}</span>
+                              <span>${(budget.total_amount || 0).toLocaleString('es-AR')}</span>
                            </div>
                            <div className="flex justify-between font-bold text-slate-500">
                               <span>IVA:</span>
@@ -501,7 +667,7 @@ export default function VerFacturaPage() {
                      )}
                      <div className="flex justify-between border-t-2 border-slate-900 pt-2 text-xl font-black text-slate-950">
                         <span>Total:</span>
-                        <span>${budget.total_amount.toLocaleString('es-AR')}</span>
+                        <span>${(budget.total_amount || 0).toLocaleString('es-AR')}</span>
                      </div>
                   </div>
                </div>
@@ -526,7 +692,7 @@ export default function VerFacturaPage() {
                }}
                budgetId={budget.id}
                clientName={client?.name || ''}
-               totalAmount={budget.total_amount}
+               totalAmount={budget.total_amount || 0}
                isEmitting={emitiendo}
             />
          )}

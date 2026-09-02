@@ -26,6 +26,10 @@ type Company = {
   id: string
   name: string
   cuit: string | null
+  legal_name: string | null
+  fiscal_address: string | null
+  iibb_number: string | null
+  activity_start_date: string | null
   address: string | null
   phone: string | null
   email: string | null
@@ -83,6 +87,10 @@ export default function EmpresaPage() {
       .update({
         name: company.name,
         cuit: company.cuit,
+        legal_name: company.legal_name,
+        fiscal_address: company.fiscal_address,
+        iibb_number: company.iibb_number,
+        activity_start_date: company.activity_start_date,
         address: company.address,
         phone: company.phone,
         email: company.email,
@@ -307,6 +315,54 @@ export default function EmpresaPage() {
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                     placeholder="Calle, Ciudad, Provincia"
                   />
+                </div>
+
+                {/* Sección Datos Fiscales Oficiales para ARCA */}
+                <div className="sm:col-span-2 rounded-2xl border border-blue-100 bg-blue-50/20 p-5 space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-2">
+                    <FileText size={16} className="text-blue-600" /> Datos Fiscales Oficiales (Emisión ARCA / Facturas)
+                  </h4>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-700 ml-1">Razón Social Legal</label>
+                      <input
+                        type="text"
+                        value={company.legal_name || ''}
+                        onChange={(e) => setCompany({ ...company, legal_name: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                        placeholder="Ej: ZOMA TECH S.A. o Nombre del Titular"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-700 ml-1">Domicilio Fiscal Legal</label>
+                      <input
+                        type="text"
+                        value={company.fiscal_address || ''}
+                        onChange={(e) => setCompany({ ...company, fiscal_address: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                        placeholder="Ej: Av. Corrientes 1234, CABA"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-700 ml-1">Número de Ingresos Brutos (IIBB)</label>
+                      <input
+                        type="text"
+                        value={company.iibb_number || ''}
+                        onChange={(e) => setCompany({ ...company, iibb_number: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                        placeholder="Ej: 20-41288612-8 o Exento"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-700 ml-1">Fecha de Inicio de Actividades</label>
+                      <input
+                        type="date"
+                        value={company.activity_start_date || ''}
+                        onChange={(e) => setCompany({ ...company, activity_start_date: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">

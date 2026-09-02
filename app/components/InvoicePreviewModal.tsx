@@ -1,7 +1,11 @@
 'use client'
-import { X, FileText, User, Calendar, DollarSign, Loader2, CheckCircle2, ShieldAlert, ShieldCheck, AlertCircle } from 'lucide-react'
+import { X, FileText, User, Calendar, Loader2, CheckCircle2, ShieldAlert, ShieldCheck, AlertCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import {
+  getDefaultServiceDates,
+  validateServiceDateOrder
+} from '@/lib/arca/invoiceRepresentation'
 
 export interface FiscalConfigResponse {
   configured: boolean
@@ -37,62 +41,25 @@ export default function InvoicePreviewModal({
   totalAmount,
   isEmitting
 }: Props) {
-  const [items, setItems] = useState<any[]>([])
   const [environment, setEnvironment] = useState<'homo' | 'prod' | null>(null)
   const [fiscalMetadata, setFiscalMetadata] = useState<FiscalConfigResponse | null>(null)
   const [fiscalLoading, setFiscalLoading] = useState(false)
-  const [client, setClient] = useState<any>(null)
+  const [client, setClient] = useState<{ name?: string; cuit?: string; condicion_iva?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [tipoCbte, setTipoCbte] = useState<number>(11)
   const [addIva, setAddIva] = useState(false)
   const [businessType, setBusinessType] = useState<string>('products')
   const [prodConfirmed, setProdConfirmed] = useState(false)
-  const [serviceDates, setServiceDates] = useState({ desde: '', hasta: '', vto: '' })
-
-  const getInitialDates = () => {
-    const today = new Date()
-    const year = today.getFullYear()
-    const month = today.getMonth()
-
-    const startOfMonth = new Date(year, month, 1)
-    const endOfMonth = new Date(year, month + 1, 0)
-    const dueDay = new Date(today)
-    dueDay.setDate(today.getDate() + 10)
-
-    const formatDate = (date: Date) => {
-      const y = date.getFullYear()
-      const m = String(date.getMonth() + 1).padStart(2, '0')
-      const d = String(date.getDate()).padStart(2, '0')
-      return `${y}-${m}-${d}`
-    }
-
+  const [serviceDates, setServiceDates] = useState(() => {
+    const d = getDefaultServiceDates()
     return {
-      desde: formatDate(startOfMonth),
-      hasta: formatDate(endOfMonth),
-      vto: formatDate(dueDay)
+      desde: d.FchServDesde,
+      hasta: d.FchServHasta,
+      vto: d.FchVtoPago
     }
-  }
+  })
 
-  useEffect(() => {
-    if (isOpen && budgetId) {
-      setEnvironment(null)
-      setFiscalMetadata(null)
-      setProdConfirmed(false)
-      setAddIva(false)
-      setServiceDates(getInitialDates())
-      fetchBudgetData()
-    }
-  }, [isOpen, budgetId])
-
-  useEffect(() => {
-    if (environment) {
-      fetchFiscalConfig(environment)
-    } else {
-      setFiscalMetadata(null)
-    }
-  }, [environment])
-
-  async function fetchFiscalConfig(env: 'homo' | 'prod') {
+  async function fetchFiscalConfig(env: 'homo' | 'prod', clientObj = client) {
     setFiscalLoading(true)
     try {
       const res = await fetch(`/api/afip/config?environment=${env}`)
@@ -101,7 +68,7 @@ export default function InvoicePreviewModal({
 
       setFiscalMetadata(data)
       if (data.tipo_contribuyente === 'responsable_inscripto') {
-        const rawCond = (client?.condicion_iva || '').toLowerCase()
+        const rawCond = (clientObj?.condicion_iva || '').toLowerCase()
         setTipoCbte(rawCond === 'responsable_inscripto' ? 1 : 6)
       } else {
         setTipoCbte(11)
@@ -114,33 +81,55 @@ export default function InvoicePreviewModal({
     }
   }
 
-  async function fetchBudgetData() {
-    setLoading(true)
-    try {
-      const { data: budgetData } = await supabase
+  useEffect(() => {
+    if (!isOpen || !budgetId) return
+
+    let isMounted = true
+    const timer = setTimeout(async () => {
+      if (!isMounted) return
+      setLoading(true)
+      setEnvironment(null)
+      setFiscalMetadata(null)
+      setProdConfirmed(false)
+      setAddIva(false)
+
+      const { data: budgetData, error } = await supabase
         .from('budgets')
         .select('*, clients(*), budget_items(*)')
         .eq('id', budgetId)
         .single()
 
-      if (budgetData) {
-        setItems(budgetData.budget_items || [])
-        const cl = Array.isArray(budgetData.clients) ? budgetData.clients[0] : budgetData.clients
-        setClient(cl)
-
-        const { data: compData } = await supabase
-          .from('companies')
-          .select('business_type')
-          .eq('id', budgetData.company_id)
-          .single()
-
-        setBusinessType(compData?.business_type || 'products')
+      if (!isMounted) return
+      if (error || !budgetData) {
+        console.error(error)
+        setLoading(false)
+        return
       }
-    } catch (err) {
-      console.error(err)
-    } finally {
+
+      const cl = Array.isArray(budgetData.clients) ? budgetData.clients[0] : budgetData.clients
+      setClient(cl)
+
+      const { data: compData } = await supabase
+        .from('companies')
+        .select('business_type')
+        .eq('id', budgetData.company_id)
+        .single()
+
+      if (!isMounted) return
+      setBusinessType(compData?.business_type || 'products')
       setLoading(false)
+    }, 0)
+
+    return () => {
+      isMounted = false
+      clearTimeout(timer)
     }
+  }, [isOpen, budgetId])
+
+  async function handleSelectEnvironment(env: 'homo' | 'prod') {
+    setEnvironment(env)
+    setProdConfirmed(false)
+    await fetchFiscalConfig(env, client)
   }
 
   if (!isOpen) return null
@@ -157,10 +146,12 @@ export default function InvoicePreviewModal({
 
   const baseTotal = totalAmount
   const finalTotal = (esRI && (tipoCbte === 1 || tipoCbte === 6) && addIva) ? (baseTotal * 1.21) : baseTotal
-  const neto = (esRI && (tipoCbte === 1 || tipoCbte === 6)) ? (finalTotal / 1.21) : finalTotal
-  const iva = finalTotal - neto
 
   const isFacturaAInvalid = tipoCbte === 1 && (!esReceptorRI || cuitLimpio.length !== 11)
+
+  const dateValidation = businessType === 'services'
+    ? validateServiceDateOrder(serviceDates.desde, serviceDates.hasta, serviceDates.vto)
+    : { valid: true }
 
   const isProdBlocked = environment === 'prod' && (
     !fiscalMetadata?.configured ||
@@ -175,7 +166,8 @@ export default function InvoicePreviewModal({
     !loading &&
     !isEmitting &&
     !isFacturaAInvalid &&
-    !isProdBlocked
+    !isProdBlocked &&
+    dateValidation.valid
   )
 
   return (
@@ -213,7 +205,7 @@ export default function InvoicePreviewModal({
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setEnvironment('homo')}
+                onClick={() => handleSelectEnvironment('homo')}
                 className={`flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-xs font-black transition border-2 ${
                   environment === 'homo'
                     ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
@@ -224,7 +216,7 @@ export default function InvoicePreviewModal({
               </button>
               <button
                 type="button"
-                onClick={() => setEnvironment('prod')}
+                onClick={() => handleSelectEnvironment('prod')}
                 className={`flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-xs font-black transition border-2 ${
                   environment === 'prod'
                     ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-500/20'
@@ -258,7 +250,7 @@ export default function InvoicePreviewModal({
                     <div>
                       <p className="text-xs font-black text-amber-900">Producción No Validada</p>
                       <p className="text-xs text-amber-800 mt-0.5">
-                        Debe presionar "Probar Conexión (PROD)" en Configuración Fiscal para habilitar la emisión real.
+                        Debe presionar &quot;Probar Conexión (PROD)&quot; en Configuración Fiscal para habilitar la emisión real.
                       </p>
                     </div>
                   </div>
@@ -343,6 +335,7 @@ export default function InvoicePreviewModal({
                   <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Servicio Hasta</label>
                   <input
                     type="date"
+                    min={serviceDates.desde || undefined}
                     value={serviceDates.hasta}
                     onChange={(e) => setServiceDates({ ...serviceDates, hasta: e.target.value })}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
@@ -353,6 +346,7 @@ export default function InvoicePreviewModal({
                   <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Vencimiento Pago</label>
                   <input
                     type="date"
+                    min={serviceDates.hasta || undefined}
                     value={serviceDates.vto}
                     onChange={(e) => setServiceDates({ ...serviceDates, vto: e.target.value })}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
@@ -360,6 +354,12 @@ export default function InvoicePreviewModal({
                   />
                 </div>
               </div>
+              {!dateValidation.valid && (
+                <div className="mt-3 p-3 bg-red-50 rounded-xl border border-red-200 flex items-center gap-2">
+                  <AlertCircle size={15} className="text-red-600 shrink-0" />
+                  <p className="text-xs font-bold text-red-700">{dateValidation.error}</p>
+                </div>
+              )}
             </div>
           )}
 

@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import {
-  Receipt, Search, RefreshCw, Eye, User, DollarSign,
-  CheckCircle2, XCircle, Loader2, Clock3, FileText,
-  Printer, ShieldCheck, MoreVertical, Trash2, Send, Lock, Sparkles, MessageSquare,
+  Receipt, Search, RefreshCw, Eye, DollarSign,
+  XCircle, Loader2, Clock3, FileText,
+  Printer, ShieldCheck, MoreVertical, Trash2, Send,
   FileMinus, FilePlus
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -35,7 +35,7 @@ type Props = {
   planType?: string
 }
 
-export default function FacturasClient({ facturasIniciales, idEmpresa, planType = 'base' }: Props) {
+export default function FacturasClient({ facturasIniciales, idEmpresa }: Props) {
   const [facturas, setFacturas] = useState<Factura[]>(facturasIniciales)
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'all' | 'draft' | 'emitted'>('all')
@@ -117,16 +117,20 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
 
   const cambiarFiltroTiempo = (nuevoRango: number | 'all' | 'month' | 'custom') => {
     setFiltroTiempo(nuevoRango)
+    setCurrentPage(1)
     if (nuevoRango !== 'custom') {
       cargarFacturas(nuevoRango)
     }
   }
 
   useEffect(() => {
-    if (filtroTiempo === 'custom') {
-      cargarFacturas('custom', fechaDesdeCustom, fechaHastaCustom)
+    if (filtroTiempo === 'custom' && fechaDesdeCustom && fechaHastaCustom) {
+      const timer = setTimeout(() => {
+        cargarFacturas('custom', fechaDesdeCustom, fechaHastaCustom)
+      }, 0)
+      return () => clearTimeout(timer)
     }
-  }, [fechaDesdeCustom, fechaHastaCustom])
+  }, [fechaDesdeCustom, fechaHastaCustom, filtroTiempo])
 
   async function exportarIvaDigital() {
     setExportando(true)
@@ -187,8 +191,9 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
       linkAlicuotas.click()
 
       toast.success('¡Libro de IVA Digital descargado con éxito! Compartilo con tu contador.')
-    } catch (err: any) {
-      toast.error('Error al exportar: ' + err.message)
+    } catch (err: unknown) {
+      const e = err as Error
+      toast.error('Error al exportar: ' + (e.message || 'Error desconocido'))
     } finally {
       setExportando(false)
     }
@@ -213,9 +218,10 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
 
       toast.success('Borrador eliminado permanentemente')
       setFacturas(facturas.filter(f => f.id !== id))
-    } catch (error: any) {
-      console.error('Error al eliminar borrador:', error)
-      toast.error('No se pudo eliminar: ' + error.message)
+    } catch (error: unknown) {
+      const err = error as Error
+      console.error('Error al eliminar borrador:', err)
+      toast.error('No se pudo eliminar: ' + (err.message || 'Error desconocido'))
     } finally {
       setProcesandoId(null)
       setMenuAbierto(null)
@@ -245,13 +251,18 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
 
       const data = await response.json()
       if (data.success) {
-        toast.success(`¡Factura autorizada con éxito en ARCA (${data.is_production ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'})!`)
+        if (data.status === 'reconciliation_required') {
+          toast.warning(data.message || 'ARCA autorizó el comprobante, pero falta sincronizarlo localmente. No vuelvas a emitir.')
+        } else {
+          toast.success(data.message || `Factura autorizada y guardada correctamente (${data.is_production ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'})`)
+        }
         cargarFacturas()
       } else {
         throw new Error(data.error)
       }
-    } catch (error: any) {
-      toast.error('Error: ' + error.message)
+    } catch (error: unknown) {
+      const err = error as Error
+      toast.error('Error: ' + (err.message || 'Error desconocido'))
     } finally {
       setProcesandoId(null)
     }
@@ -266,14 +277,11 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
     })
   }, [facturas, busqueda, filtroEstado])
 
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [busqueda, filtroEstado, filtroTiempo])
-
   const totalPages = Math.ceil(facturasFiltradas.length / itemsPerPage)
+  const safeCurrentPage = Math.min(currentPage, Math.max(1, totalPages))
   const paginatedFacturas = facturasFiltradas.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
   )
 
 
@@ -352,7 +360,7 @@ export default function FacturasClient({ facturasIniciales, idEmpresa, planType 
                 ].map((r) => (
                   <button
                     key={r.label}
-                    onClick={() => cambiarFiltroTiempo(r.value as any)}
+                    onClick={() => cambiarFiltroTiempo(r.value as number | 'all' | 'month' | 'custom')}
                     className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition ${filtroTiempo === r.value ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     {r.label}
